@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" fill="none">
+  <defs>
+    <linearGradient id="dm-bg" x1="0" y1="0" x2="400" y2="200">
+      <stop offset="0%" stop-color="#5c3a14"/>
+      <stop offset="100%" stop-color="#2a1808"/>
+    </linearGradient>
+    <radialGradient id="dm-glow" cx="80%" cy="20%" r="60%">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="400" height="200" fill="url(#dm-bg)"/>
+  <rect width="400" height="200" fill="url(#dm-glow)"/>
+  <text x="32" y="110" fill="#fbbf24" font-family="system-ui,sans-serif" font-size="48" font-weight="800">WV</text>
+</svg>

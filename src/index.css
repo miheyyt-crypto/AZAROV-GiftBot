@@ -1,0 +1,182 @@
+@import 'tailwindcss';
+
+:root {
+  /* Background — deep purple/black like reference */
+  --color-bg-dark: #0c0a15;
+  --color-bg-elevated: #14121c;
+  --color-bg-surface: #1a1726;
+
+  /* Brand palette */
+  --color-purple: #7c3aed;
+  --color-neon-purple: #a855f7;
+  --color-pink: #ec4899;
+  --color-gold: #fbbf24;
+
+  /* Kick */
+  --color-kick: #53cc18;
+  --color-kick-light: #7ae045;
+  --color-kick-dark: #0d1a0a;
+
+  /* Text */
+  --color-white: #f8fafc;
+  --color-muted: #94a3b8;
+
+  /* Effects */
+  --glow-purple: 0 0 18px rgb(168 85 247 / 45%);
+  --glow-pink: 0 0 18px rgb(236 72 153 / 35%);
+  --glow-gold: 0 0 14px rgb(251 191 36 / 28%);
+  --glow-card: 0 8px 28px rgb(0 0 0 / 35%);
+
+  /* Layout */
+  /* Floating pill + center shop protrusion */
+  --nav-height: 5.75rem;
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --radius-card: 1.25rem;
+}
+
+@theme inline {
+  --color-bg-dark: var(--color-bg-dark);
+  --color-bg-elevated: var(--color-bg-elevated);
+  --color-bg-surface: var(--color-bg-surface);
+  --color-purple: var(--color-purple);
+  --color-neon-purple: var(--color-neon-purple);
+  --color-pink: var(--color-pink);
+  --color-gold: var(--color-gold);
+  --color-kick: var(--color-kick);
+  --color-kick-light: var(--color-kick-light);
+  --color-kick-dark: var(--color-kick-dark);
+  --color-white: var(--color-white);
+  --color-muted: var(--color-muted);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgb(88 28 135 / 28%), transparent 55%),
+    var(--color-bg-dark);
+  color: var(--color-white);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Unified press / hover interaction ───────────────────────────── */
+:root {
+  --press-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --press-duration: 180ms;
+  --press-hover-scale: 1.04;
+  --press-active-scale: 0.98;
+}
+
+:where(
+  button:not(:disabled):not(.press-none),
+  a[href]:not(.press-none),
+  [role='button']:not(.press-none):not([aria-disabled='true']),
+  .interactive:not(.press-none):not([aria-disabled='true'])
+) {
+  -webkit-tap-highlight-color: transparent;
+  transform: translateZ(0);
+  transform-origin: center;
+  transition:
+    transform var(--press-duration) var(--press-ease),
+    box-shadow var(--press-duration) ease,
+    filter var(--press-duration) ease,
+    opacity var(--press-duration) ease,
+    background-color var(--press-duration) ease,
+    border-color var(--press-duration) ease,
+    color var(--press-duration) ease;
+}
+
+:where(
+  button:not(:disabled):not(.press-none),
+  a[href]:not(.press-none),
+  [role='button']:not(.press-none):not([aria-disabled='true']),
+  .interactive:not(.press-none):not([aria-disabled='true'])
+):active {
+  transform: scale(var(--press-active-scale));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(
+    button:not(:disabled):not(.press-none),
+    a[href]:not(.press-none),
+    [role='button']:not(.press-none):not([aria-disabled='true']),
+    .interactive:not(.press-none):not([aria-disabled='true'])
+  ):hover {
+    transform: scale(var(--press-hover-scale));
+  }
+
+  :where(
+    button:not(:disabled):not(.press-none),
+    a[href]:not(.press-none),
+    [role='button']:not(.press-none):not([aria-disabled='true']),
+    .interactive:not(.press-none):not([aria-disabled='true'])
+  ):hover:active {
+    transform: scale(var(--press-active-scale));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(
+    button:not(:disabled):not(.press-none),
+    a[href]:not(.press-none),
+    [role='button']:not(.press-none):not([aria-disabled='true']),
+    .interactive:not(.press-none):not([aria-disabled='true'])
+  ) {
+    transition: none !important;
+  }
+
+  :where(
+    button:not(:disabled):not(.press-none),
+    a[href]:not(.press-none),
+    [role='button']:not(.press-none):not([aria-disabled='true']),
+    .interactive:not(.press-none):not([aria-disabled='true'])
+  ):hover,
+  :where(
+    button:not(:disabled):not(.press-none),
+    a[href]:not(.press-none),
+    [role='button']:not(.press-none):not([aria-disabled='true']),
+    .interactive:not(.press-none):not([aria-disabled='true'])
+  ):active {
+    transform: none !important;
+  }
+}

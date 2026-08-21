@@ -1,0 +1,11 @@
+export const TELEGRAM_CHANNEL = '@azarov222'
+export const TELEGRAM_BOT_USERNAME = 'Bedolagy_GiftBot'
+export const TELEGRAM_SUBSCRIBE_TASK_ID = 'telegram-subscribe'
+export const TELEGRAM_SUBSCRIBE_REWARD = 500
+export const REFERRAL_INVITE_TASK_ID = 'referral-invite'
+export const REFERRAL_INVITE_TASK_REQUIRED = 3
+export const REFERRAL_INVITE_TASK_REWARD = 2000
+export const REFERRAL_ACTIVATION_REWARD = 500
+export const REFERRAL_CASE_EVERY = 5
+export const REFERRAL_CODE_PREFIX = 'ref_'
+export const REFERRAL_CODE_LENGTH = 8

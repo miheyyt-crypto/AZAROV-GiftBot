@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="76" height="76" viewBox="0 0 76 76" fill="none" overflow="visible">
+  <defs>
+    <linearGradient id="friendsGrad" x1="14" y1="10" x2="62" y2="68" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9A45FF"/>
+      <stop offset="1" stop-color="#7435D8"/>
+    </linearGradient>
+    <filter id="friendsGlow" x="-80%" y="-80%" width="260%" height="260%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="7.5" result="b"/>
+      <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.38 0" result="soft"/>
+      <feMerge>
+        <feMergeNode in="soft"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="friendsShine" x1="18" y1="12" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#friendsGlow)">
+    <rect x="4" y="4" width="68" height="68" rx="22" fill="url(#friendsGrad)"/>
+    <rect x="4" y="4" width="68" height="68" rx="22" fill="url(#friendsShine)"/>
+  </g>
+  <!-- left person -->
+  <circle cx="24.5" cy="31" r="5.2" fill="none" stroke="#101116" stroke-width="4.4"/>
+  <path d="M17.2 48.5c0-4.55 3.25-8.1 7.3-8.1s7.3 3.55 7.3 8.1" fill="none" stroke="#101116" stroke-width="4.4" stroke-linecap="round"/>
+  <!-- right person -->
+  <circle cx="51.5" cy="31" r="5.2" fill="none" stroke="#101116" stroke-width="4.4"/>
+  <path d="M44.2 48.5c0-4.55 3.25-8.1 7.3-8.1s7.3 3.55 7.3 8.1" fill="none" stroke="#101116" stroke-width="4.4" stroke-linecap="round"/>
+  <!-- center person (slightly larger) -->
+  <circle cx="38" cy="29.2" r="6.1" fill="none" stroke="#101116" stroke-width="4.6"/>
+  <path d="M28.6 50.2c0-5.4 4.1-9.5 9.4-9.5s9.4 4.1 9.4 9.5" fill="none" stroke="#101116" stroke-width="4.6" stroke-linecap="round"/>
+</svg>

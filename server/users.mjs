@@ -1,0 +1,316 @@
+import crypto from 'node:crypto'
+
+import { REFERRAL_CASE_EVERY, REFERRAL_CODE_LENGTH, REFERRAL_CODE_PREFIX, TELEGRAM_BOT_USERNAME } from './constants.mjs'
+import { loadStore } from './store.mjs'
+
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+export function getBotUsername() {
+  const fromEnv = String(process.env.BOT_USERNAME || '')
+    .trim()
+    .replace(/^@/, '')
+  return fromEnv || TELEGRAM_BOT_USERNAME
+}
+
+export function normalizeReferralCode(code) {
+  const raw = String(code || '')
+    .trim()
+    .toUpperCase()
+
+  if (!raw) {
+    return ''
+  }
+
+  if (raw.startsWith(REFERRAL_CODE_PREFIX.toUpperCase())) {
+    return raw.slice(REFERRAL_CODE_PREFIX.length)
+  }
+
+  return raw
+}
+
+/** Public form: ref_XXXXXXXX */
+export function formatReferralCode(code) {
+  const normalized = normalizeReferralCode(code)
+  return normalized ? `${REFERRAL_CODE_PREFIX}${normalized}` : ''
+}
+
+export function extractReferralCode(startParam) {
+  const raw = String(startParam || '').trim()
+  const match = raw.match(/^ref_([A-Za-z0-9]{6,12})$/)
+  if (!match) {
+    return null
+  }
+
+  return match[1].toUpperCase()
+}
+
+export function buildReferralLink(referralCode) {
+  const code = normalizeReferralCode(referralCode)
+  if (!code) {
+    return ''
+  }
+
+  return `https://t.me/${getBotUsername()}?startapp=${REFERRAL_CODE_PREFIX}${code}`
+}
+
+export function generateReferralCode(store) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    let body = ''
+    const bytes = crypto.randomBytes(REFERRAL_CODE_LENGTH)
+
+    for (let i = 0; i < REFERRAL_CODE_LENGTH; i += 1) {
+      body += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length]
+    }
+
+    if (!store.referralIndex[body] && !store.referralIndex[`${REFERRAL_CODE_PREFIX}${body}`]) {
+      return body
+    }
+  }
+
+  throw new Error('referral_code_collision')
+}
+
+function isTelegramIdBasedCode(code, telegramId) {
+  const normalized = normalizeReferralCode(code)
+  return normalized === String(telegramId)
+}
+
+export function indexReferralCode(store, user) {
+  const code = normalizeReferralCode(user.referralCode)
+  if (!code) {
+    return
+  }
+
+  user.referralCode = code
+  store.referralIndex[code] = user.telegramId
+}
+
+export function createUser(store, telegramUser) {
+  const referralCode = generateReferralCode(store)
+  const user = {
+    telegramId: telegramUser.id,
+    username: telegramUser.username || '',
+    firstName: telegramUser.first_name || '',
+    lastName: telegramUser.last_name || '',
+    photoUrl: telegramUser.photo_url || '',
+    balance: 0,
+    referralCode,
+    referredByUserId: null,
+    referredBy: null,
+    referralStatus: null,
+    referralCreatedAt: null,
+    referralActivatedAt: null,
+    referralRewardClaimed: false,
+    invitedUsers: [],
+    activeReferrals: 0,
+    completedTasks: [],
+    startedPartnerTasks: [],
+    orderIds: [],
+    earnedRewards: [],
+    referralEarnings: 0,
+    kickVerified: false,
+    inviterRewardGranted: false,
+    invitedRewardGranted: false,
+    openedReferralCases: 0,
+    caseOpenings: [],
+    pendingStartParam: null,
+    languageCode: telegramUser.language_code || '',
+    isPremium: Boolean(telegramUser.is_premium),
+  }
+
+  store.users[String(user.telegramId)] = user
+  indexReferralCode(store, user)
+  return user
+}
+
+function mapLegacyStatus(status) {
+  if (status === 'INVITED') {
+    return 'pending'
+  }
+  if (status === 'ACTIVE') {
+    return 'active'
+  }
+  return status || 'pending'
+}
+
+export function referralPairKey(referrerUserId, referredUserId) {
+  return `${referrerUserId}:${referredUserId}`
+}
+
+export function hydrateUserReferrals(store, user) {
+  store.referrals = store.referrals || {}
+
+  for (const item of user.invitedUsers || []) {
+    const inviteeId = Number(item.telegramId)
+    if (!Number.isInteger(inviteeId) || inviteeId <= 0) {
+      continue
+    }
+
+    const key = referralPairKey(user.telegramId, inviteeId)
+    const status = mapLegacyStatus(item.status)
+
+    // Do not invent a second referrer row for an invitee already claimed elsewhere.
+    const existingForInvitee = Object.values(store.referrals).find(
+      (row) => Number(row.referredUserId) === inviteeId,
+    )
+    if (
+      existingForInvitee &&
+      Number(existingForInvitee.referrerUserId) !== Number(user.telegramId)
+    ) {
+      continue
+    }
+
+    if (!store.referrals[key]) {
+      store.referrals[key] = {
+        id: key,
+        referrerUserId: user.telegramId,
+        referredUserId: inviteeId,
+        status: status === 'ACTIVE' ? 'active' : status,
+        createdAt: item.createdAt || new Date().toISOString(),
+        activatedAt:
+          status === 'active' || status === 'rewarded'
+            ? item.activatedAt || new Date().toISOString()
+            : null,
+        rewardedAt: status === 'rewarded' ? item.rewardedAt || null : null,
+      }
+    }
+
+    const invitee = store.users[String(inviteeId)]
+    if (invitee && !invitee.referredByUserId) {
+      invitee.referredByUserId = user.telegramId
+      invitee.referredBy = String(user.telegramId)
+      invitee.referralStatus = invitee.referralStatus || store.referrals[key].status
+      invitee.referralCreatedAt = invitee.referralCreatedAt || store.referrals[key].createdAt
+    }
+  }
+}
+
+export function ensureUser(store, telegramUser) {
+  const existing = store.users[String(telegramUser.id)]
+
+  if (!existing) {
+    return createUser(store, telegramUser)
+  }
+
+  existing.username = telegramUser.username || existing.username || ''
+  existing.firstName = telegramUser.first_name || existing.firstName || ''
+  existing.lastName = telegramUser.last_name || existing.lastName || ''
+  existing.photoUrl = telegramUser.photo_url || existing.photoUrl || ''
+  if (telegramUser.language_code) {
+    existing.languageCode = telegramUser.language_code
+  }
+  if (typeof telegramUser.is_premium === 'boolean') {
+    existing.isPremium = telegramUser.is_premium
+  }
+  existing.invitedUsers = existing.invitedUsers || []
+  existing.orderIds = existing.orderIds || []
+  existing.startedPartnerTasks = existing.startedPartnerTasks || []
+  existing.completedTasks = existing.completedTasks || []
+  existing.earnedRewards = existing.earnedRewards || []
+  existing.referralEarnings = existing.referralEarnings || 0
+  existing.kickVerified = Boolean(existing.kickVerified)
+  existing.inviterRewardGranted = Boolean(existing.inviterRewardGranted)
+  existing.invitedRewardGranted = Boolean(existing.invitedRewardGranted)
+  existing.openedReferralCases = existing.openedReferralCases || 0
+  existing.caseOpenings = existing.caseOpenings || []
+  existing.referredByUserId = existing.referredByUserId || null
+  existing.referralStatus = existing.referralStatus || null
+  existing.referralCreatedAt = existing.referralCreatedAt || null
+  existing.referralActivatedAt = existing.referralActivatedAt || null
+  existing.referralRewardClaimed = Boolean(existing.referralRewardClaimed)
+  if (existing.pendingStartParam === undefined) {
+    existing.pendingStartParam = null
+  }
+
+  // Referral code is permanent: create once, never rotate (except one-time Telegram-ID legacy codes).
+  if (!existing.referralCode) {
+    existing.referralCode = generateReferralCode(store)
+  } else if (isTelegramIdBasedCode(existing.referralCode, existing.telegramId)) {
+    existing.referralCode = generateReferralCode(store)
+  } else {
+    existing.referralCode = normalizeReferralCode(existing.referralCode)
+  }
+
+  indexReferralCode(store, existing)
+  hydrateUserReferrals(store, existing)
+
+  return existing
+}
+
+export function findUserByReferralCode(store, code) {
+  const normalized = normalizeReferralCode(code)
+  if (!normalized) {
+    return null
+  }
+
+  const telegramId =
+    store.referralIndex[normalized] ||
+    store.referralIndex[`${REFERRAL_CODE_PREFIX}${normalized}`] ||
+    store.referralIndex[`${REFERRAL_CODE_PREFIX.toUpperCase()}${normalized}`]
+
+  if (!telegramId) {
+    return null
+  }
+
+  return store.users[String(telegramId)] || null
+}
+
+export function getReferralsByReferrer(store, referrerUserId) {
+  return Object.values(store.referrals || {}).filter(
+    (item) => Number(item.referrerUserId) === Number(referrerUserId),
+  )
+}
+
+export function countActiveReferrals(store, referrerUserId) {
+  return getReferralsByReferrer(store, referrerUserId).filter(
+    (item) => item.status === 'active' || item.status === 'rewarded',
+  ).length
+}
+
+export function toPublicUser(user, store = null) {
+  if (!user) {
+    return null
+  }
+
+  const source = store || loadStore()
+  const referrals = getReferralsByReferrer(source, user.telegramId)
+  const invitedCount = referrals.length
+  const pendingCount = referrals.filter((item) => item.status === 'pending').length
+  const activeCount = referrals.filter(
+    (item) => item.status === 'active' || item.status === 'rewarded',
+  ).length
+  const openedReferralCases = user.openedReferralCases || 0
+  const earnedReferralCases = Math.floor(activeCount / REFERRAL_CASE_EVERY)
+  const availableReferralCases = Math.max(0, earnedReferralCases - openedReferralCases)
+  let caseProgress = activeCount % REFERRAL_CASE_EVERY
+  if (availableReferralCases > 0 && caseProgress === 0) {
+    caseProgress = REFERRAL_CASE_EVERY
+  }
+
+  return {
+    telegramId: user.telegramId,
+    username: user.username,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    photoUrl: user.photoUrl,
+    referralCode: formatReferralCode(user.referralCode),
+    referredBy: user.referredByUserId ? String(user.referredByUserId) : user.referredBy,
+    referredByUserId: user.referredByUserId || null,
+    balance: user.balance,
+    invitedCount,
+    invitedUserIds: referrals.map((item) => item.referredUserId),
+    activeReferrals: activeCount,
+    pendingCount,
+    referralEarnings: user.referralEarnings,
+    kickConnected: user.kickVerified,
+    referralRewardGranted: user.invitedRewardGranted || user.referralRewardClaimed,
+    claimedTaskIds: user.completedTasks,
+    completedTasks: user.completedTasks,
+    startedPartnerTasks: user.startedPartnerTasks || [],
+    openedReferralCases,
+    availableReferralCases,
+    caseProgress,
+    caseTarget: REFERRAL_CASE_EVERY,
+    referralLink: buildReferralLink(user.referralCode),
+  }
+}

@@ -1,0 +1,8 @@
+export { FriendsPage } from './FriendsPage'
+export { HomePage } from './HomePage'
+export { NotFoundPage } from './NotFoundPage'
+export { OperationsHistoryPage } from './OperationsHistoryPage'
+export { OrdersPage } from './OrdersPage'
+export { ProfilePage } from './ProfilePage'
+export { ShopPage } from './ShopPage'
+export { TasksPage } from './TasksPage'

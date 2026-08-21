@@ -1,0 +1,34 @@
+{
+  "poor": [
+    { "id": "poor-rub-5000", "name": "5000 РУБЛЕЙ!", "amount": 5000, "currency": "RUB", "rarity": "legendary", "chance": 1 },
+    { "id": "poor-rub-1000", "name": "1000 Рублей", "amount": 1000, "currency": "RUB", "rarity": "epic", "chance": 5 },
+    { "id": "poor-coins-12000", "name": "12 000 Монет", "amount": 12000, "currency": "COINS", "rarity": "epic", "chance": 7 },
+    { "id": "poor-coins-7777", "name": "7777 Монет", "amount": 7777, "currency": "COINS", "rarity": "rare", "chance": 10 },
+    { "id": "poor-coins-5000", "name": "5000 Монет", "amount": 5000, "currency": "COINS", "rarity": "rare", "chance": 20 },
+    { "id": "poor-coins-3333", "name": "3333 Монеты", "amount": 3333, "currency": "COINS", "rarity": "common", "chance": 57 }
+  ],
+  "medium": [
+    { "id": "medium-rub-10000", "name": "10 000 РУБЛЕЙ", "amount": 10000, "currency": "RUB", "rarity": "legendary", "chance": 2 },
+    { "id": "medium-rub-5000", "name": "5000 РУБЛЕЙ!", "amount": 5000, "currency": "RUB", "rarity": "legendary", "chance": 2 },
+    { "id": "medium-rub-1000", "name": "1000 Рублей", "amount": 1000, "currency": "RUB", "rarity": "epic", "chance": 10 },
+    { "id": "medium-coins-20000", "name": "20 000 Монет", "amount": 20000, "currency": "COINS", "rarity": "epic", "chance": 11 },
+    { "id": "medium-coins-11111", "name": "11111 Монет", "amount": 11111, "currency": "COINS", "rarity": "rare", "chance": 28 },
+    { "id": "medium-coins-8888", "name": "8888 Монет", "amount": 8888, "currency": "COINS", "rarity": "common", "chance": 48 }
+  ],
+  "rich": [
+    { "id": "rich-rub-30000", "name": "30 000 РУБЛЕЙ!", "amount": 30000, "currency": "RUB", "rarity": "legendary", "chance": 1 },
+    { "id": "rich-rub-10000", "name": "10 000 РУБЛЕЙ", "amount": 10000, "currency": "RUB", "rarity": "legendary", "chance": 2 },
+    { "id": "rich-rub-5000", "name": "5000 Рублей!", "amount": 5000, "currency": "RUB", "rarity": "epic", "chance": 5 },
+    { "id": "rich-rub-2000", "name": "2000 Рублей", "amount": 2000, "currency": "RUB", "rarity": "epic", "chance": 10 },
+    { "id": "rich-coins-44444", "name": "44 444 Монет", "amount": 44444, "currency": "COINS", "rarity": "rare", "chance": 35 },
+    { "id": "rich-coins-22222", "name": "22 222 Монет", "amount": 22222, "currency": "COINS", "rarity": "common", "chance": 47 }
+  ],
+  "referral": [
+    { "id": "referral-rub-3000", "name": "3000 РУБЛЕЙ!", "amount": 3000, "currency": "RUB", "rarity": "legendary", "chance": 1 },
+    { "id": "referral-rub-1000", "name": "1000 РУБЛЕЙ", "amount": 1000, "currency": "RUB", "rarity": "legendary", "chance": 2 },
+    { "id": "referral-coins-15000", "name": "15 000 Монет", "amount": 15000, "currency": "COINS", "rarity": "epic", "chance": 8 },
+    { "id": "referral-coins-6000", "name": "6000 Монет", "amount": 6000, "currency": "COINS", "rarity": "rare", "chance": 20 },
+    { "id": "referral-coins-2500", "name": "2500 Монет", "amount": 2500, "currency": "COINS", "rarity": "common", "chance": 30 },
+    { "id": "referral-coins-1000", "name": "1000 Монет", "amount": 1000, "currency": "COINS", "rarity": "common", "chance": 39 }
+  ]
+}
