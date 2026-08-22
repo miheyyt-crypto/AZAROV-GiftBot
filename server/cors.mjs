@@ -53,6 +53,17 @@ export function createCorsMiddleware() {
     const requestOrigin = typeof req.headers.origin === 'string' ? req.headers.origin : ''
     const normalized = requestOrigin ? normalizeOrigin(requestOrigin) : ''
 
+    const shouldDebugLog = Boolean(requestOrigin) || String(req.path || '').includes('/assets')
+    if (shouldDebugLog) {
+      console.log('[CORS_DEBUG] --- incoming request ---')
+      console.log('[CORS_DEBUG] req.method:', req.method)
+      console.log('[CORS_DEBUG] req.path:', req.path)
+      console.log('[CORS_DEBUG] requestOrigin:', requestOrigin)
+      console.log('[CORS_DEBUG] normalized:', normalized)
+      console.log('[CORS_DEBUG] process.env.WEBAPP_URL:', process.env.WEBAPP_URL)
+      console.log('[CORS_DEBUG] allowed:', allowed)
+    }
+
     if (normalized && allowed.includes(normalized)) {
       res.setHeader('Access-Control-Allow-Origin', normalized)
       res.setHeader('Vary', 'Origin')
@@ -67,6 +78,10 @@ export function createCorsMiddleware() {
 
     if (req.method === 'OPTIONS') {
       if (requestOrigin && normalized && !allowed.includes(normalized)) {
+        console.log(
+          '[CORS_DEBUG] 403 triggered: OPTIONS request with requestOrigin set, normalized set, but not in allowed list.',
+          { req_method: req.method, req_path: req.path, requestOrigin, normalized, allowed },
+        )
         res.status(403).json({ success: false, message: 'Origin не разрешён.' })
         return
       }
@@ -75,6 +90,10 @@ export function createCorsMiddleware() {
     }
 
     if (requestOrigin && normalized && !allowed.includes(normalized)) {
+      console.log(
+        '[CORS_DEBUG] 403 triggered: non-OPTIONS request with requestOrigin set, normalized set, but not in allowed list.',
+        { req_method: req.method, req_path: req.path, requestOrigin, normalized, allowed },
+      )
       res.status(403).json({ success: false, message: 'Origin не разрешён.' })
       return
     }
