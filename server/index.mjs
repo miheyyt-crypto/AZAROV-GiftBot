@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
-import { verifyTelegramInitData } from './auth.mjs'
+import { verifyTelegramInitData, verifyTelegramLoginWidget } from './auth.mjs'
 import { createCorsMiddleware } from './cors.mjs'
 import { asyncHandler, HttpError, sendSafeError } from './errors.mjs'
 import { toPublicUser } from './users.mjs'
@@ -45,6 +45,15 @@ import {
   sanitizePurchaseMetadata,
 } from './validate.mjs'
 import { clientIp, createRateLimiter, timingSafeEqualString } from './rate-limit.mjs'
+import {
+  clearWebSessionCookie,
+  createWebSession,
+  purgeExpiredWebSessions,
+  readWebSessionToken,
+  resolveWebSession,
+  revokeWebSession,
+  setWebSessionCookie,
+} from './web-sessions.mjs'
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 loadEnv({ path: path.join(rootDir, '.env') })
@@ -86,6 +95,7 @@ assertProductionEnv()
 
 const adminAuthLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 })
 const partnerUploadLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 10 })
+const webLoginLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 30 })
 
 const partnerUpload = multer({
   storage: multer.memoryStorage(),
@@ -140,7 +150,16 @@ function partnerScreenshotUpload(req, res, next) {
 
 app.disable('x-powered-by')
 app.use(express.json({ limit: '64kb' }))
-app.use(createCorsMiddleware())
+
+const corsMiddleware = createCorsMiddleware()
+
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return corsMiddleware(req, res, next)
+  }
+
+  next()
+})
 
 function readInitData(req) {
   const header = req.headers.authorization || ''
@@ -154,39 +173,128 @@ function readInitData(req) {
   return ''
 }
 
+/**
+ * Resolve identity from Mini App initData (preferred) or HttpOnly web session cookie.
+ * Mini App path is unchanged; web session is additive for website Login Widget.
+ */
 function requireTelegramAuth(req, res) {
   const botToken = process.env.BOT_TOKEN || ''
   const initData = readInitData(req)
 
-  if (!botToken) {
-    res.status(503).json({
-      success: false,
-      message: 'Сервер ещё не настроен для проверки Telegram.',
-    })
-    return null
+  if (initData) {
+    if (!botToken) {
+      res.status(503).json({
+        success: false,
+        message: 'Сервер ещё не настроен для проверки Telegram.',
+      })
+      return null
+    }
+
+    try {
+      return verifyTelegramInitData(initData, botToken)
+    } catch {
+      res.status(401).json({
+        success: false,
+        message: 'Не удалось подтвердить Telegram-сессию.',
+      })
+      return null
+    }
   }
 
-  if (!initData) {
-    res.status(401).json({
-      success: false,
-      message: 'Открой приложение в Telegram.',
-    })
-    return null
+  const sessionToken = readWebSessionToken(req)
+  if (sessionToken) {
+    const session = resolveWebSession(sessionToken)
+    if (!session) {
+      clearWebSessionCookie(res)
+      res.status(401).json({
+        success: false,
+        message: 'Сессия истекла. Войди через Telegram снова.',
+      })
+      return null
+    }
+
+    const stored = getUser(session.telegramUserId)
+    if (!stored) {
+      clearWebSessionCookie(res)
+      revokeWebSession(sessionToken)
+      res.status(401).json({
+        success: false,
+        message: 'Пользователь не найден. Войди через Telegram снова.',
+      })
+      return null
+    }
+
+    return {
+      user: {
+        id: Number(stored.telegramId),
+        first_name: stored.firstName || '',
+        last_name: stored.lastName || undefined,
+        username: stored.username || undefined,
+        photo_url: stored.photoUrl || undefined,
+        language_code: stored.languageCode || undefined,
+        is_premium: Boolean(stored.isPremium),
+      },
+      startParam: '',
+      authSource: 'web_session',
+    }
   }
 
-  try {
-    return verifyTelegramInitData(initData, botToken)
-  } catch {
-    res.status(401).json({
-      success: false,
-      message: 'Не удалось подтвердить Telegram-сессию.',
-    })
-    return null
-  }
+  res.status(401).json({
+    success: false,
+    message: 'Открой приложение в Telegram или войди через Telegram на сайте.',
+  })
+  return null
 }
 
 function requireTelegramUser(req, res) {
   return requireTelegramAuth(req, res)?.user ?? null
+}
+
+function parseTelegramLoginPayload(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new HttpError(400, 'Нужны данные Telegram Login.', 'INVALID_LOGIN_PAYLOAD')
+  }
+
+  // Accept either flat widget fields or { user: { ... } } wrapper.
+  const source =
+    body.user && typeof body.user === 'object' && !Array.isArray(body.user) ? body.user : body
+
+  const id = Number(source.id)
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new HttpError(400, 'Некорректный Telegram ID.', 'INVALID_LOGIN_PAYLOAD')
+  }
+
+  const authDate = Number(source.auth_date)
+  if (!Number.isInteger(authDate) || authDate <= 0) {
+    throw new HttpError(400, 'Некорректный auth_date.', 'INVALID_LOGIN_PAYLOAD')
+  }
+
+  const hash = String(source.hash || '').trim()
+  if (!hash) {
+    throw new HttpError(400, 'Отсутствует подпись Telegram.', 'INVALID_LOGIN_PAYLOAD')
+  }
+
+  if (typeof source.first_name !== 'string' || !source.first_name.trim()) {
+    throw new HttpError(400, 'Некорректные данные Telegram Login.', 'INVALID_LOGIN_PAYLOAD')
+  }
+
+  const payload = {
+    id,
+    first_name: source.first_name.trim().slice(0, 128),
+    auth_date: authDate,
+    hash,
+  }
+  if (typeof source.last_name === 'string') {
+    payload.last_name = source.last_name.slice(0, 128)
+  }
+  if (typeof source.username === 'string') {
+    payload.username = source.username.slice(0, 64)
+  }
+  if (typeof source.photo_url === 'string') {
+    payload.photo_url = source.photo_url.slice(0, 512)
+  }
+
+  return payload
 }
 
 function withUser(handler) {
@@ -247,6 +355,125 @@ app.get('/api/health', (_req, res) => {
     ok: true,
   })
 })
+
+/**
+ * Website Telegram Login Widget → verified backend session (HttpOnly cookie).
+ * Does not replace Mini App /api/session + initData flow.
+ */
+app.post(
+  '/api/auth/telegram-web',
+  asyncHandler(async (req, res) => {
+    assertNoClientFinancialOverrides(req.body)
+
+    const ip = clientIp(req)
+    const limit = webLoginLimiter.check(`web-login:${ip}`)
+    if (!limit.allowed) {
+      res.setHeader('Retry-After', String(Math.ceil(limit.retryAfterMs / 1000) || 1))
+      res.status(429).json({
+        success: false,
+        message: 'Слишком много попыток входа. Попробуй позже.',
+      })
+      return
+    }
+
+    const botToken = process.env.BOT_TOKEN || ''
+    if (!botToken) {
+      res.status(503).json({
+        success: false,
+        message: 'Сервер ещё не настроен для проверки Telegram.',
+      })
+      return
+    }
+
+    let payload
+    try {
+      payload = parseTelegramLoginPayload(req.body)
+    } catch (error) {
+      if (error instanceof HttpError) {
+        sendSafeError(res, error)
+        return
+      }
+      throw error
+    }
+
+    let verified
+    try {
+      verified = verifyTelegramLoginWidget(payload, botToken)
+    } catch (error) {
+      const code = error?.message || 'invalid_hash'
+      if (code === 'expired') {
+        res.status(401).json({
+          success: false,
+          code: 'EXPIRED',
+          message: 'Данные входа устарели. Попробуй войти снова.',
+        })
+        return
+      }
+
+      res.status(401).json({
+        success: false,
+        code: 'INVALID_SIGNATURE',
+        message: 'Не удалось подтвердить вход через Telegram.',
+      })
+      return
+    }
+
+    purgeExpiredWebSessions()
+
+    const result = bootstrapUser(verified.user, '')
+    const user = getUser(verified.user.id)
+    if (!user) {
+      res.status(500).json({
+        success: false,
+        message: 'Не удалось создать пользователя.',
+      })
+      return
+    }
+
+    const session = createWebSession(user.telegramId, {
+      userAgent: String(req.headers['user-agent'] || ''),
+      ip,
+    })
+    setWebSessionCookie(res, session.token, session.expiresAt)
+
+    res.json({
+      success: true,
+      message: 'Вход выполнен.',
+      user: toPublicUser(user),
+      referral: result.referral,
+      referralStats: result.me,
+      expiresAt: session.expiresAt,
+    })
+  }),
+)
+
+app.post(
+  '/api/auth/logout',
+  asyncHandler(async (req, res) => {
+    const token = readWebSessionToken(req)
+    if (token) {
+      revokeWebSession(token)
+    }
+    clearWebSessionCookie(res)
+    res.json({
+      success: true,
+      message: 'Выход выполнен.',
+    })
+  }),
+)
+
+app.get(
+  '/api/auth/me',
+  withUser(async (_req, res, telegramUser) => {
+    const result = bootstrapUser(telegramUser, '')
+    res.json({
+      success: true,
+      user: toPublicUser(getUser(telegramUser.id)),
+      referral: result.referral,
+      referralStats: result.me,
+    })
+  }),
+)
 
 app.post(
   '/api/session',

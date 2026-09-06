@@ -14,6 +14,14 @@ export const TELEGRAM_BOT_USERNAME = 'Bedolagy_GiftBot'
 export const TELEGRAM_CHANNEL = '@azarov222'
 export const TELEGRAM_CHANNEL_URL = 'https://t.me/azarov222'
 
+/** Bot username for Telegram Login Widget (no @). Overridable via Vite env. */
+export function getTelegramLoginBotUsername(): string {
+  const fromEnv = String(import.meta.env.VITE_TELEGRAM_BOT_USERNAME || '')
+    .trim()
+    .replace(/^@/, '')
+  return fromEnv || TELEGRAM_BOT_USERNAME
+}
+
 export const REFERRAL_CODE_PREFIX = 'ref_'
 export const REFERRAL_ACTIVATION_REWARD = 500
 export const REFERRAL_CASE_EVERY = 5

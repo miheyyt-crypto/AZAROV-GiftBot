@@ -1,14 +1,16 @@
 import { getBalance } from '@/lib/balance'
+import { getWebAuthUser } from '@/lib/auth'
 import {
   getTelegramUserUnsafe,
   isTelegramEnvironment,
+  getTelegramInitData,
 } from '@/lib/telegram'
 import type { TelegramUser, UserProfile, UserStats } from '@/types'
 
 const DEMO_USER: TelegramUser = {
   id: 0,
-  first_name: 'Михаил',
-  username: 'demo_user',
+  first_name: 'Гость',
+  username: undefined,
   isDemo: true,
 }
 
@@ -35,17 +37,20 @@ function mapTelegramUser(raw: NonNullable<ReturnType<typeof getTelegramUserUnsaf
 }
 
 export function getTelegramUser(): TelegramUser {
-  if (!isTelegramEnvironment()) {
-    return DEMO_USER
+  // Website session (Login Widget) takes priority outside Mini App initData.
+  const webUser = getWebAuthUser()
+  if (webUser && webUser.id > 0 && !webUser.isDemo) {
+    return webUser
   }
 
-  const rawUser = getTelegramUserUnsafe()
-
-  if (!rawUser) {
-    return DEMO_USER
+  if (isTelegramEnvironment() && getTelegramInitData()) {
+    const rawUser = getTelegramUserUnsafe()
+    if (rawUser) {
+      return mapTelegramUser(rawUser)
+    }
   }
 
-  return mapTelegramUser(rawUser)
+  return DEMO_USER
 }
 
 export function getUserProfile(): UserProfile {
@@ -63,7 +68,7 @@ export function getUserStats(): UserStats {
 }
 
 export function getDisplayName(user: TelegramUser): string {
-  return [user.first_name, user.last_name].filter(Boolean).join(' ')
+  return [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Игрок'
 }
 
 export function getDisplayUsername(user: TelegramUser): string {

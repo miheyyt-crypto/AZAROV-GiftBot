@@ -2,6 +2,7 @@ import {
   Award,
   ChevronRight,
   History,
+  LogOut,
   Package,
   Receipt,
   Store,
@@ -11,10 +12,11 @@ import type { ProfileMenuId } from '@/types/profile'
 
 interface ProfileMenuProps {
   onSelect: (id: ProfileMenuId) => void
+  showLogout?: boolean
 }
 
 const items: Array<{
-  id: ProfileMenuId
+  id: Exclude<ProfileMenuId, 'logout'>
   label: string
   icon: typeof History
   iconClass: string
@@ -51,10 +53,27 @@ const items: Array<{
   },
 ]
 
-export function ProfileMenu({ onSelect }: ProfileMenuProps) {
+export function ProfileMenu({ onSelect, showLogout = false }: ProfileMenuProps) {
+  const menuItems: Array<{
+    id: ProfileMenuId
+    label: string
+    icon: typeof History
+    iconClass: string
+  }> = showLogout
+    ? [
+        ...items,
+        {
+          id: 'logout',
+          label: 'Выйти',
+          icon: LogOut,
+          iconClass: 'bg-white/10 text-muted',
+        },
+      ]
+    : items
+
   return (
     <nav className="overflow-visible rounded-[22px] border border-white/10 bg-white/[0.03] backdrop-blur-md">
-      {items.map((item, index) => {
+      {menuItems.map((item, index) => {
         const Icon = item.icon
 
         return (
@@ -66,7 +85,7 @@ export function ProfileMenu({ onSelect }: ProfileMenuProps) {
               'flex w-full items-center gap-4 px-4 py-4 text-left active:bg-white/[0.04]',
               index > 0 ? 'border-t border-white/5' : '',
               index === 0 ? 'rounded-t-[21px]' : '',
-              index === items.length - 1 ? 'rounded-b-[21px]' : '',
+              index === menuItems.length - 1 ? 'rounded-b-[21px]' : '',
             ].join(' ')}
           >
             <span

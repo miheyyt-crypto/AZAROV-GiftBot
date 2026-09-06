@@ -14,11 +14,20 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const defaultDataDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data')
-const dataDir = process.env.AZAROV_STORE_DIR
-  ? path.resolve(process.env.AZAROV_STORE_DIR)
-  : defaultDataDir
-const storePath = path.join(dataDir, 'store.json')
-const lockPath = `${storePath}.lock`
+
+function getDataDir() {
+  return process.env.AZAROV_STORE_DIR
+    ? path.resolve(process.env.AZAROV_STORE_DIR)
+    : defaultDataDir
+}
+
+function getStorePath() {
+  return path.join(getDataDir(), 'store.json')
+}
+
+function getLockPath() {
+  return `${getStorePath()}.lock`
+}
 
 const LOCK_TIMEOUT_MS = 15_000
 const LOCK_RETRY_MS = 25
@@ -45,6 +54,7 @@ export function createEmptyStore() {
     caseOpenings: {},
     partnerSubmissions: {},
     partnerAccountBinds: {},
+    webSessions: {},
   }
 }
 
@@ -58,6 +68,7 @@ function migrateStore(store) {
   store.caseOpenings = store.caseOpenings || {}
   store.partnerSubmissions = store.partnerSubmissions || {}
   store.partnerAccountBinds = store.partnerAccountBinds || {}
+  store.webSessions = store.webSessions || {}
   return store
 }
 
@@ -68,12 +79,14 @@ function sleepSync(ms) {
 }
 
 function ensureDataDir() {
+  const dataDir = getDataDir()
   if (!existsSync(dataDir)) {
     mkdirSync(dataDir, { recursive: true })
   }
 }
 
 function tryClearStaleLock() {
+  const lockPath = getLockPath()
   try {
     const content = readFileSync(lockPath, 'utf8')
     const ts = Number(String(content).split('\n')[1] || 0)
@@ -89,6 +102,7 @@ function tryClearStaleLock() {
 
 function acquireFileLock() {
   ensureDataDir()
+  const lockPath = getLockPath()
   const started = Date.now()
   let clearedStale = false
 
@@ -143,6 +157,7 @@ function releaseFileLock(lock) {
  * never return an empty store that would wipe production data on save.
  */
 export function loadStore() {
+  const storePath = getStorePath()
   if (!existsSync(storePath)) {
     return createEmptyStore()
   }
@@ -180,6 +195,7 @@ export function loadStore() {
 export function saveStore(store) {
   ensureDataDir()
 
+  const storePath = getStorePath()
   const payload = JSON.stringify(store, null, 2)
   const tempPath = `${storePath}.tmp`
   writeFileSync(tempPath, payload)

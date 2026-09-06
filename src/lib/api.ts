@@ -60,6 +60,7 @@ async function request(path: string, init: RequestInit = {}): Promise<ApiUserRes
   const response = await fetch(apiUrl(path), {
     ...init,
     headers,
+    credentials: 'include',
   })
 
   const payload = (await response.json().catch(() => null)) as ApiUserResponse | null
@@ -140,6 +141,7 @@ export async function createPartnerSubmissionRequest(input: {
     method: 'POST',
     headers,
     body,
+    credentials: 'include',
   })
 
   const payload = (await response.json().catch(() => null)) as ApiUserResponse | null
@@ -189,6 +191,34 @@ export function openCaseRequest(caseId: string, requestId: string): Promise<ApiU
 
 export function getReferralMe(): Promise<ApiUserResponse> {
   return request('/api/referral/me', {
+    method: 'GET',
+  })
+}
+
+export function loginWithTelegramWeb(payload: {
+  id: number
+  first_name: string
+  last_name?: string
+  username?: string
+  photo_url?: string
+  auth_date: number
+  hash: string
+}): Promise<ApiUserResponse> {
+  return request('/api/auth/telegram-web', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function logoutWebSession(): Promise<ApiUserResponse> {
+  return request('/api/auth/logout', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export function fetchAuthMe(): Promise<ApiUserResponse> {
+  return request('/api/auth/me', {
     method: 'GET',
   })
 }

@@ -20,7 +20,10 @@ async function request(path: string): Promise<HomeApiResponse> {
     headers.set('Authorization', `tma ${initData}`)
   }
 
-  const response = await fetch(apiUrl(path), { headers })
+  const response = await fetch(apiUrl(path), {
+    headers,
+    credentials: 'include',
+  })
   const payload = (await response.json().catch(() => null)) as HomeApiResponse | null
 
   if (!payload) {

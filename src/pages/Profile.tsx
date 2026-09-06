@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { AchievementsSheet } from '@/components/AchievementsSheet'
+import { useAuth } from '@/components/AuthGate'
 import { CoinBalance } from '@/components/BalanceCard'
 import { CoinHistorySheet } from '@/components/CoinHistorySheet'
 import { InventorySheet } from '@/components/InventorySheet'
@@ -15,11 +16,13 @@ import { XPProgress } from '@/components/XPProgress'
 import { getPartnerById } from '@/data/partners'
 import { useBalance } from '@/hooks/useBalance'
 import { useUserProfile } from '@/hooks/useUserProfile'
+import { isMiniAppAuthAvailable } from '@/lib/auth'
 import { ROUTES } from '@/lib/constants'
 import type { ProfileMenuId } from '@/types/profile'
 
 export function Profile() {
   const navigate = useNavigate()
+  const { logout, isWebSession } = useAuth()
   const { formatted } = useBalance()
   const {
     user,
@@ -32,16 +35,30 @@ export function Profile() {
 
   const [activeSheet, setActiveSheet] = useState<ProfileMenuId | null>(null)
   const [showWelvuraModal, setShowWelvuraModal] = useState(false)
+  const [logoutBusy, setLogoutBusy] = useState(false)
 
   const welvuraPartner = getPartnerById('dragonmoney')
+  const showLogout = isWebSession || (!isMiniAppAuthAvailable() && !isDemo)
 
-  function handleMenuSelect(id: ProfileMenuId) {
+  async function handleMenuSelect(id: ProfileMenuId) {
     if (id === 'operations') {
       navigate(ROUTES.operations)
       return
     }
     if (id === 'orders') {
       navigate(ROUTES.orders)
+      return
+    }
+    if (id === 'logout') {
+      if (logoutBusy) {
+        return
+      }
+      setLogoutBusy(true)
+      try {
+        await logout()
+      } finally {
+        setLogoutBusy(false)
+      }
       return
     }
     setActiveSheet(id)
@@ -118,7 +135,7 @@ export function Profile() {
         <ProfileWelvuraBanner onClick={() => setShowWelvuraModal(true)} />
       </div>
 
-      <ProfileMenu onSelect={handleMenuSelect} />
+      <ProfileMenu onSelect={handleMenuSelect} showLogout={showLogout} />
 
       {activeSheet === 'coin-history' && (
         <CoinHistorySheet onClose={() => setActiveSheet(null)} />

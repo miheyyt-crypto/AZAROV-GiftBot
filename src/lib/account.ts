@@ -102,12 +102,20 @@ export function setCurrentTelegramId(telegramId: number): UserAccount {
   return account
 }
 
+export function clearCurrentAccount(): void {
+  currentTelegramId = null
+  notify(createAccount(0))
+}
+
 export function getCurrentTelegramId(): number {
   return currentTelegramId ?? 0
 }
 
 export function getCurrentAccount(): UserAccount {
-  return ensureAccount(getCurrentTelegramId())
+  if (currentTelegramId == null || currentTelegramId <= 0) {
+    return createAccount(0)
+  }
+  return ensureAccount(currentTelegramId)
 }
 
 export function updateCurrentAccount(
