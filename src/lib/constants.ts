@@ -10,7 +10,7 @@ export const ROUTES = {
   orders: '/orders',
 } as const
 
-export const TELEGRAM_BOT_USERNAME = 'Bedolagy_GiftBot'
+export const TELEGRAM_BOT_USERNAME = 'AZAROV_GiftBot'
 export const TELEGRAM_CHANNEL = '@azarov222'
 export const TELEGRAM_CHANNEL_URL = 'https://t.me/azarov222'
 

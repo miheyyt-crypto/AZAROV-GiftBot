@@ -1,5 +1,5 @@
 export const TELEGRAM_CHANNEL = '@azarov222'
-export const TELEGRAM_BOT_USERNAME = 'Bedolagy_GiftBot'
+export const TELEGRAM_BOT_USERNAME = 'AZAROV_GiftBot'
 export const TELEGRAM_SUBSCRIBE_TASK_ID = 'telegram-subscribe'
 export const TELEGRAM_SUBSCRIBE_REWARD = 500
 export const REFERRAL_INVITE_TASK_ID = 'referral-invite'
