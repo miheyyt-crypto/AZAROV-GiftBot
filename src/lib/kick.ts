@@ -17,7 +17,7 @@ export function setKickConnection(connection: KickConnection): KickConnection {
 
   if (connection.connected) {
     void activateReferralRemote().catch(() => {
-      // Kick OAuth is not connected yet; server will reject activation.
+      // Idempotent: referral rewards are already granted on registration bind.
     })
   }
 

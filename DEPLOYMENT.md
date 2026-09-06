@@ -55,6 +55,7 @@ Do not commit `dist/`.
 |----------|-----------------|---------|
 | `BOT_TOKEN` | yes | Telegram bot token |
 | `BOT_USERNAME` | yes (for referral links) | Bot username without `@` |
+| `REFERRAL_REWARD` | optional | Coins for both sides on first referral registration (default `500`) |
 | `WEBAPP_URL` | yes | Public HTTPS URL of the Mini App |
 | `TELEGRAM_CHANNEL` | recommended | Channel for subscribe task |
 | `PORT` | set by Railway | HTTP listen port |

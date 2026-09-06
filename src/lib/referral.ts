@@ -1,6 +1,10 @@
 import { activateReferralRemote } from '@/lib/api'
 import { getCurrentAccount } from '@/lib/account'
-import { REFERRAL_CASE_EVERY, REFERRAL_CODE_PREFIX, TELEGRAM_BOT_USERNAME } from '@/lib/constants'
+import {
+  REFERRAL_CASE_EVERY,
+  REFERRAL_CODE_PREFIX,
+  getTelegramLoginBotUsername,
+} from '@/lib/constants'
 import { getTelegramWebApp } from '@/lib/telegram'
 import type { ReferralProgress } from '@/types'
 import type { UserAccount } from '@/types/account'
@@ -18,7 +22,7 @@ export function buildReferralLink(referralCode: string): string {
     return ''
   }
 
-  return `https://t.me/${TELEGRAM_BOT_USERNAME}?startapp=${REFERRAL_CODE_PREFIX}${code}`
+  return `https://t.me/${getTelegramLoginBotUsername()}?startapp=${REFERRAL_CODE_PREFIX}${code}`
 }
 
 export function getCurrentReferralLink(): string {
@@ -137,7 +141,7 @@ export function isReferralComplete(progress: ReferralProgress): boolean {
 
 export function shareReferralLink(referralLink: string): Promise<'telegram' | 'native' | 'copied'> {
   const shareText = [
-    'Присоединяйся к GiftBot ⚡',
+    '🎁 Присоединяйся к приложению и получай бонусы!',
     '',
     'Здесь можно получать монеты, выполнять задания и открывать кейсы.',
     '',

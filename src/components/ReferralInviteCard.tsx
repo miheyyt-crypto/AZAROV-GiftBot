@@ -152,7 +152,7 @@ export function ReferralInviteCard({ account }: ReferralInviteCardProps) {
             disabled={isSharing || !referralLink}
             className="flex h-12 flex-1 items-center justify-center rounded-full bg-[#9d59ff] text-sm font-bold text-white shadow-[0_0_24px_rgb(157_89_255/55%)] transition hover:opacity-95 disabled:opacity-60"
           >
-            {isSharing ? '...' : 'Поделиться'}
+            {isSharing ? '...' : 'Пригласить друзей'}
           </button>
           <button
             type="button"

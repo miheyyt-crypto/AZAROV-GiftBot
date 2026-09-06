@@ -3,6 +3,7 @@ import iconKickConnect from '@/assets/tasks/icon-kick-connect.svg'
 import iconKickFollow from '@/assets/tasks/icon-kick-follow.svg'
 import iconKickNickname from '@/assets/tasks/icon-kick-nickname.svg'
 import iconTelegramSubscribe from '@/assets/tasks/icon-telegram-subscribe.svg'
+import { REFERRAL_ACTIVATION_REWARD } from '@/lib/constants'
 import type { Task } from '@/types'
 
 export const tasks: Task[] = [
@@ -50,7 +51,7 @@ export const tasks: Task[] = [
     id: 'referral-invite',
     title: 'Пригласи 3 друзей',
     description:
-      'Друг считается после того, как он привяжет свой Kick. За это вы оба получаете по 500 монет — один раз.',
+      `Друг считается после первой успешной регистрации по твоей ссылке. За это вы оба получаете по ${REFERRAL_ACTIVATION_REWARD} монет — один раз.`,
     category: 'telegram',
     reward: 2000,
     type: 'referral',
