@@ -92,7 +92,7 @@ export function getReferralCaseStats(activeCount, openedReferralCases) {
 
 /**
  * Bind invitee to referrer from signed start_param.
- * Coins are granted atomically via activateReferralOnStore in the same store write.
+ * Does NOT grant coins — confirmation happens after Kick OAuth via activateReferralOnStore.
  */
 export function processReferral(store, invitee, startParam) {
   store.referrals = store.referrals || {}
@@ -207,10 +207,23 @@ export function processReferral(store, invitee, startParam) {
   }
 }
 
+function inviteeHasKickLinked(store, invitee) {
+  if (!invitee) {
+    return false
+  }
+
+  const tgKey = String(invitee.telegramId)
+  if (store.kickByTelegram?.[tgKey]) {
+    return true
+  }
+
+  return Boolean(invitee.kickVerified && invitee.kickUserId)
+}
+
 /**
- * Grant referral coins once to the referrer for each invitee.
- * Idempotent via wallet event id + referral.status.
- * Kick verification is NOT required — reward fires after successful Telegram registration bind.
+ * Confirm referral and grant +REWARD once to BOTH referrer and invitee.
+ * Requires the invitee's Kick account to be linked on the server.
+ * Idempotent via wallet event ids + referral.status (file-locked withStore).
  */
 export function activateReferralOnStore(store, userId) {
   const rewardAmount = getReferralActivationReward()
@@ -250,12 +263,28 @@ export function activateReferralOnStore(store, userId) {
     }
   }
 
+  if (!inviteeHasKickLinked(store, invitee)) {
+    logReferral('activation_waiting_for_kick', {
+      referralId: referral.id,
+      inviteeId: invitee.telegramId,
+      referrerId: referrer.telegramId,
+    })
+    return {
+      success: false,
+      rewarded: false,
+      reason: 'kick_required',
+      message: 'Реферал подтвердится после привязки Kick.',
+    }
+  }
+
   const inviterEventId = `referral_reward:${referral.id}:inviter`
+  const inviteeEventId = `referral_reward:${referral.id}:invitee`
   const alreadyRewarded =
     referral.status === 'rewarded' ||
     invitee.referralRewardClaimed ||
     invitee.invitedRewardGranted ||
-    hasEvent(store, inviterEventId)
+    hasEvent(store, inviterEventId) ||
+    hasEvent(store, inviteeEventId)
 
   if (alreadyRewarded) {
     logReferral('duplicate_reward_prevented', {
@@ -291,7 +320,7 @@ export function activateReferralOnStore(store, userId) {
     inviterEventId,
     {
       referenceId: referral.id,
-      description: 'Награда за реферала',
+      description: 'Награда за реферала (пригласивший)',
       referredUserId: invitee.telegramId,
     },
   )
@@ -300,7 +329,24 @@ export function activateReferralOnStore(store, userId) {
     throw new Error('referral_reward_inviter_failed')
   }
 
-  if (!inviterGrant.granted) {
+  const inviteeGrant = addCoins(
+    store,
+    invitee,
+    rewardAmount,
+    TX_TYPE.REFERRAL_REWARD,
+    inviteeEventId,
+    {
+      referenceId: referral.id,
+      description: 'Награда за реферала (приглашённый)',
+      referrerUserId: referrer.telegramId,
+    },
+  )
+
+  if (!inviteeGrant.granted && inviteeGrant.reason !== 'already_granted') {
+    throw new Error('referral_reward_invitee_failed')
+  }
+
+  if (!inviterGrant.granted && !inviteeGrant.granted) {
     logReferral('duplicate_reward_prevented', {
       referralId: referral.id,
       inviteeId: invitee.telegramId,
@@ -321,7 +367,9 @@ export function activateReferralOnStore(store, userId) {
     }
   }
 
-  referrer.referralEarnings += rewardAmount
+  if (inviterGrant.granted) {
+    referrer.referralEarnings += rewardAmount
+  }
 
   referral.status = 'rewarded'
   referral.rewardedAt = now
@@ -338,18 +386,20 @@ export function activateReferralOnStore(store, userId) {
     inviteeId: invitee.telegramId,
     referrerId: referrer.telegramId,
     amount: rewardAmount,
+    inviterGranted: Boolean(inviterGrant.granted),
+    inviteeGranted: Boolean(inviteeGrant.granted),
   })
 
   return {
     success: true,
-    rewarded: true,
+    rewarded: Boolean(inviterGrant.granted || inviteeGrant.granted),
     reason: 'rewarded',
-    message: `Реферал активирован. Начислено ${rewardAmount} монет.`,
+    message: `Реферал подтверждён. Начислено по ${rewardAmount} монет вам и пригласившему.`,
   }
 }
 
 /**
- * Bind from start_param (if any) and grant reward once in the same store mutation.
+ * Bind from start_param (if any). Confirm + reward only if Kick is already linked.
  */
 export function applyReferralAndReward(store, invitee, startParam) {
   const referral = processReferral(store, invitee, startParam)

@@ -5,7 +5,7 @@ export const TELEGRAM_SUBSCRIBE_REWARD = 500
 export const REFERRAL_INVITE_TASK_ID = 'referral-invite'
 export const REFERRAL_INVITE_TASK_REQUIRED = 3
 export const REFERRAL_INVITE_TASK_REWARD = 2000
-/** Default coins granted to both referrer and invitee on first successful referral bind. */
+/** Default coins granted to both referrer and invitee when invitee links Kick. */
 export const REFERRAL_ACTIVATION_REWARD = 500
 export const REFERRAL_CASE_EVERY = 5
 export const REFERRAL_CODE_PREFIX = 'ref_'

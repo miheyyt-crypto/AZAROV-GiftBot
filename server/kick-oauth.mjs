@@ -9,6 +9,7 @@ import {
   KICK_OAUTH_STATE_TTL_MS,
   KICK_OAUTH_TOKEN_URL,
 } from './constants.mjs'
+import { activateReferralOnStore } from './referrals.mjs'
 import { withStore, withStoreRead } from './store.mjs'
 import { addCoins, hasEvent, TX_TYPE } from './wallet.mjs'
 
@@ -140,9 +141,22 @@ function applyKickTokenBundle(account, tokenBundle) {
   account.tokenUpdatedAt = new Date().toISOString()
 }
 
+function finalizeKickLinkResult(store, telegramUserId, result) {
+  if (!result?.ok) {
+    return result
+  }
+
+  const referralActivation = activateReferralOnStore(store, telegramUserId)
+  return {
+    ...result,
+    referralActivation,
+  }
+}
+
 /**
  * Atomically link Kick ↔ Telegram with 1:1 uniqueness indexes.
  * Optional tokenBundle stores server-only OAuth tokens for later follow checks.
+ * On successful link, confirms any pending referral (Kick-gated rewards).
  */
 export function linkKickAccountOnStore(store, telegramUserId, kickProfile, tokenBundle = null) {
   store.kickAccounts = store.kickAccounts || {}
@@ -179,12 +193,12 @@ export function linkKickAccountOnStore(store, telegramUserId, kickProfile, token
       user.kickDisplayName = kickProfile.displayName
       user.kickAvatarUrl = kickProfile.avatarUrl
       logKick('already_connected', { telegramUserId, kickUserId: kickKey })
-      return {
+      return finalizeKickLinkResult(store, telegramUserId, {
         ok: true,
         code: 'already_connected',
         message: `Kick уже подключён (@${kickProfile.username}).`,
         connection: getKickConnectionForUser(store, telegramUserId),
-      }
+      })
     }
 
     logKick('telegram_already_has_kick', {
@@ -215,12 +229,12 @@ export function linkKickAccountOnStore(store, telegramUserId, kickProfile, token
       user.kickVerified = true
       user.kickUserId = kickKey
       applyKickTokenBundle(existingAccount, tokenBundle)
-      return {
+      return finalizeKickLinkResult(store, telegramUserId, {
         ok: true,
         code: 'already_connected',
         message: `Kick уже подключён (@${existingAccount.username}).`,
         connection: getKickConnectionForUser(store, telegramUserId),
-      }
+      })
     }
 
     logKick('kick_already_linked', {
@@ -263,13 +277,13 @@ export function linkKickAccountOnStore(store, telegramUserId, kickProfile, token
     taskRewardGranted: taskGrant.granted,
   })
 
-  return {
+  return finalizeKickLinkResult(store, telegramUserId, {
     ok: true,
     code: 'linked',
     message: `Kick успешно подключён (@${kickProfile.username}).`,
     connection: getKickConnectionForUser(store, telegramUserId),
     taskRewardGranted: taskGrant.granted,
-  }
+  })
 }
 
 export function createKickOAuthStart(telegramUserId) {

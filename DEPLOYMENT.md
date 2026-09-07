@@ -55,7 +55,7 @@ Do not commit `dist/`.
 |----------|-----------------|---------|
 | `BOT_TOKEN` | yes | Telegram bot token |
 | `BOT_USERNAME` | yes (for referral links) | Bot username without `@` |
-| `REFERRAL_REWARD` | optional | Coins for both sides on first referral registration (default `500`) |
+| `REFERRAL_REWARD` | optional | Coins for both sides when invitee links Kick (default `500`) |
 | `WEBAPP_URL` | yes | Public HTTPS URL of the Mini App |
 | `TELEGRAM_CHANNEL` | recommended | Channel for subscribe task (`@azarov222`). Bot must be an **administrator** of this channel so `getChatMember` works. |
 | `KICK_CLIENT_ID` | for Kick link | Kick OAuth client id |

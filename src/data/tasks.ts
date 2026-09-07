@@ -51,7 +51,7 @@ export const tasks: Task[] = [
     id: 'referral-invite',
     title: 'Пригласи 3 друзей',
     description:
-      `Друг считается после первой успешной регистрации по твоей ссылке. За каждого такого друга ты получаешь ${REFERRAL_ACTIVATION_REWARD} монет — один раз.`,
+      `Друг считается после успешной привязки Kick по твоей ссылке. За каждого такого друга ты получаешь ${REFERRAL_ACTIVATION_REWARD} монет — один раз.`,
     category: 'telegram',
     reward: 2000,
     type: 'referral',

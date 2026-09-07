@@ -21,7 +21,7 @@ export function Friends() {
       </header>
 
       <p className="mb-5 text-sm leading-relaxed text-[#a1a1aa]">
-        За каждого друга, который дойдёт до первого бонуса — монеты обоим.
+        За каждого друга, который привяжет Kick по твоей ссылке — по 500 монет обоим.
       </p>
 
       <div className="space-y-3.5">
