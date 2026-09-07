@@ -801,8 +801,10 @@ test('disconnected user sees connect message and zero streak', async () => {
 
 function seedFreezeOrder(store, telegramId, orderId = 'FRZ001') {
   store.orders = store.orders || {}
+  store.inventory = store.inventory || {}
   const user = store.users[String(telegramId)]
   user.orderIds = user.orderIds || []
+  user.inventoryIds = user.inventoryIds || []
   const createdAt = new Date().toISOString()
   store.orders[orderId] = {
     orderId,
@@ -810,13 +812,42 @@ function seedFreezeOrder(store, telegramId, orderId = 'FRZ001') {
     productId: STREAK_FREEZE_PRODUCT_ID,
     productName: 'Заморозка стрика',
     price: 1000,
-    status: 'pending',
+    status: 'completed',
     createdAt,
     updatedAt: createdAt,
-    completedAt: null,
+    completedAt: createdAt,
+    reviewedBy: 'test',
+    reviewedAt: createdAt,
     metadata: {},
   }
   user.orderIds = [...user.orderIds, orderId]
+  const itemId = `sf:${orderId}`
+  store.inventory[itemId] = {
+    itemId,
+    userId: Number(telegramId),
+    type: STREAK_FREEZE_PRODUCT_ID,
+    status: 'available',
+    sourceOrderId: orderId,
+    createdAt,
+    consumedAt: null,
+    metadata: {},
+  }
+  user.inventoryIds = [...user.inventoryIds, itemId]
+  store.events = store.events || {}
+  store.events[`shop:inventory:${orderId}`] = {
+    eventId: `shop:inventory:${orderId}`,
+    done: true,
+    itemId,
+    orderId,
+    userId: Number(telegramId),
+    createdAt,
+  }
+  store.events[`shop:approve:${orderId}`] = {
+    eventId: `shop:approve:${orderId}`,
+    done: true,
+    orderId,
+    createdAt,
+  }
   return orderId
 }
 
@@ -901,7 +932,9 @@ test('one missed day + Freeze → streak kept, freeze -1, ledger note', async ()
 
     withStore((store) => {
       assert.equal(store.orders.FRZ70.status, 'completed')
-      assert.equal(store.orders.FRZ70.metadata.consumedForDate, toStreakCalendarDate(utcDateOffset(0)))
+      const item = store.inventory['sf:FRZ70']
+      assert.equal(item.status, 'consumed')
+      assert.equal(item.metadata.consumedForDate, toStreakCalendarDate(utcDateOffset(0)))
       assert.ok(store.coinTransactions[`streak:freeze:70:${toStreakCalendarDate(utcDateOffset(0))}`])
       assert.equal(
         store.coinTransactions[`streak:freeze:70:${toStreakCalendarDate(utcDateOffset(0))}`].type,
@@ -960,7 +993,8 @@ test('two missed days + Freeze → reset, freeze not spent', async () => {
     assert.equal(getKickStreakForUser(72).freezeAvailable, 1)
 
     withStore((store) => {
-      assert.equal(store.orders.FRZ72.status, 'pending')
+      assert.equal(store.orders.FRZ72.status, 'completed')
+      assert.equal(store.inventory['sf:FRZ72'].status, 'available')
       return true
     })
   })

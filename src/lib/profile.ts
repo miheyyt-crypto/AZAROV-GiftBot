@@ -5,6 +5,7 @@ import { getUserStats } from '@/lib/user'
 import { getAchievements } from '@/data/achievements'
 import type {
   AchievementProgress,
+  CaseOpeningItem,
   CoinHistoryFilter,
   CoinTransaction,
   InventoryItem,
@@ -18,6 +19,7 @@ export interface ProfileApiResponse {
   user?: UserAccount
   transactions?: CoinTransaction[]
   items?: InventoryItem[]
+  caseOpenings?: CaseOpeningItem[]
   achievements?: AchievementProgress[]
   orders?: ShopOrder[]
 }
@@ -68,13 +70,19 @@ export async function fetchCoinHistory(
   }
 }
 
-export async function fetchInventory(): Promise<InventoryItem[]> {
+export async function fetchInventory(): Promise<{
+  items: InventoryItem[]
+  caseOpenings: CaseOpeningItem[]
+}> {
   try {
     const result = await getInventoryRequest()
     applyRemoteUser(result.user)
-    return result.items ?? []
+    return {
+      items: result.items ?? [],
+      caseOpenings: result.caseOpenings ?? [],
+    }
   } catch {
-    return []
+    return { items: [], caseOpenings: [] }
   }
 }
 

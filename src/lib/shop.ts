@@ -27,12 +27,12 @@ export const ORDER_STATUS_HINTS: Record<string, string> = {
   processing: 'Заказ находится в обработке.',
   completed: 'Заказ успешно выполнен.',
   cancelled: 'Заказ отменён, монеты возвращены.',
-  rejected: 'Заказ отклонён.',
+  rejected: 'Заказ отклонён, монеты возвращены.',
   PENDING: 'Заказ получен и ожидает выполнения.',
   PROCESSING: 'Заказ находится в обработке.',
   COMPLETED: 'Заказ успешно выполнен.',
   CANCELLED: 'Заказ отменён, монеты возвращены.',
-  REJECTED: 'Заказ отклонён.',
+  REJECTED: 'Заказ отклонён, монеты возвращены.',
 }
 
 function applyRemoteUser(user: Parameters<typeof mapRemoteAccount>[0] | undefined): void {

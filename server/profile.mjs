@@ -1,4 +1,5 @@
 import { getUserOrders, normalizeOrderStatus } from './shop.mjs'
+import { listUserInventoryItems } from './inventory.mjs'
 import { withStoreRead } from './store.mjs'
 import { getReferralsByReferrer } from './users.mjs'
 import { listUserTransactions, normalizeTxType } from './wallet.mjs'
@@ -118,14 +119,19 @@ export function getInventory(userId) {
   return withStoreRead((store) => {
     const user = store.users[String(userId)]
     if (!user) {
-      return { success: false, message: 'Пользователь не найден.', items: [] }
+      return {
+        success: false,
+        message: 'Пользователь не найден.',
+        items: [],
+        caseOpenings: [],
+      }
     }
 
     const openings = (user.caseOpenings || [])
       .slice()
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
-    const items = openings.map((opening) => ({
+    const caseOpenings = openings.map((opening) => ({
       id: opening.openingId,
       name: opening.prize?.name || `${opening.rewardAmount}`,
       amount: opening.rewardAmount,
@@ -136,7 +142,54 @@ export function getInventory(userId) {
       createdAt: opening.createdAt,
     }))
 
-    return { success: true, items }
+    const inventoryRows = listUserInventoryItems(store, userId)
+    const availableFreezes = inventoryRows.filter(
+      (item) =>
+        String(item.type) === 'streak-freeze' && String(item.status) === 'available',
+    )
+    const otherItems = inventoryRows.filter(
+      (item) =>
+        !(String(item.type) === 'streak-freeze' && String(item.status) === 'available'),
+    )
+
+    const items = []
+
+    if (availableFreezes.length > 0) {
+      const sorted = availableFreezes
+        .slice()
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+      items.push({
+        itemId: 'streak-freeze',
+        type: 'streak-freeze',
+        status: 'available',
+        quantity: availableFreezes.length,
+        sourceOrderId: null,
+        createdAt: sorted[0].createdAt,
+        consumedAt: null,
+        name: 'Заморозка стрика',
+        metadata: {},
+      })
+    }
+
+    for (const item of otherItems) {
+      // Consumed freezes are not listed — user only sees available × N.
+      if (String(item.type) === 'streak-freeze') {
+        continue
+      }
+      items.push({
+        itemId: item.itemId,
+        type: item.type,
+        status: item.status,
+        quantity: 1,
+        sourceOrderId: item.sourceOrderId || null,
+        createdAt: item.createdAt,
+        consumedAt: item.consumedAt || null,
+        name: String(item.type || 'Предмет'),
+        metadata: item.metadata || {},
+      })
+    }
+
+    return { success: true, items, caseOpenings }
   })
 }
 

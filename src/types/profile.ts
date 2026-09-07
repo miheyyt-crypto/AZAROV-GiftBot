@@ -11,7 +11,8 @@ export interface CoinTransaction {
   createdAt: string
 }
 
-export interface InventoryItem {
+/** Prize from a case opening (legacy inventory list). */
+export interface CaseOpeningItem {
   id: string
   name: string
   amount: number
@@ -21,6 +22,23 @@ export interface InventoryItem {
   rarity: string
   createdAt: string
 }
+
+/** Real inventory item (shop fulfillment after admin approve). */
+export interface InventoryItem {
+  itemId: string
+  type: string
+  status: 'available' | 'consumed' | string
+  /** Stack count for stackable items (e.g. available streak-freeze). */
+  quantity?: number
+  sourceOrderId?: string | null
+  createdAt: string
+  consumedAt?: string | null
+  name: string
+  metadata?: Record<string, unknown>
+}
+
+/** @deprecated Prefer CaseOpeningItem — kept for older call sites. */
+export type LegacyCaseInventoryItem = CaseOpeningItem
 
 export interface AchievementDefinition {
   id: string
@@ -43,4 +61,3 @@ export type ProfileMenuId =
   | 'orders'
   | 'achievements'
   | 'logout'
-

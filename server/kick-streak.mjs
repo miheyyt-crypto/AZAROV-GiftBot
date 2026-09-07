@@ -1,13 +1,12 @@
+import { getKickRequiredChannel, KICK_STREAK_TIMEZONE } from './constants.mjs'
 import {
-  getKickRequiredChannel,
-  KICK_STREAK_TIMEZONE,
-  STREAK_FREEZE_PRODUCT_ID,
-} from './constants.mjs'
+  consumeStreakFreezeInventoryOnStore,
+  countAvailableStreakFreezes,
+  listAvailableStreakFreezeItems,
+} from './inventory.mjs'
 import { fetchKickChannelLiveStatus, resolveKickChannelBySlug } from './kick-api.mjs'
 import { getKickConnectionForUser } from './kick-oauth.mjs'
-import { normalizeOrderStatus } from './shop.mjs'
 import { withStore, withStoreRead } from './store.mjs'
-import { hasEvent, recordLedgerNote, TX_TYPE, utcNow } from './wallet.mjs'
 
 const WEBHOOK_EVENT_TTL_MS = 7 * 24 * 60 * 60 * 1000
 /** Fresh livestream.status.updated / API snapshot window (ms). */
@@ -146,98 +145,21 @@ export function isMessageDuringLive(store, messageAtIso, liveApi = null, { nowMs
   return { duringLive: false, reason: 'unconfirmed' }
 }
 
-/**
- * Available streak-freeze units from shop orders (not yet auto-consumed).
- * Purchase creates pending orders; consume marks them completed.
- */
-export function listAvailableStreakFreezeOrders(store, telegramUserId) {
-  store.orders = store.orders || {}
-  return Object.values(store.orders)
-    .filter((order) => {
-      if (!order || Number(order.userId) !== Number(telegramUserId)) {
-        return false
-      }
-      if (String(order.productId) !== STREAK_FREEZE_PRODUCT_ID) {
-        return false
-      }
-      const status = normalizeOrderStatus(order.status)
-      if (status !== 'pending' && status !== 'processing') {
-        return false
-      }
-      if (order.consumedAt || order.metadata?.consumedForDate) {
-        return false
-      }
-      return true
-    })
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-}
-
-export function countAvailableStreakFreezes(store, telegramUserId) {
-  return listAvailableStreakFreezeOrders(store, telegramUserId).length
-}
+export { countAvailableStreakFreezes }
+export const listAvailableStreakFreezeOrders = listAvailableStreakFreezeItems
 
 export function streakFreezeEventId(telegramUserId, activityDate) {
   return `streak:freeze:${telegramUserId}:${activityDate}`
 }
 
 /**
- * Atomically consume one available freeze for a calendar gap day.
+ * Atomically consume one available freeze inventory item for a calendar gap day.
  * Idempotent per (telegramId, activityDate) via ledger event id.
+ * Shop order stays completed — inventory is the source of truth.
  */
 export function consumeStreakFreezeOnStore(store, telegramUserId, activityDate) {
   const eventId = streakFreezeEventId(telegramUserId, activityDate)
-  if (hasEvent(store, eventId)) {
-    return {
-      consumed: false,
-      reason: 'already_consumed_for_date',
-      eventId,
-      orderId: store.events[eventId]?.referenceId || null,
-    }
-  }
-
-  const available = listAvailableStreakFreezeOrders(store, telegramUserId)
-  if (!available.length) {
-    return { consumed: false, reason: 'no_freeze', eventId, orderId: null }
-  }
-
-  const user = store.users[String(telegramUserId)]
-  if (!user) {
-    return { consumed: false, reason: 'missing_user', eventId, orderId: null }
-  }
-
-  const order = available[0]
-  const now = utcNow()
-  order.status = 'completed'
-  order.completedAt = order.completedAt || now
-  order.updatedAt = now
-  order.consumedAt = now
-  order.metadata = {
-    ...(order.metadata || {}),
-    consumedForDate: String(activityDate),
-    consumedReason: 'streak_gap',
-  }
-
-  const note = recordLedgerNote(store, user, TX_TYPE.STREAK_FREEZE, eventId, {
-    referenceId: order.orderId,
-    description: 'Заморозка стрика: стрик сохранён после пропуска одного дня',
-  })
-
-  if (!note.applied && note.reason === 'already_granted') {
-    return {
-      consumed: false,
-      reason: 'already_consumed_for_date',
-      eventId,
-      orderId: order.orderId,
-    }
-  }
-
-  return {
-    consumed: true,
-    reason: 'consumed',
-    eventId,
-    orderId: order.orderId,
-    transaction: note.transaction,
-  }
+  return consumeStreakFreezeInventoryOnStore(store, telegramUserId, activityDate, eventId)
 }
 
 /**

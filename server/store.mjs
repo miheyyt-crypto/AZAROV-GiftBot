@@ -14,6 +14,8 @@ import {
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { ensureStreakFreezeInventoryMigration } from './inventory.mjs'
+
 const moduleDir = path.dirname(fileURLToPath(import.meta.url))
 const defaultDataDir = path.join(moduleDir, 'data')
 const projectRoot = path.resolve(moduleDir, '..')
@@ -86,13 +88,14 @@ export function isPersistentStoreDir(dir = getDataDir()) {
 
 export function createEmptyStore() {
   return {
-    version: 4,
+    version: 5,
     users: {},
     referralIndex: {},
     referrals: {},
     events: {},
     coinTransactions: {},
     orders: {},
+    inventory: {},
     caseOpenings: {},
     partnerSubmissions: {},
     partnerAccountBinds: {},
@@ -114,6 +117,7 @@ function migrateStore(store) {
   store.events = store.events || {}
   store.coinTransactions = store.coinTransactions || {}
   store.orders = store.orders || {}
+  store.inventory = store.inventory || {}
   store.caseOpenings = store.caseOpenings || {}
   store.partnerSubmissions = store.partnerSubmissions || {}
   store.partnerAccountBinds = store.partnerAccountBinds || {}
@@ -127,6 +131,14 @@ function migrateStore(store) {
   if (store.kickLivestreamState === undefined) {
     store.kickLivestreamState = null
   }
+
+  // One-shot upgrade: pending streak-freeze orders → inventory (strategy B).
+  if (Number(store.version) < 5) {
+    ensureStreakFreezeInventoryMigration(store)
+  } else {
+    store.inventory = store.inventory || {}
+  }
+
   return store
 }
 
@@ -354,6 +366,14 @@ export function withStore(updater, { readOnly = false } = {}) {
 
 export function withStoreRead(reader) {
   return withStore(reader, { readOnly: true })
+}
+
+/**
+ * Persist versioned store migrations (e.g. legacy streak-freeze → inventory).
+ * Safe to call on boot; no-op after migration event is saved.
+ */
+export function persistStoreMigrations() {
+  return withStore((store) => ensureStreakFreezeInventoryMigration(store))
 }
 
 export async function withStoreAsync(updater, { readOnly = false } = {}) {

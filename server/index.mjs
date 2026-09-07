@@ -43,11 +43,23 @@ import {
   notifyAdminsNewPartnerSubmission,
   notifyUserPartnerDecision,
 } from './partner-admin.mjs'
+import {
+  notifyAdminsNewShopOrder,
+  notifyUserShopDecision,
+} from './shop-admin.mjs'
 import { getBotRuntimeDiagnostics } from './bot.mjs'
 import { telegramApi } from './telegram-notify.mjs'
 import { listPartnersPublic } from './partners.mjs'
 import { MAX_SCREENSHOT_BYTES, isForbiddenOriginalName } from './uploads.mjs'
-import { purchaseProduct, getUserOrders, getOrder, cancelOrder } from './shop.mjs'
+import {
+  approveShopOrder,
+  cancelOrder,
+  getOrder,
+  getUserOrders,
+  listShopOrdersForAdmin,
+  purchaseProduct,
+  rejectShopOrder,
+} from './shop.mjs'
 import { openCase } from './cases.mjs'
 import { getLeaderboard, getRecentCaseDrops } from './home.mjs'
 import {
@@ -60,6 +72,7 @@ import {
   assertPersistentStoreOrExit,
   getStoreDiagnostics,
   getUser,
+  persistStoreMigrations,
   withStore,
 } from './store.mjs'
 import {
@@ -1082,6 +1095,59 @@ app.post(
   }),
 )
 
+app.get(
+  '/api/admin/shop/orders',
+  withAdmin(async (req, res) => {
+    const status = typeof req.query.status === 'string' ? req.query.status : ''
+    const result = listShopOrdersForAdmin(status)
+    res.json(result)
+  }),
+)
+
+app.post(
+  '/api/admin/shop/orders/:orderId/approve',
+  withAdmin(async (req, res) => {
+    const orderId = parseOrderId(req.params.orderId)
+    const requestId =
+      typeof req.body?.requestId === 'string' && req.body.requestId.trim()
+        ? parseRequestId(req.body.requestId)
+        : `admin-shop-approve-${Date.now()}`
+    const result = approveShopOrder(orderId, 'admin-key', requestId)
+    if (result.success && result.order?.status === 'completed' && !result.alreadyProcessed) {
+      void notifyUserShopDecision(result.order).catch((error) => {
+        console.error('[shop-admin] approve HTTP notify failed', {
+          orderId: result.order?.orderId,
+          message: error instanceof Error ? error.message : 'unknown_error',
+        })
+      })
+    }
+    res.json(result)
+  }),
+)
+
+app.post(
+  '/api/admin/shop/orders/:orderId/reject',
+  withAdmin(async (req, res) => {
+    const orderId = parseOrderId(req.params.orderId)
+    const requestId =
+      typeof req.body?.requestId === 'string' && req.body.requestId.trim()
+        ? parseRequestId(req.body.requestId)
+        : `admin-shop-reject-${Date.now()}`
+    const rejectionReason =
+      typeof req.body?.rejectionReason === 'string' ? req.body.rejectionReason : ''
+    const result = rejectShopOrder(orderId, 'admin-key', rejectionReason, requestId)
+    if (result.success && result.order?.status === 'rejected' && !result.alreadyProcessed) {
+      void notifyUserShopDecision(result.order).catch((error) => {
+        console.error('[shop-admin] reject HTTP notify failed', {
+          orderId: result.order?.orderId,
+          message: error instanceof Error ? error.message : 'unknown_error',
+        })
+      })
+    }
+    res.json(result)
+  }),
+)
+
 app.post(
   '/api/shop/purchase',
   withUser(async (req, res, telegramUser) => {
@@ -1090,6 +1156,14 @@ app.post(
     const metadata = sanitizePurchaseMetadata(req.body?.metadata)
     bootstrapUser(telegramUser, '')
     const result = purchaseProduct(telegramUser.id, productId, requestId, metadata)
+    if (result.success && result.created && result.order?.status === 'pending') {
+      void notifyAdminsNewShopOrder(result.order).catch((error) => {
+        console.error('[shop-admin] purchase notify failed', {
+          orderId: result.order?.orderId,
+          message: error instanceof Error ? error.message : 'unknown_error',
+        })
+      })
+    }
     res.json({
       ...result,
       user: toPublicUser(getUser(telegramUser.id)),
@@ -1266,6 +1340,17 @@ app.use((error, _req, res, _next) => {
 export { app, PORT, HOST }
 
 export function startHttpServer() {
+  try {
+    const migration = persistStoreMigrations()
+    if (migration && !migration.alreadyDone && migration.migrated > 0) {
+      console.info('[store] migrated legacy streak-freeze orders to inventory', migration)
+    }
+  } catch (error) {
+    console.error('[store] migration failed', {
+      message: error instanceof Error ? error.message : 'unknown_error',
+    })
+  }
+
   const server = app.listen(PORT, HOST, () => {
     console.log(`AZAROV GiftBot API listening on http://${HOST}:${PORT}`)
     if (canServeFrontend) {

@@ -10,6 +10,11 @@ import {
   handlePartnerModerationCallback,
   handlePartnerRejectReasonMessage,
 } from './partner-admin.mjs'
+import {
+  answerShopCallback,
+  handleShopModerationCallback,
+  handleShopRejectReasonMessage,
+} from './shop-admin.mjs'
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 loadEnv({ path: path.join(rootDir, '.env') })
@@ -162,12 +167,39 @@ export function createBot() {
     await answerPartnerCallback(ctx)
   })
 
+  async function onShopModerationAction(ctx) {
+    try {
+      console.info('[Telegram Bot] shop moderation action', {
+        data: ctx.callbackQuery?.data || null,
+        fromId: ctx.from?.id != null ? String(ctx.from.id) : null,
+      })
+      const handled = await handleShopModerationCallback(ctx)
+      if (!handled) {
+        await answerShopCallback(ctx)
+      }
+    } catch (error) {
+      console.error('[Telegram Bot] shop moderation action failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+      await answerShopCallback(ctx, 'Ошибка обработки', true)
+    }
+  }
+
+  bot.action(/^shop:(approve|reject):([A-Z0-9]{4,32})$/i, onShopModerationAction)
+  bot.action('shop:noop', async (ctx) => {
+    await answerShopCallback(ctx)
+  })
+
   bot.on('text', async (ctx) => {
     // Ignore /commands — only consume plain text as rejection reasons.
     if (String(ctx.message?.text || '').startsWith('/')) {
       return
     }
     try {
+      const shopHandled = await handleShopRejectReasonMessage(ctx)
+      if (shopHandled) {
+        return
+      }
       await handlePartnerRejectReasonMessage(ctx)
     } catch (error) {
       console.error('[Telegram Bot] reject-reason text failed', {
