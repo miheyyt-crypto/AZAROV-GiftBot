@@ -3,6 +3,7 @@ import { hydrateBalanceFromAccount } from '@/lib/balance'
 import { mapRemoteAccount } from '@/lib/session'
 import { getTelegramInitData, getTelegramWebApp } from '@/lib/telegram'
 import type { KickConnection } from '@/types'
+import type { KickStreakInfo } from '@/types/kick'
 import type { UserAccount } from '@/types/account'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? ''
@@ -124,6 +125,46 @@ export function startKickConnectionPolling(options?: {
       }
     })
   }, intervalMs)
+}
+
+export async function fetchKickStreak(): Promise<KickStreakInfo | null> {
+  try {
+    const initData = getTelegramInitData()
+    const headers = new Headers()
+    headers.set('Content-Type', 'application/json')
+    if (initData) {
+      headers.set('Authorization', `tma ${initData}`)
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/kick/streak`, {
+      method: 'GET',
+      headers,
+      credentials: 'include',
+    })
+
+    const payload = (await response.json().catch(() => null)) as KickStreakInfo | null
+    if (!payload || payload.success === false) {
+      return null
+    }
+
+    return {
+      success: true,
+      kickConnected: Boolean(payload.kickConnected),
+      kickUsername: payload.kickUsername ?? null,
+      kickUserId: payload.kickUserId ?? null,
+      currentStreak: Number(payload.currentStreak) || 0,
+      lastActiveDate: payload.lastActiveDate || null,
+      creditedToday: Boolean(payload.creditedToday),
+      todayDate: payload.todayDate,
+      timezone: payload.timezone,
+      channel: payload.channel,
+      message: payload.message ?? null,
+      freezeAvailable: Number(payload.freezeAvailable) || 0,
+      freezeAutoConsume: Boolean(payload.freezeAutoConsume),
+    }
+  } catch {
+    return null
+  }
 }
 
 async function kickRequest(path: string, init: RequestInit = {}): Promise<{

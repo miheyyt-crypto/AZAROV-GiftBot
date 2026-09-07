@@ -36,6 +36,9 @@ export function resetAllKickBindingsOnStore(store) {
   store.kickByTelegram = {}
   store.kickOAuthStates = {}
   store.kickFollows = {}
+  store.kickStreamStreaks = {}
+  store.kickWebhookEvents = {}
+  store.kickLivestreamState = null
 
   for (const user of Object.values(store.users || {})) {
     if (!user || typeof user !== 'object') {

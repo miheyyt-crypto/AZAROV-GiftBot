@@ -5,9 +5,17 @@ import {
   KICK_API_CHANNELS_FOLLOWED_URL,
   KICK_API_CHANNELS_URL,
   KICK_API_EVENTS_SUBSCRIPTIONS_URL,
+  KICK_API_LIVESTREAMS_URL,
   KICK_API_PUBLIC_KEY_URL,
   KICK_OAUTH_TOKEN_URL,
 } from './constants.mjs'
+
+/** Events the app subscribes to via App Access Token webhooks. */
+export const KICK_WEBHOOK_EVENTS = [
+  { name: 'channel.followed', version: 1 },
+  { name: 'chat.message.sent', version: 1 },
+  { name: 'livestream.status.updated', version: 1 },
+]
 
 function getKickClientId() {
   return String(process.env.KICK_CLIENT_ID || '').trim()
@@ -381,26 +389,35 @@ export async function listKickEventSubscriptions(options = {}) {
   return { ok: true, status: response.status, subscriptions }
 }
 
-export async function ensureKickFollowEventSubscription(channel, options = {}) {
+/**
+ * Ensure webhook subscriptions for follow + chat streak + livestream status.
+ * Uses App Access Token (no user OAuth re-auth / events:subscribe on user tokens).
+ */
+export async function ensureKickEventSubscriptions(channel, options = {}) {
   const fetchImpl = options.fetchImpl || fetch
   const appToken = options.appAccessToken || (await fetchKickAppAccessToken(options))
+  const wanted = options.events || KICK_WEBHOOK_EVENTS
 
   const existing = await listKickEventSubscriptions({
     ...options,
     appAccessToken: appToken,
     broadcasterUserId: channel.broadcasterUserId,
   })
-  const already = (existing.subscriptions || []).some(
-    (row) =>
-      String(row?.event || row?.name || '') === 'channel.followed' &&
-      String(row?.broadcaster_user_id ?? '') === String(channel.broadcasterUserId),
+
+  const present = new Set(
+    (existing.subscriptions || [])
+      .filter((row) => String(row?.broadcaster_user_id ?? '') === String(channel.broadcasterUserId))
+      .map((row) => String(row?.event || row?.name || '')),
   )
-  if (already) {
+
+  const missing = wanted.filter((event) => !present.has(event.name))
+  if (!missing.length) {
     logKickApi('event_subscribe_already', {
       broadcasterUserId: channel.broadcasterUserId,
       slug: channel.slug,
+      events: wanted.map((e) => e.name),
     })
-    return { ok: true, already: true, data: existing.subscriptions }
+    return { ok: true, already: true, data: existing.subscriptions, missing: [] }
   }
 
   const response = await fetchImpl(KICK_API_EVENTS_SUBSCRIPTIONS_URL, {
@@ -412,7 +429,7 @@ export async function ensureKickFollowEventSubscription(channel, options = {}) {
     },
     body: JSON.stringify({
       broadcaster_user_id: Number(channel.broadcasterUserId),
-      events: [{ name: 'channel.followed', version: 1 }],
+      events: missing,
       method: 'webhook',
     }),
   })
@@ -428,15 +445,72 @@ export async function ensureKickFollowEventSubscription(channel, options = {}) {
     logKickApi('event_subscribe_failed', {
       status: response.status,
       message: typeof payload?.message === 'string' ? payload.message.slice(0, 120) : null,
+      missing: missing.map((e) => e.name),
     })
-    return { ok: false, status: response.status, message: payload?.message || null }
+    return { ok: false, status: response.status, message: payload?.message || null, missing }
   }
 
   logKickApi('event_subscribe_ok', {
     broadcasterUserId: channel.broadcasterUserId,
     slug: channel.slug,
+    subscribed: missing.map((e) => e.name),
   })
-  return { ok: true, data: payload?.data || null }
+  return { ok: true, data: payload?.data || null, missing }
+}
+
+/** @deprecated Prefer ensureKickEventSubscriptions — kept for call-site compatibility. */
+export async function ensureKickFollowEventSubscription(channel, options = {}) {
+  return ensureKickEventSubscriptions(channel, {
+    ...options,
+    events: [{ name: 'channel.followed', version: 1 }],
+  })
+}
+
+/**
+ * Official livestream presence for a broadcaster (aggregate live flag only).
+ */
+export async function fetchKickChannelLiveStatus(broadcasterUserId, options = {}) {
+  const fetchImpl = options.fetchImpl || fetch
+  const appToken = options.appAccessToken || (await fetchKickAppAccessToken(options))
+  const url = new URL(KICK_API_LIVESTREAMS_URL)
+  url.searchParams.set('broadcaster_user_id', String(broadcasterUserId))
+
+  const response = await fetchImpl(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${appToken}`,
+      Accept: 'application/json',
+    },
+  })
+
+  let payload = null
+  try {
+    payload = await response.json()
+  } catch {
+    payload = null
+  }
+
+  if (!response.ok) {
+    const error = new Error('kick_livestream_unavailable')
+    error.code = 'kick_livestream_unavailable'
+    error.httpStatus = response.status
+    throw error
+  }
+
+  const rows = Array.isArray(payload?.data) ? payload.data : []
+  const match = rows.find(
+    (row) => String(row?.broadcaster_user_id ?? '') === String(broadcasterUserId),
+  )
+  if (!match) {
+    return { isLive: false, startedAt: null, title: null }
+  }
+
+  return {
+    isLive: true,
+    startedAt: match.started_at || null,
+    title: match.stream_title || match.title || null,
+    viewerCount: match.viewer_count ?? null,
+  }
 }
 
 export async function getKickWebhookPublicKey(options = {}) {
@@ -496,7 +570,7 @@ export async function bootstrapKickFollowInfrastructure(options = {}) {
   try {
     const slug = getKickRequiredChannel()
     const channel = await resolveKickChannelBySlug(slug, options)
-    const sub = await ensureKickFollowEventSubscription(channel, options)
+    const sub = await ensureKickEventSubscriptions(channel, options)
     return { ok: Boolean(sub.ok), channel, subscription: sub }
   } catch (error) {
     logKickApi('bootstrap_failed', {

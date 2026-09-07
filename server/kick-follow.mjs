@@ -14,6 +14,7 @@ import {
   getKickWebhookPublicKey,
 } from './kick-api.mjs'
 import { getKickConnectionForUser, isKickOAuthConfigured } from './kick-oauth.mjs'
+import { processChatMessageSent, processLivestreamStatusUpdated } from './kick-streak.mjs'
 import { withStore, withStoreRead } from './store.mjs'
 import { addCoins, hasEvent, TX_TYPE } from './wallet.mjs'
 
@@ -469,10 +470,6 @@ export async function handleKickFollowWebhook(req, options = {}) {
     return { ok: false, status: 401, message: 'invalid_signature' }
   }
 
-  if (eventType && eventType !== 'channel.followed') {
-    return { ok: true, status: 200, ignored: true }
-  }
-
   let payload
   try {
     payload = typeof req.body === 'object' && req.body && !Buffer.isBuffer(req.body)
@@ -480,6 +477,20 @@ export async function handleKickFollowWebhook(req, options = {}) {
       : JSON.parse(rawBody)
   } catch {
     return { ok: false, status: 400, message: 'invalid_json' }
+  }
+
+  if (eventType === 'livestream.status.updated') {
+    const result = await processLivestreamStatusUpdated(payload, options)
+    return { ok: true, status: 200, ...result }
+  }
+
+  if (eventType === 'chat.message.sent') {
+    const result = await processChatMessageSent(payload, { messageId, options })
+    return { ok: true, status: 200, ...result }
+  }
+
+  if (eventType && eventType !== 'channel.followed') {
+    return { ok: true, status: 200, ignored: true }
   }
 
   const followerKickUserId = String(payload?.follower?.user_id ?? '').trim()
@@ -574,6 +585,12 @@ export async function getKickFollowAdminStatus(options = {}) {
   const followEventSubs = (subscriptions.subscriptions || []).filter(
     (row) => String(row?.event || row?.name || '') === 'channel.followed',
   )
+  const chatEventSubs = (subscriptions.subscriptions || []).filter(
+    (row) => String(row?.event || row?.name || '') === 'chat.message.sent',
+  )
+  const liveEventSubs = (subscriptions.subscriptions || []).filter(
+    (row) => String(row?.event || row?.name || '') === 'livestream.status.updated',
+  )
 
   return {
     ok: true,
@@ -590,12 +607,16 @@ export async function getKickFollowAdminStatus(options = {}) {
       error: subscriptions.error || null,
       count: (subscriptions.subscriptions || []).length,
       channelFollowed: followEventSubs,
+      chatMessageSent: chatEventSubs,
+      livestreamStatusUpdated: liveEventSubs,
     },
     diagnosis: !followEventSubs.length
       ? 'NO_CHANNEL_FOLLOWED_SUBSCRIPTION'
-      : storeSnapshot.kickFollows === 0
-        ? 'SUBSCRIPTION_OK_BUT_NO_FOLLOW_EVENTS'
-        : 'OK',
+      : !chatEventSubs.length
+        ? 'NO_CHAT_MESSAGE_SUBSCRIPTION'
+        : storeSnapshot.kickFollows === 0
+          ? 'SUBSCRIPTION_OK_BUT_NO_FOLLOW_EVENTS'
+          : 'OK',
   }
 }
 

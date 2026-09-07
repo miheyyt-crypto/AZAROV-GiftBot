@@ -26,6 +26,7 @@ import {
   getKickFollowAdminStatus,
   handleKickFollowWebhook,
 } from './kick-follow.mjs'
+import { getKickStreakForUser } from './kick-streak.mjs'
 import { resetAllKickBindingsOnStore } from './kick-reset.mjs'
 import { startPartnerTask, verifyPartnerTask } from './partner-tasks.mjs'
 import {
@@ -435,6 +436,22 @@ app.get(
 )
 
 /**
+ * Kick chat-activity streak for the authenticated Mini App user.
+ * Source of truth is backend (webhook credits); never trust client Kick ids.
+ */
+app.get(
+  '/api/kick/streak',
+  withUser(async (_req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const streak = getKickStreakForUser(telegramUser.id)
+    res.json({
+      ...streak,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+/**
  * Kick OAuth redirect URI. Must match KICK_REDIRECT_URI / Kick Developer settings.
  * Example production: https://azarov-giftbot-production.up.railway.app/api/kick/callback
  */
@@ -677,7 +694,7 @@ app.post(
 )
 
 /**
- * Kick Events webhook receiver (channel.followed).
+ * Kick Events webhook receiver (channel.followed, chat.message.sent, livestream.status.updated).
  * Configure this exact URL in Kick Developer → Enable Webhooks.
  * Does not require Telegram auth; signature is verified with Kick public key.
  */

@@ -29,9 +29,17 @@ export const KICK_OAUTH_TOKEN_URL = 'https://id.kick.com/oauth/token'
 export const KICK_API_USERS_URL = 'https://api.kick.com/public/v1/users'
 export const KICK_API_CHANNELS_URL = 'https://api.kick.com/public/v1/channels'
 export const KICK_API_CHANNELS_FOLLOWED_URL = 'https://api.kick.com/public/v1/channels/followed'
+export const KICK_API_LIVESTREAMS_URL = 'https://api.kick.com/public/v1/livestreams'
 export const KICK_API_EVENTS_SUBSCRIPTIONS_URL = 'https://api.kick.com/public/v1/events/subscriptions'
 export const KICK_API_PUBLIC_KEY_URL = 'https://api.kick.com/public/v1/public-key'
 export const KICK_OAUTH_STATE_TTL_MS = 10 * 60 * 1000
+/**
+ * Calendar-day boundary for Kick chat streak.
+ * Kick event timestamps are ISO/UTC; store ledgers use UTC ISO — keep streak days in UTC.
+ */
+export const KICK_STREAK_TIMEZONE = 'UTC'
+/** Product id for streak freeze shop item (orders only today — no auto-consume yet). */
+export const STREAK_FREEZE_PRODUCT_ID = 'streak-freeze'
 
 export function getKickRequiredChannel() {
   const raw = String(process.env.KICK_REQUIRED_CHANNEL || KICK_REQUIRED_CHANNEL_DEFAULT)

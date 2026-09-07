@@ -101,6 +101,9 @@ export function createEmptyStore() {
     kickByTelegram: {},
     kickOAuthStates: {},
     kickFollows: {},
+    kickStreamStreaks: {},
+    kickWebhookEvents: {},
+    kickLivestreamState: null,
   }
 }
 
@@ -119,6 +122,11 @@ function migrateStore(store) {
   store.kickByTelegram = store.kickByTelegram || {}
   store.kickOAuthStates = store.kickOAuthStates || {}
   store.kickFollows = store.kickFollows || {}
+  store.kickStreamStreaks = store.kickStreamStreaks || {}
+  store.kickWebhookEvents = store.kickWebhookEvents || {}
+  if (store.kickLivestreamState === undefined) {
+    store.kickLivestreamState = null
+  }
   return store
 }
 
