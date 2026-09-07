@@ -78,7 +78,7 @@ export function CoinHistorySheet({ onClose }: CoinHistorySheetProps) {
                       isIncome ? 'text-gold' : 'text-red-400',
                     ].join(' ')}
                   >
-                    {isIncome ? '+' : ''}
+                    {isIncome ? '+' : '−'}
                     {formatBalance(Math.abs(item.amount))}
                   </p>
                 </div>
