@@ -162,6 +162,8 @@ npm run build
 npm run start:production
 ```
 
+(`npm start` is the same launcher. `railway.toml` also pins this command.)
+
 This starts:
 
 1. Express API on `HOST:PORT`
@@ -170,7 +172,7 @@ This starts:
 
 Do **not** also run `npm run start:bot` in a second service — two bots with the same token will conflict.
 
-Keep `npm start` / `npm run start:bot` for local/API-only use.
+Local API-only (no bot): `npm run server` or `npm run start:api`.
 
 ---
 

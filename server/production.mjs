@@ -28,6 +28,8 @@ if (!bot) {
   console.error(
     '[production] Telegram Bot did not start (BOT_TOKEN missing or launch failed). API may still be running.',
   )
+} else {
+  console.info('[production] Telegram Bot attached to this process (long polling).')
 }
 
 let shuttingDown = false

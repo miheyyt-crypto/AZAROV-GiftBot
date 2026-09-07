@@ -14,6 +14,21 @@ import {
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 loadEnv({ path: path.join(rootDir, '.env') })
 
+/** Safe runtime snapshot for admin diagnostics (no tokens). */
+let botRuntimeDiagnostics = {
+  pollingActive: false,
+  botId: null,
+  botUsername: null,
+  webhookUrlBeforeLaunch: null,
+  webhookPendingUpdateCount: null,
+  launchMode: null,
+  lastLaunchError: null,
+}
+
+export function getBotRuntimeDiagnostics() {
+  return { ...botRuntimeDiagnostics }
+}
+
 function mapTelegramUser(from) {
   if (!from?.id) {
     return null
@@ -55,6 +70,21 @@ export function createBot() {
   }
 
   const bot = new Telegraf(botToken)
+
+  // TEMP DIAGNOSIS (remove after Welvura callback root-cause confirmed):
+  // Top-level middleware — runs for every update before bot.action / bot.start.
+  // Must call next() so existing handlers still run.
+  bot.use(async (ctx, next) => {
+    if (ctx.callbackQuery) {
+      console.info('[Telegram Bot] DIAG callback_query received', {
+        received: true,
+        data: String(ctx.callbackQuery.data || '').slice(0, 80) || null,
+        fromId: ctx.from?.id != null ? String(ctx.from.id) : null,
+        updateId: ctx.update?.update_id ?? null,
+      })
+    }
+    return next()
+  })
 
   bot.start(async (ctx) => {
     const telegramUser = mapTelegramUser(ctx.from)
@@ -163,21 +193,68 @@ export async function startBot(options = {}) {
   const registerSignals = options.registerSignals !== false
   const bot = createBot()
   if (!bot) {
+    botRuntimeDiagnostics = {
+      ...botRuntimeDiagnostics,
+      pollingActive: false,
+      launchMode: null,
+      lastLaunchError: 'bot_token_missing_or_create_failed',
+    }
     return null
   }
 
   try {
+    // Probe Telegram before launch (safe fields only — no token).
+    const me = await bot.telegram.getMe()
+    const webhookInfo = await bot.telegram.getWebhookInfo()
+    botRuntimeDiagnostics = {
+      ...botRuntimeDiagnostics,
+      botId: me?.id ?? null,
+      botUsername: me?.username || null,
+      webhookUrlBeforeLaunch: webhookInfo?.url || '',
+      webhookPendingUpdateCount: webhookInfo?.pending_update_count ?? null,
+      launchMode: 'polling',
+      lastLaunchError: null,
+    }
+    console.info('[Telegram Bot] DIAG getMe', {
+      id: me?.id ?? null,
+      username: me?.username || null,
+    })
+    console.info('[Telegram Bot] DIAG getWebhookInfo', {
+      url: webhookInfo?.url || '',
+      pendingUpdateCount: webhookInfo?.pending_update_count ?? null,
+      allowedUpdates: webhookInfo?.allowed_updates ?? null,
+      lastErrorDate: webhookInfo?.last_error_date ?? null,
+      lastErrorMessage: webhookInfo?.last_error_message
+        ? String(webhookInfo.last_error_message).slice(0, 200)
+        : null,
+      maxConnections: webhookInfo?.max_connections ?? null,
+    })
+
+    // Long polling only — Telegraf deletes any existing webhook before getUpdates.
     // Explicitly include callback_query so moderation buttons always deliver.
     await bot.launch({
       dropPendingUpdates: true,
       allowedUpdates: ['message', 'callback_query'],
     })
+    botRuntimeDiagnostics = {
+      ...botRuntimeDiagnostics,
+      pollingActive: true,
+      launchMode: 'polling',
+      lastLaunchError: null,
+    }
     console.info('[Telegram Bot] Long polling started', {
       allowedUpdates: ['message', 'callback_query'],
+      dropPendingUpdates: true,
     })
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown_error'
+    botRuntimeDiagnostics = {
+      ...botRuntimeDiagnostics,
+      pollingActive: false,
+      lastLaunchError: message.slice(0, 200),
+    }
     console.error('[Telegram Bot] Failed to start long polling', {
-      message: error instanceof Error ? error.message : 'unknown_error',
+      message,
     })
     return null
   }

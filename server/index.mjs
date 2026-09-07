@@ -42,6 +42,8 @@ import {
   notifyAdminsNewPartnerSubmission,
   notifyUserPartnerDecision,
 } from './partner-admin.mjs'
+import { getBotRuntimeDiagnostics } from './bot.mjs'
+import { telegramApi } from './telegram-notify.mjs'
 import { listPartnersPublic } from './partners.mjs'
 import { MAX_SCREENSHOT_BYTES, isForbiddenOriginalName } from './uploads.mjs'
 import { purchaseProduct, getUserOrders, getOrder, cancelOrder } from './shop.mjs'
@@ -887,6 +889,61 @@ app.get(
   withAdmin(async (_req, res) => {
     const status = await getKickFollowAdminStatus()
     res.json({ success: true, status })
+  }),
+)
+
+/**
+ * TEMP DIAGNOSIS — Telegram bot delivery path (no tokens in response).
+ * Confirms getMe / getWebhookInfo and whether this process has Telegraf polling.
+ */
+app.get(
+  '/api/admin/telegram/bot-diag',
+  withAdmin(async (_req, res) => {
+    const runtime = getBotRuntimeDiagnostics()
+    const me = await telegramApi('getMe')
+    const webhook = await telegramApi('getWebhookInfo')
+    const meResult = me.ok ? me.result : null
+    const whResult = webhook.ok ? webhook.result : null
+
+    console.info('[admin] telegram bot-diag', {
+      pollingActive: runtime.pollingActive,
+      launchMode: runtime.launchMode,
+      botUsername: meResult?.username || runtime.botUsername || null,
+      webhookUrl: whResult?.url || '',
+      pendingUpdateCount: whResult?.pending_update_count ?? null,
+    })
+
+    res.json({
+      success: true,
+      process: {
+        entryHint: runtime.pollingActive
+          ? 'telegraf_polling_active_in_this_process'
+          : 'no_telegraf_polling_in_this_process',
+        ...runtime,
+      },
+      telegram: {
+        getMeOk: Boolean(me.ok),
+        getMeError: me.ok ? null : me.error || me.description || null,
+        botId: meResult?.id ?? null,
+        botUsername: meResult?.username || null,
+        getWebhookInfoOk: Boolean(webhook.ok),
+        getWebhookInfoError: webhook.ok
+          ? null
+          : webhook.error || webhook.description || null,
+        webhookUrl: whResult?.url || '',
+        pendingUpdateCount: whResult?.pending_update_count ?? null,
+        webhookAllowedUpdates: whResult?.allowed_updates ?? null,
+        lastErrorDate: whResult?.last_error_date ?? null,
+        lastErrorMessage: whResult?.last_error_message
+          ? String(whResult.last_error_message).slice(0, 200)
+          : null,
+      },
+      interpretation: {
+        modeExpectedByCode: 'long_polling',
+        webhookConfigured: Boolean(whResult?.url),
+        note: 'callback_query never appears as Express HTTP when using polling — look for DIAG callback_query / Long polling started logs instead.',
+      },
+    })
   }),
 )
 

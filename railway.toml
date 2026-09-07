@@ -1,0 +1,4 @@
+# Pin Railway start so Nixpacks cannot fall back to API-only `server/index.mjs`.
+# Single process: Express API + Telegraf long polling (see server/production.mjs).
+[deploy]
+startCommand = "npm run start:production"
