@@ -20,6 +20,7 @@ import {
 } from './kick-oauth.mjs'
 import { bootstrapKickFollowInfrastructure } from './kick-api.mjs'
 import { checkKickFollow, handleKickFollowWebhook } from './kick-follow.mjs'
+import { resetAllKickBindingsOnStore } from './kick-reset.mjs'
 import { startPartnerTask, verifyPartnerTask } from './partner-tasks.mjs'
 import {
   approvePartnerSubmission,
@@ -46,6 +47,7 @@ import {
   assertPersistentStoreOrExit,
   getStoreDiagnostics,
   getUser,
+  withStore,
 } from './store.mjs'
 import {
   assertNoClientFinancialOverrides,
@@ -832,6 +834,32 @@ app.get(
     const status = typeof req.query.status === 'string' ? req.query.status : ''
     const result = listAdminPartnerSubmissions(status)
     res.json(result)
+  }),
+)
+
+/**
+ * Wipe all Kick OAuth bindings / tokens / follow evidence (admin only).
+ * Body optional: { "confirm": "RESET_KICK_BINDINGS" }
+ */
+app.post(
+  '/api/admin/kick/reset',
+  withAdmin(async (req, res) => {
+    const confirm = String(req.body?.confirm || '').trim()
+    if (confirm !== 'RESET_KICK_BINDINGS') {
+      res.status(400).json({
+        success: false,
+        message: 'Передай confirm: "RESET_KICK_BINDINGS".',
+      })
+      return
+    }
+
+    const summary = withStore((store) => resetAllKickBindingsOnStore(store))
+    console.info('[admin] kick bindings reset', summary)
+    res.json({
+      success: true,
+      message: 'Все привязки Kick сброшены. Можно подключать аккаунты заново.',
+      summary,
+    })
   }),
 )
 
