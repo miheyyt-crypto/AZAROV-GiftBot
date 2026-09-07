@@ -141,6 +141,11 @@ export function createUser(store, telegramUser) {
     earnedRewards: [],
     referralEarnings: 0,
     kickVerified: false,
+    kickUserId: null,
+    kickUsername: null,
+    kickDisplayName: null,
+    kickAvatarUrl: null,
+    kickLinkedAt: null,
     inviterRewardGranted: false,
     invitedRewardGranted: false,
     openedReferralCases: 0,
@@ -241,6 +246,11 @@ export function ensureUser(store, telegramUser) {
   existing.earnedRewards = existing.earnedRewards || []
   existing.referralEarnings = existing.referralEarnings || 0
   existing.kickVerified = Boolean(existing.kickVerified)
+  existing.kickUserId = existing.kickUserId || null
+  existing.kickUsername = existing.kickUsername || null
+  existing.kickDisplayName = existing.kickDisplayName || null
+  existing.kickAvatarUrl = existing.kickAvatarUrl || null
+  existing.kickLinkedAt = existing.kickLinkedAt || null
   existing.inviterRewardGranted = Boolean(existing.inviterRewardGranted)
   existing.invitedRewardGranted = Boolean(existing.invitedRewardGranted)
   existing.openedReferralCases = existing.openedReferralCases || 0
@@ -334,7 +344,11 @@ export function toPublicUser(user, store = null) {
     activeReferrals: activeCount,
     pendingCount,
     referralEarnings: user.referralEarnings,
-    kickConnected: user.kickVerified,
+    kickConnected: Boolean(user.kickVerified || user.kickUserId),
+    kickUserId: user.kickUserId || null,
+    kickUsername: user.kickUsername || null,
+    kickDisplayName: user.kickDisplayName || null,
+    kickAvatarUrl: user.kickAvatarUrl || null,
     referralRewardGranted: user.invitedRewardGranted || user.referralRewardClaimed,
     claimedTaskIds: user.completedTasks,
     completedTasks: user.completedTasks,

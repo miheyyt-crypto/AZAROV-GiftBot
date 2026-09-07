@@ -10,6 +10,13 @@ export const REFERRAL_ACTIVATION_REWARD = 500
 export const REFERRAL_CASE_EVERY = 5
 export const REFERRAL_CODE_PREFIX = 'ref_'
 export const REFERRAL_CODE_LENGTH = 8
+export const KICK_CONNECT_TASK_ID = 'kick-connect'
+export const KICK_CONNECT_TASK_REWARD = 400
+export const KICK_OAUTH_SCOPES = 'user:read'
+export const KICK_OAUTH_AUTHORIZE_URL = 'https://id.kick.com/oauth/authorize'
+export const KICK_OAUTH_TOKEN_URL = 'https://id.kick.com/oauth/token'
+export const KICK_API_USERS_URL = 'https://api.kick.com/public/v1/users'
+export const KICK_OAUTH_STATE_TTL_MS = 10 * 60 * 1000
 
 /**
  * Production-tunable referral coin reward.

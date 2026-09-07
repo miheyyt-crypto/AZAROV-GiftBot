@@ -36,4 +36,6 @@ export interface KickConnection {
   connected: boolean
   username?: string
   userId?: string
+  avatarUrl?: string
+  displayName?: string
 }

@@ -44,7 +44,7 @@ export class StoreCorruptError extends Error {
 
 export function createEmptyStore() {
   return {
-    version: 3,
+    version: 4,
     users: {},
     referralIndex: {},
     referrals: {},
@@ -55,6 +55,9 @@ export function createEmptyStore() {
     partnerSubmissions: {},
     partnerAccountBinds: {},
     webSessions: {},
+    kickAccounts: {},
+    kickByTelegram: {},
+    kickOAuthStates: {},
   }
 }
 
@@ -69,6 +72,9 @@ function migrateStore(store) {
   store.partnerSubmissions = store.partnerSubmissions || {}
   store.partnerAccountBinds = store.partnerAccountBinds || {}
   store.webSessions = store.webSessions || {}
+  store.kickAccounts = store.kickAccounts || {}
+  store.kickByTelegram = store.kickByTelegram || {}
+  store.kickOAuthStates = store.kickOAuthStates || {}
   return store
 }
 

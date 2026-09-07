@@ -15,6 +15,10 @@ export interface UserAccount {
   pendingCount?: number
   referralEarnings: number
   kickConnected: boolean
+  kickUserId?: string | null
+  kickUsername?: string | null
+  kickDisplayName?: string | null
+  kickAvatarUrl?: string | null
   referralRewardGranted: boolean
   claimedTaskIds: string[]
   startedPartnerTasks?: string[]

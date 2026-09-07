@@ -11,6 +11,13 @@ import { asyncHandler, HttpError, sendSafeError } from './errors.mjs'
 import { extractReferralCode, toPublicUser } from './users.mjs'
 import { bootstrapUser, activateReferral, readReferralMe } from './referrals.mjs'
 import { checkTelegramSubscribe, claimInviteFriendsTask } from './tasks.mjs'
+import {
+  buildKickResultRedirect,
+  completeKickOAuthCallback,
+  createKickOAuthStart,
+  isKickOAuthConfigured,
+  readKickConnection,
+} from './kick-oauth.mjs'
 import { startPartnerTask, verifyPartnerTask } from './partner-tasks.mjs'
 import {
   approvePartnerSubmission,
@@ -355,6 +362,63 @@ app.get('/api/health', (_req, res) => {
     ok: true,
   })
 })
+
+/**
+ * Start Kick OAuth (PKCE). Requires existing Telegram Mini App / web session auth.
+ * Returns authorizationUrl for the client to open — never exposes client secret.
+ */
+app.post(
+  '/api/kick/oauth/start',
+  withUser(async (_req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const result = createKickOAuthStart(telegramUser.id)
+    res.status(result.success ? 200 : result.code === 'already_connected' ? 409 : 503).json({
+      ...result,
+      configured: isKickOAuthConfigured(),
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.get(
+  '/api/kick/me',
+  withUser(async (_req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const connection = readKickConnection(telegramUser.id)
+    res.json({
+      success: true,
+      configured: isKickOAuthConfigured(),
+      connection,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+/**
+ * Kick OAuth redirect URI. Must match KICK_REDIRECT_URI / Kick Developer settings.
+ * Example production: https://azarov-giftbot-production.up.railway.app/api/kick/callback
+ */
+app.get(
+  '/api/kick/callback',
+  asyncHandler(async (req, res) => {
+    const result = await completeKickOAuthCallback({
+      code: typeof req.query.code === 'string' ? req.query.code : '',
+      state: typeof req.query.state === 'string' ? req.query.state : '',
+      error: typeof req.query.error === 'string' ? req.query.error : '',
+      errorDescription:
+        typeof req.query.error_description === 'string' ? req.query.error_description : '',
+    })
+
+    const status = result.success
+      ? result.code === 'already_connected'
+        ? 'already'
+        : 'connected'
+      : result.code || 'error'
+
+    const redirectTo = buildKickResultRedirect(status, result.message || '')
+    res.redirect(302, redirectTo)
+  }),
+)
 
 /**
  * Website Telegram Login Widget → verified backend session (HttpOnly cookie).

@@ -1,22 +1,98 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import kickLogo from '@/assets/partners/kick-logo.png'
-import { getKickConnection, initiateKickOAuth } from '@/lib/kick'
+import { useNotifications } from '@/components/NotificationProvider'
+import { applyAccountSnapshot, getCurrentAccount } from '@/lib/account'
+import { hydrateBalanceFromAccount } from '@/lib/balance'
+import {
+  applyKickConnectionFromAccount,
+  consumeKickReturnQuery,
+  fetchKickConnectionRemote,
+  getKickConnection,
+  initiateKickOAuth,
+} from '@/lib/kick'
+import type { KickConnection } from '@/types'
 
 export function KickConnectCard() {
-  const [connection] = useState(() => getKickConnection())
+  const { showNotification } = useNotifications()
+  const [connection, setConnection] = useState<KickConnection>(() => {
+    const account = getCurrentAccount()
+    if (account.kickConnected || account.kickUserId) {
+      return applyKickConnectionFromAccount(account)
+    }
+    return getKickConnection()
+  })
   const [message, setMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
+  useEffect(() => {
+    let cancelled = false
+
+    const returned = consumeKickReturnQuery()
+    if (returned) {
+      if (returned.status === 'connected' || returned.status === 'already') {
+        showNotification({
+          type: 'success',
+          title: 'Kick подключён',
+          message: returned.message || 'Аккаунт Kick успешно привязан.',
+        })
+      } else if (returned.status === 'cancelled') {
+        showNotification({
+          type: 'info',
+          title: 'Подключение отменено',
+          message: returned.message || 'Подключение отменено.',
+        })
+      } else {
+        showNotification({
+          type: 'error',
+          title: 'Kick',
+          message: returned.message || 'Не удалось привязать Kick.',
+        })
+        setMessage(returned.message || 'Не удалось привязать Kick.')
+      }
+    }
+
+    void fetchKickConnectionRemote().then((next) => {
+      if (!cancelled) {
+        setConnection(next)
+        const account = getCurrentAccount()
+        if (next.connected) {
+          applyAccountSnapshot({
+            ...account,
+            kickConnected: true,
+            kickUsername: next.username || account.kickUsername,
+            kickUserId: next.userId || account.kickUserId,
+            kickAvatarUrl: next.avatarUrl || account.kickAvatarUrl,
+          })
+          hydrateBalanceFromAccount()
+        }
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [showNotification])
+
   async function handleConnect() {
+    if (connection.connected || isLoading) {
+      return
+    }
+
     setMessage(null)
     setIsLoading(true)
 
     try {
       const result = await initiateKickOAuth()
+      setConnection(getKickConnection())
 
       if (!result.success && result.message) {
         setMessage(result.message)
+        showNotification({
+          type: result.code === 'already_connected' ? 'info' : 'warning',
+          title: 'Kick',
+          message: result.message,
+        })
       }
     } finally {
       setIsLoading(false)
@@ -30,7 +106,15 @@ export function KickConnectCard() {
           className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-kick p-2"
           aria-hidden
         >
-          <img src={kickLogo} alt="" className="size-full object-contain" />
+          {connection.connected && connection.avatarUrl ? (
+            <img
+              src={connection.avatarUrl}
+              alt=""
+              className="size-full rounded-lg object-cover"
+            />
+          ) : (
+            <img src={kickLogo} alt="" className="size-full object-contain" />
+          )}
         </div>
 
         <div className="min-w-0 flex-1">
@@ -45,7 +129,9 @@ export function KickConnectCard() {
         {!connection.connected && (
           <button
             type="button"
-            onClick={handleConnect}
+            onClick={() => {
+              void handleConnect()
+            }}
             disabled={isLoading}
             className="shrink-0 rounded-xl bg-kick px-4 py-2 text-sm font-semibold text-black transition hover:bg-kick-light disabled:opacity-60"
           >
@@ -55,7 +141,7 @@ export function KickConnectCard() {
 
         {connection.connected && (
           <span className="shrink-0 rounded-xl border border-kick/40 bg-kick/10 px-3 py-1.5 text-xs font-medium text-kick-light">
-            Подключено
+            Подключено ✓
           </span>
         )}
       </div>

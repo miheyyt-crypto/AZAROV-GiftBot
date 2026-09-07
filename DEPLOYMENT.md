@@ -58,6 +58,9 @@ Do not commit `dist/`.
 | `REFERRAL_REWARD` | optional | Coins for both sides on first referral registration (default `500`) |
 | `WEBAPP_URL` | yes | Public HTTPS URL of the Mini App |
 | `TELEGRAM_CHANNEL` | recommended | Channel for subscribe task (`@azarov222`). Bot must be an **administrator** of this channel so `getChatMember` works. |
+| `KICK_CLIENT_ID` | for Kick link | Kick OAuth client id |
+| `KICK_CLIENT_SECRET` | for Kick link | Kick OAuth client secret (server only) |
+| `KICK_REDIRECT_URI` | for Kick link | Exact callback URL registered in Kick Developer settings |
 | `PORT` | set by Railway | HTTP listen port |
 | `HOST` | optional | Default `0.0.0.0` |
 | `NODE_ENV` | yes (`production`) | Enables production checks |
@@ -233,6 +236,22 @@ Required setup:
 3. Set Railway env `TELEGRAM_CHANNEL=@azarov222` (or the channel numeric id `-100…`).
 
 If the bot is not in the channel, users see a clear error instead of a silent failure, and server logs include `classified: bot_access`.
+
+### Kick OAuth account linking
+
+Required Railway variables:
+
+| Variable | Purpose |
+|----------|---------|
+| `KICK_CLIENT_ID` | Kick Developer application client id |
+| `KICK_CLIENT_SECRET` | Kick Developer application secret (server only) |
+| `KICK_REDIRECT_URI` | Exact callback URL registered in Kick |
+
+Production redirect URI:
+
+`https://azarov-giftbot-production.up.railway.app/api/kick/callback`
+
+In Kick Developer settings register that exact redirect. Flow uses OAuth 2.1 + PKCE (`user:read`) and enforces **1 Telegram ↔ 1 Kick** via unique indexes `kickByTelegram` and `kickAccounts`.
 
 ---
 
