@@ -2,7 +2,7 @@ import cashImage from '@/assets/shop/cash.png'
 import diamondImage from '@/assets/shop/diamond.png'
 import donateImage from '@/assets/shop/donate.svg'
 import freezeImage from '@/assets/shop/freeze.png'
-import musicImage from '@/assets/shop/music.svg'
+import musicImage from '@/assets/shop/music.png'
 import premium6mImage from '@/assets/shop/premium-6m.png'
 import premium12mImage from '@/assets/shop/premium-12m.png'
 import vipImage from '@/assets/shop/vip.png'
@@ -87,6 +87,7 @@ export const products: ShopProduct[] = [
     currency: 'coins',
     category: 'donate',
     image: musicImage,
+    imageClassName: 'object-contain scale-[0.9]',
     description: 'Заказ трека на стрим.',
     detailText: 'Напиши @username — администратор уточнит трек и поставит его на стрим.',
     infoText: ADMIN_ORDERS_INFO,
