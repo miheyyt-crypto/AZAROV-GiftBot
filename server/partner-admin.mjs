@@ -1,6 +1,5 @@
 import {
   answerTelegramCallback,
-  editTelegramReplyMarkup,
   getAdminNotifyChatIds,
   getAdminTelegramIds,
   isAdminTelegramUser,
@@ -15,7 +14,7 @@ import {
 import { getUser } from './store.mjs'
 import { resolveSubmissionScreenshotPath } from './uploads.mjs'
 
-/** Admin awaiting rejection reason text. */
+/** Admin awaiting rejection reason text. Keys are string telegram user ids. */
 const pendingRejectByAdmin = new Map()
 
 const REJECT_REASON_TTL_MS = 15 * 60 * 1000
@@ -25,26 +24,27 @@ export function clearPendingRejectReasons() {
 }
 
 export function getPendingRejectReason(adminId) {
-  const entry = pendingRejectByAdmin.get(Number(adminId))
+  const key = String(adminId ?? '').trim()
+  const entry = pendingRejectByAdmin.get(key)
   if (!entry) {
     return null
   }
   if (entry.expiresAt < Date.now()) {
-    pendingRejectByAdmin.delete(Number(adminId))
+    pendingRejectByAdmin.delete(key)
     return null
   }
   return entry
 }
 
 function setPendingRejectReason(adminId, submissionId) {
-  pendingRejectByAdmin.set(Number(adminId), {
+  pendingRejectByAdmin.set(String(adminId), {
     submissionId: String(submissionId),
     expiresAt: Date.now() + REJECT_REASON_TTL_MS,
   })
 }
 
 function clearPendingRejectReason(adminId) {
-  pendingRejectByAdmin.delete(Number(adminId))
+  pendingRejectByAdmin.delete(String(adminId))
 }
 
 export function buildPartnerModerationKeyboard(submissionId) {
@@ -58,14 +58,23 @@ export function buildPartnerModerationKeyboard(submissionId) {
   }
 }
 
+export function buildPartnerResultKeyboard(label) {
+  return {
+    inline_keyboard: [[{ text: label, callback_data: 'vellur:noop' }]],
+  }
+}
+
 export function parsePartnerModerationCallback(data) {
   const raw = String(data || '').trim()
-  const match = /^(vellur|welvura|partner):(approve|reject):([0-9a-fA-F-]{8,64})$/.exec(raw)
+  if (raw === 'vellur:noop') {
+    return { action: 'noop', submissionId: null }
+  }
+  const match = /^(vellur|welvura|partner):(approve|reject):([0-9a-fA-F-]{8,64})$/i.exec(raw)
   if (!match) {
     return null
   }
   return {
-    action: match[2],
+    action: match[2].toLowerCase(),
     submissionId: match[3],
   }
 }
@@ -107,6 +116,58 @@ export function buildPartnerSubmissionAdminText(submission, user) {
     'Статус: ⏳ Ожидает проверки',
     `ID заявки: <code>${escapeHtml(submission.submissionId)}</code>`,
   ].join('\n')
+}
+
+/**
+ * Always clear Telegram's loading spinner. Prefer Telegraf ctx, fall back to Bot API.
+ */
+export async function answerPartnerCallback(ctx, text = '', showAlert = false) {
+  const payload = String(text || '').slice(0, 200)
+  try {
+    if (typeof ctx.answerCbQuery === 'function') {
+      await ctx.answerCbQuery(payload, { show_alert: showAlert })
+      return true
+    }
+  } catch (error) {
+    console.warn('[partner-admin] ctx.answerCbQuery failed', {
+      message: error instanceof Error ? error.message : 'unknown_error',
+    })
+  }
+
+  const callbackId = ctx.callbackQuery?.id
+  if (!callbackId) {
+    return false
+  }
+  const result = await answerTelegramCallback(callbackId, payload, { showAlert })
+  if (!result.ok) {
+    console.warn('[partner-admin] answerCallbackQuery failed', {
+      error: result.error || null,
+      description: result.description || null,
+    })
+  }
+  return Boolean(result.ok)
+}
+
+async function markModerationResult(ctx, label) {
+  const markup = buildPartnerResultKeyboard(label)
+  try {
+    if (typeof ctx.editMessageReplyMarkup === 'function') {
+      await ctx.editMessageReplyMarkup(markup)
+      return
+    }
+  } catch {
+    // fall through
+  }
+
+  try {
+    const chatId = ctx.callbackQuery?.message?.chat?.id
+    const messageId = ctx.callbackQuery?.message?.message_id
+    if (chatId != null && messageId != null && typeof ctx.telegram?.editMessageReplyMarkup === 'function') {
+      await ctx.telegram.editMessageReplyMarkup(chatId, messageId, undefined, markup)
+    }
+  } catch {
+    // Best-effort
+  }
 }
 
 /**
@@ -203,54 +264,76 @@ export async function notifyUserPartnerDecision(submission, options = {}) {
   return sendTelegramMessage(chatId, text, {}, options)
 }
 
-async function stripModerationKeyboard(ctx) {
-  try {
-    const chatId = ctx.callbackQuery?.message?.chat?.id
-    const messageId = ctx.callbackQuery?.message?.message_id
-    if (chatId != null && messageId != null) {
-      await editTelegramReplyMarkup(chatId, messageId, { inline_keyboard: [] })
-    }
-  } catch {
-    // Best-effort — message may be too old or already edited.
-  }
-}
-
 /**
  * Handle inline approve/reject callbacks from Telegram admins.
  */
 export async function handlePartnerModerationCallback(ctx) {
-  const data = String(ctx.callbackQuery?.data || '')
+  const data = String(ctx.callbackQuery?.data || ctx.match?.input || '').trim()
   const parsed = parsePartnerModerationCallback(data)
+
   if (!parsed) {
+    console.info('[partner-admin] callback ignored (unmatched)', {
+      data: data.slice(0, 80) || null,
+    })
     return false
   }
 
-  const adminId = ctx.from?.id
-  const callbackId = ctx.callbackQuery?.id
+  const adminId = ctx.from?.id ?? ctx.callbackQuery?.from?.id
+  console.info('[partner-admin] callback received', {
+    action: parsed.action,
+    submissionId: parsed.submissionId,
+    adminId: adminId != null ? String(adminId) : null,
+    adminConfigured: getAdminTelegramIds().length,
+  })
+
+  if (parsed.action === 'noop') {
+    await answerPartnerCallback(ctx)
+    return true
+  }
 
   if (!isAdminTelegramUser(adminId)) {
-    await answerTelegramCallback(callbackId, 'Нет доступа.', { showAlert: true })
+    console.warn('[partner-admin] callback denied — not in ADMIN_TELEGRAM_IDS', {
+      adminId: adminId != null ? String(adminId) : null,
+    })
+    await answerPartnerCallback(ctx, '⛔ Недостаточно прав', true)
     return true
   }
 
   if (parsed.action === 'approve') {
-    const result = approvePartnerSubmission(
-      parsed.submissionId,
-      `tg:${adminId}`,
-      `tg-approve:${ctx.callbackQuery?.id || Date.now()}`,
-    )
-
-    if (!result.success) {
-      await answerTelegramCallback(callbackId, result.message || 'Ошибка', { showAlert: true })
+    let result
+    try {
+      result = approvePartnerSubmission(
+        parsed.submissionId,
+        `tg:${adminId}`,
+        `tg-approve:${ctx.callbackQuery?.id || Date.now()}`,
+      )
+    } catch (error) {
+      console.error('[partner-admin] approve threw', {
+        submissionId: parsed.submissionId,
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+      await answerPartnerCallback(ctx, 'Ошибка подтверждения', true)
       return true
     }
 
-    await answerTelegramCallback(callbackId, 'Подтверждено')
-    await stripModerationKeyboard(ctx)
+    console.info('[partner-admin] approve result', {
+      submissionId: parsed.submissionId,
+      success: Boolean(result?.success),
+      status: result?.submission?.status || null,
+      message: result?.message || null,
+    })
+
+    if (!result?.success) {
+      await answerPartnerCallback(ctx, result?.message || 'Ошибка', true)
+      return true
+    }
+
+    await answerPartnerCallback(ctx, '✅ Заявка подтверждена')
+    await markModerationResult(ctx, '✅ APPROVED')
     void notifyUserPartnerDecision(result.submission)
     try {
       await ctx.reply(
-        `✅ Заявка <code>${parsed.submissionId}</code> подтверждена.\n${escapeHtml(result.message)}`,
+        `✅ Заявка <code>${escapeHtml(parsed.submissionId)}</code> подтверждена.\n${escapeHtml(result.message)}`,
         { parse_mode: 'HTML' },
       )
     } catch {
@@ -261,13 +344,15 @@ export async function handlePartnerModerationCallback(ctx) {
 
   // reject → ask for reason
   setPendingRejectReason(adminId, parsed.submissionId)
-  await answerTelegramCallback(callbackId, 'Введите причину отклонения')
+  await answerPartnerCallback(ctx, 'Введите причину отклонения')
   try {
     await ctx.reply(
       [
-        `❌ Отклонение заявки <code>${parsed.submissionId}</code>.`,
+        `❌ Отклонение заявки <code>${escapeHtml(parsed.submissionId)}</code>.`,
         '',
-        'Введите причину отклонения одним сообщением.',
+        'Ответьте на это сообщение причиной отклонения',
+        'или напишите причину в личку боту.',
+        '',
         'Или напишите «отмена».',
       ].join('\n'),
       { parse_mode: 'HTML' },
@@ -305,21 +390,37 @@ export async function handlePartnerRejectReasonMessage(ctx) {
   }
 
   clearPendingRejectReason(adminId)
-  const result = rejectPartnerSubmission(
-    pending.submissionId,
-    `tg:${adminId}`,
-    text,
-    `tg-reject:${adminId}:${Date.now()}`,
-  )
+  let result
+  try {
+    result = rejectPartnerSubmission(
+      pending.submissionId,
+      `tg:${adminId}`,
+      text,
+      `tg-reject:${adminId}:${Date.now()}`,
+    )
+  } catch (error) {
+    console.error('[partner-admin] reject threw', {
+      submissionId: pending.submissionId,
+      message: error instanceof Error ? error.message : 'unknown_error',
+    })
+    await ctx.reply('Не удалось отклонить заявку.')
+    return true
+  }
 
-  if (!result.success) {
-    await ctx.reply(result.message || 'Не удалось отклонить заявку.')
+  console.info('[partner-admin] reject result', {
+    submissionId: pending.submissionId,
+    success: Boolean(result?.success),
+    status: result?.submission?.status || null,
+  })
+
+  if (!result?.success) {
+    await ctx.reply(result?.message || 'Не удалось отклонить заявку.')
     return true
   }
 
   void notifyUserPartnerDecision(result.submission)
   await ctx.reply(
-    `❌ Заявка <code>${pending.submissionId}</code> отклонена.\nПричина: ${escapeHtml(text)}`,
+    `❌ Заявка <code>${escapeHtml(pending.submissionId)}</code> отклонена.\nПричина: ${escapeHtml(text)}`,
     { parse_mode: 'HTML' },
   )
   return true

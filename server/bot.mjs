@@ -6,6 +6,7 @@ import { Markup, Telegraf } from 'telegraf'
 import { registerBotStart } from './referrals.mjs'
 import { extractReferralCode } from './users.mjs'
 import {
+  answerPartnerCallback,
   handlePartnerModerationCallback,
   handlePartnerRejectReasonMessage,
 } from './partner-admin.mjs'
@@ -104,22 +105,31 @@ export function createBot() {
     }
   })
 
-  bot.on('callback_query', async (ctx) => {
+  // Preferred Telegraf path for inline buttons (reliably matches callback_data).
+  async function onPartnerModerationAction(ctx) {
     try {
+      console.info('[Telegram Bot] partner moderation action', {
+        data: ctx.callbackQuery?.data || null,
+        fromId: ctx.from?.id != null ? String(ctx.from.id) : null,
+      })
       const handled = await handlePartnerModerationCallback(ctx)
-      if (!handled && ctx.callbackQuery?.id) {
-        await ctx.answerCbQuery().catch(() => {})
+      if (!handled) {
+        await answerPartnerCallback(ctx)
       }
     } catch (error) {
-      console.error('[Telegram Bot] callback_query failed', {
+      console.error('[Telegram Bot] partner moderation action failed', {
         message: error instanceof Error ? error.message : 'unknown_error',
       })
-      try {
-        await ctx.answerCbQuery('Ошибка обработки').catch(() => {})
-      } catch {
-        // ignore
-      }
+      await answerPartnerCallback(ctx, 'Ошибка обработки', true)
     }
+  }
+
+  bot.action(/^vellur:(approve|reject):([0-9a-fA-F-]+)$/i, onPartnerModerationAction)
+  bot.action(/^welvura:(approve|reject):([0-9a-fA-F-]+)$/i, onPartnerModerationAction)
+  bot.action(/^partner:(approve|reject):([0-9a-fA-F-]+)$/i, onPartnerModerationAction)
+
+  bot.action('vellur:noop', async (ctx) => {
+    await answerPartnerCallback(ctx)
   })
 
   bot.on('text', async (ctx) => {
@@ -157,10 +167,14 @@ export async function startBot(options = {}) {
   }
 
   try {
+    // Explicitly include callback_query so moderation buttons always deliver.
     await bot.launch({
       dropPendingUpdates: true,
+      allowedUpdates: ['message', 'callback_query'],
     })
-    console.info('[Telegram Bot] Long polling started')
+    console.info('[Telegram Bot] Long polling started', {
+      allowedUpdates: ['message', 'callback_query'],
+    })
   } catch (error) {
     console.error('[Telegram Bot] Failed to start long polling', {
       message: error instanceof Error ? error.message : 'unknown_error',

@@ -9,13 +9,15 @@ export function getBotToken() {
   return String(process.env.BOT_TOKEN || '').trim()
 }
 
+/**
+ * Parse comma/space/semicolon-separated Telegram IDs into digit strings.
+ * Keeps precision for large IDs (no Number()).
+ */
 export function parseTelegramIdList(raw) {
   return String(raw || '')
     .split(/[\s,;]+/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => Number(part))
-    .filter((id) => Number.isFinite(id) && id !== 0)
+    .map((part) => part.trim().replace(/^["']|["']$/g, ''))
+    .filter((part) => /^-?\d+$/.test(part))
 }
 
 /** Telegram user IDs allowed to moderate partner submissions via bot buttons. */
@@ -28,17 +30,18 @@ export function getAdminTelegramIds() {
  * Falls back to DMing each ADMIN_TELEGRAM_IDS entry when empty.
  */
 export function getAdminNotifyChatIds() {
-  const chatId = String(process.env.ADMIN_CHAT_ID || '').trim()
-  if (chatId) {
-    const asNumber = Number(chatId)
-    return [Number.isFinite(asNumber) && chatId === String(asNumber) ? asNumber : chatId]
+  const chatId = String(process.env.ADMIN_CHAT_ID || '')
+    .trim()
+    .replace(/^["']|["']$/g, '')
+  if (chatId && /^-?\d+$/.test(chatId)) {
+    return [chatId]
   }
   return getAdminTelegramIds()
 }
 
 export function isAdminTelegramUser(telegramUserId) {
-  const id = Number(telegramUserId)
-  if (!Number.isFinite(id)) {
+  const id = String(telegramUserId ?? '').trim()
+  if (!/^-?\d+$/.test(id)) {
     return false
   }
   return getAdminTelegramIds().includes(id)

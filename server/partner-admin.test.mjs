@@ -35,12 +35,46 @@ function makeStore(...users) {
 }
 
 test('parseTelegramIdList and isAdminTelegramUser', () => {
-  assert.deepEqual(parseTelegramIdList('111, 222;333'), [111, 222, 333])
+  assert.deepEqual(parseTelegramIdList('111, 222;333'), ['111', '222', '333'])
+  assert.deepEqual(parseTelegramIdList('"999", \'888\''), ['999', '888'])
   process.env.ADMIN_TELEGRAM_IDS = '111,222'
   assert.equal(isAdminTelegramUser(111), true)
+  assert.equal(isAdminTelegramUser('111'), true)
   assert.equal(isAdminTelegramUser(999), false)
   delete process.env.ADMIN_TELEGRAM_IDS
 })
+
+test('non-admin gets denied alert path', async () => {
+  clearPendingRejectReasons()
+  process.env.ADMIN_TELEGRAM_IDS = '424242'
+  let answered = null
+  const handled = await handlePartnerModerationCallback({
+    from: { id: 1 },
+    callbackQuery: {
+      id: 'cb-deny',
+      data: 'vellur:approve:10ad69e7-2db7-4842-9ad4-72684e23778a',
+      message: { chat: { id: 1 }, message_id: 1 },
+    },
+    answerCbQuery: async (text, opts) => {
+      answered = { text, opts }
+    },
+    reply: async () => {},
+  })
+  assert.equal(handled, true)
+  assert.match(String(answered?.text || ''), /прав/i)
+  assert.equal(answered?.opts?.show_alert, true)
+  delete process.env.ADMIN_TELEGRAM_IDS
+})
+
+test('unknown callback format is ignored safely', async () => {
+  const handled = await handlePartnerModerationCallback({
+    from: { id: 1 },
+    callbackQuery: { id: 'cb-x', data: 'not-a-valid-callback' },
+    answerCbQuery: async () => {},
+  })
+  assert.equal(handled, false)
+})
+
 
 test('parsePartnerModerationCallback accepts vellur approve/reject', () => {
   const id = '10ad69e7-2db7-4842-9ad4-72684e23778a'
