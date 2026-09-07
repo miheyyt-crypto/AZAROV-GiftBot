@@ -333,6 +333,7 @@ export async function checkKickUserFollowsChannel(accessToken, channel, options 
   }
 
   if (sawUnsupported) {
+    logKickApi('followed_api_unsupported', { lastStatus })
     return {
       following: false,
       mode: 'unsupported',
@@ -348,9 +349,59 @@ export async function checkKickUserFollowsChannel(accessToken, channel, options 
   }
 }
 
+export async function listKickEventSubscriptions(options = {}) {
+  const fetchImpl = options.fetchImpl || fetch
+  const appToken = options.appAccessToken || (await fetchKickAppAccessToken(options))
+  const url = new URL(KICK_API_EVENTS_SUBSCRIPTIONS_URL)
+  if (options.broadcasterUserId != null) {
+    url.searchParams.set('broadcaster_user_id', String(options.broadcasterUserId))
+  }
+
+  const response = await fetchImpl(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${appToken}`,
+      Accept: 'application/json',
+    },
+  })
+
+  let payload = null
+  try {
+    payload = await response.json()
+  } catch {
+    payload = null
+  }
+
+  if (!response.ok) {
+    logKickApi('event_list_failed', { status: response.status })
+    return { ok: false, status: response.status, subscriptions: [] }
+  }
+
+  const subscriptions = Array.isArray(payload?.data) ? payload.data : []
+  return { ok: true, status: response.status, subscriptions }
+}
+
 export async function ensureKickFollowEventSubscription(channel, options = {}) {
   const fetchImpl = options.fetchImpl || fetch
   const appToken = options.appAccessToken || (await fetchKickAppAccessToken(options))
+
+  const existing = await listKickEventSubscriptions({
+    ...options,
+    appAccessToken: appToken,
+    broadcasterUserId: channel.broadcasterUserId,
+  })
+  const already = (existing.subscriptions || []).some(
+    (row) =>
+      String(row?.event || row?.name || '') === 'channel.followed' &&
+      String(row?.broadcaster_user_id ?? '') === String(channel.broadcasterUserId),
+  )
+  if (already) {
+    logKickApi('event_subscribe_already', {
+      broadcasterUserId: channel.broadcasterUserId,
+      slug: channel.slug,
+    })
+    return { ok: true, already: true, data: existing.subscriptions }
+  }
 
   const response = await fetchImpl(KICK_API_EVENTS_SUBSCRIPTIONS_URL, {
     method: 'POST',
@@ -378,7 +429,7 @@ export async function ensureKickFollowEventSubscription(channel, options = {}) {
       status: response.status,
       message: typeof payload?.message === 'string' ? payload.message.slice(0, 120) : null,
     })
-    return { ok: false, status: response.status }
+    return { ok: false, status: response.status, message: payload?.message || null }
   }
 
   logKickApi('event_subscribe_ok', {

@@ -273,22 +273,24 @@ Production redirect URI:
 In Kick Developer settings:
 
 1. Register that exact OAuth redirect.
-2. Enable Webhooks → URL `https://azarov-giftbot-production.up.railway.app/api/kick/webhooks` (backup for `channel.followed`).
+2. Enable Webhooks → URL `https://azarov-giftbot-production.up.railway.app/api/kick/webhooks` (**required** for the follow task — Kick has no public “is following?” API).
 
 OAuth scopes requested by the app: **`user:read channel:read`**.
 
 - `user:read` — Kick identity on link
-- `channel:read` — channel / followed-channels reads for the follow task
+- `channel:read` — channel metadata
 
 Flow uses OAuth 2.1 + PKCE and enforces **1 Telegram ↔ 1 Kick** via unique indexes `kickByTelegram` and `kickAccounts`.
 
-Follow task check endpoint (Telegram auth required):
+Follow verification:
 
-`POST /api/tasks/kick-follow/check` with `{ "requestId": "..." }`
+1. On boot the server subscribes (App Access Token) to `channel.followed` for `KICK_REQUIRED_CHANNEL`.
+2. When a user follows, Kick POSTs to `/api/kick/webhooks`; the server stores the event.
+3. `POST /api/tasks/kick-follow/check` completes the task when that webhook evidence exists (or a rare pull API hit if Kick ever exposes it).
 
-Server resolves `@KICK_REQUIRED_CHANNEL` via official `GET /public/v1/channels?slug=…` (App Access Token), then verifies follow using the **stored** Kick user OAuth token (never trust frontend Kick ids). Access/refresh tokens stay server-only.
+If follow check never succeeds: confirm the webhook URL in Kick Developer, then `POST /api/admin/kick/follow/subscribe` with `X-Admin-Key`, ask the user to unfollow/refollow, and re-check. Admin diagnostics: `GET /api/admin/kick/status`.
 
-Users who linked Kick **before** token persistence was added must reconnect Kick once so the server can store tokens for follow checks.
+Users who linked Kick **before** token persistence was added must reconnect Kick once so the server can store tokens.
 
 ---
 

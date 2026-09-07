@@ -19,7 +19,13 @@ import {
   readKickConnection,
 } from './kick-oauth.mjs'
 import { bootstrapKickFollowInfrastructure } from './kick-api.mjs'
-import { checkKickFollow, handleKickFollowWebhook } from './kick-follow.mjs'
+import {
+  adminCompleteKickFollow,
+  adminRefreshKickFollowSubscription,
+  checkKickFollow,
+  getKickFollowAdminStatus,
+  handleKickFollowWebhook,
+} from './kick-follow.mjs'
 import { resetAllKickBindingsOnStore } from './kick-reset.mjs'
 import { startPartnerTask, verifyPartnerTask } from './partner-tasks.mjs'
 import {
@@ -860,6 +866,46 @@ app.post(
       message: 'Все привязки Kick сброшены. Можно подключать аккаунты заново.',
       summary,
     })
+  }),
+)
+
+app.get(
+  '/api/admin/kick/status',
+  withAdmin(async (_req, res) => {
+    const status = await getKickFollowAdminStatus()
+    res.json({ success: true, status })
+  }),
+)
+
+app.post(
+  '/api/admin/kick/follow/subscribe',
+  withAdmin(async (_req, res) => {
+    const result = await adminRefreshKickFollowSubscription()
+    res.json({
+      success: Boolean(result?.ok),
+      result,
+      message: result?.ok
+        ? 'Подписка на channel.followed обновлена.'
+        : 'Не удалось подписаться на webhook Kick.',
+    })
+  }),
+)
+
+app.post(
+  '/api/admin/kick/follow/complete',
+  withAdmin(async (req, res) => {
+    const telegramUserId = Number(req.body?.telegramUserId)
+    const confirm = String(req.body?.confirm || '').trim()
+    if (confirm !== 'COMPLETE_KICK_FOLLOW') {
+      res.status(400).json({
+        success: false,
+        message: 'Передай confirm: "COMPLETE_KICK_FOLLOW".',
+      })
+      return
+    }
+
+    const result = await adminCompleteKickFollow(telegramUserId)
+    res.status(result.success ? 200 : 400).json(result)
   }),
 )
 

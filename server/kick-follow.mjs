@@ -5,7 +5,9 @@ import {
   KICK_FOLLOW_TASK_REWARD,
 } from './constants.mjs'
 import {
+  bootstrapKickFollowInfrastructure,
   checkKickUserFollowsChannel,
+  listKickEventSubscriptions,
   refreshKickUserAccessToken,
   resolveKickChannelBySlug,
   verifyKickWebhookSignature,
@@ -304,12 +306,14 @@ export async function checkKickFollow(userId, requestId, options = {}) {
     try {
       const pull = await checkKickUserFollowsChannel(accessToken, channel, options)
       if (pull.mode === 'unsupported') {
+        // Official Kick Public API has no "list followed channels" endpoint.
+        // Without a prior channel.followed webhook we cannot prove the follow yet.
         return {
           success: false,
           completed: false,
           following: false,
-          code: 'NOT_FOLLOWING',
-          message: `Зафолловь ${channelUrl}, подожди несколько секунд и нажми «Проверить» снова. Если уже подписан — отпишись и подпишись заново.`,
+          code: 'FOLLOW_WEBHOOK_PENDING',
+          message: `Kick не отдаёт список фолловов через API. Отпишись от ${channelUrl} и подпишись снова (нужно событие webhook), подожди 5–10 секунд и нажми «Проверить». Если снова не сработает — напиши админу: webhook не настроен.`,
         }
       }
       following = Boolean(pull.following)
@@ -513,4 +517,150 @@ export async function handleKickFollowWebhook(req, options = {}) {
   })
 
   return { ok: true, status: 200 }
+}
+
+export async function getKickFollowAdminStatus(options = {}) {
+  const channelSlug = getKickRequiredChannel()
+  const storeSnapshot = withStoreRead((store) => ({
+    kickAccounts: Object.keys(store.kickAccounts || {}).length,
+    kickLinks: Object.keys(store.kickByTelegram || {}).length,
+    kickFollows: Object.keys(store.kickFollows || {}).length,
+    followSamples: Object.values(store.kickFollows || {})
+      .slice(0, 10)
+      .map((row) => ({
+        followerKickUserId: row.followerKickUserId,
+        broadcasterUserId: row.broadcasterUserId,
+        channelSlug: row.channelSlug,
+        source: row.source,
+        followedAt: row.followedAt,
+      })),
+    linkedUsers: Object.values(store.users || {})
+      .filter((user) => user?.kickUserId)
+      .map((user) => ({
+        telegramId: user.telegramId,
+        kickUserId: user.kickUserId,
+        kickUsername: user.kickUsername || null,
+        completedKickFollow: Array.isArray(user.completedTasks)
+          ? user.completedTasks.includes(KICK_FOLLOW_TASK_ID)
+          : false,
+      })),
+  }))
+
+  let channel = null
+  let channelError = null
+  try {
+    channel = await resolveKickChannelBySlug(channelSlug, options)
+  } catch (error) {
+    channelError = error?.code || error?.message || 'channel_resolve_failed'
+  }
+
+  let subscriptions = { ok: false, subscriptions: [], status: null }
+  if (channel?.broadcasterUserId) {
+    try {
+      subscriptions = await listKickEventSubscriptions({
+        ...options,
+        broadcasterUserId: channel.broadcasterUserId,
+      })
+    } catch (error) {
+      subscriptions = {
+        ok: false,
+        status: null,
+        subscriptions: [],
+        error: error?.code || error?.message || 'list_failed',
+      }
+    }
+  }
+
+  const followEventSubs = (subscriptions.subscriptions || []).filter(
+    (row) => String(row?.event || row?.name || '') === 'channel.followed',
+  )
+
+  return {
+    ok: true,
+    channelSlug,
+    channelUrl: getKickRequiredChannelUrl(),
+    channel,
+    channelError,
+    oauthConfigured: isKickOAuthConfigured(),
+    webhookUrlHint: `${String(process.env.WEBAPP_URL || '').replace(/\/$/, '')}/api/kick/webhooks`,
+    store: storeSnapshot,
+    subscriptions: {
+      ok: Boolean(subscriptions.ok),
+      status: subscriptions.status ?? null,
+      error: subscriptions.error || null,
+      count: (subscriptions.subscriptions || []).length,
+      channelFollowed: followEventSubs,
+    },
+    diagnosis: !followEventSubs.length
+      ? 'NO_CHANNEL_FOLLOWED_SUBSCRIPTION'
+      : storeSnapshot.kickFollows === 0
+        ? 'SUBSCRIPTION_OK_BUT_NO_FOLLOW_EVENTS'
+        : 'OK',
+  }
+}
+
+/**
+ * Admin-only: mark kick-follow complete for a linked Telegram user after manual review.
+ */
+export async function adminCompleteKickFollow(telegramUserId, options = {}) {
+  const userId = Number(telegramUserId)
+  if (!Number.isFinite(userId) || userId <= 0) {
+    return {
+      success: false,
+      code: 'INVALID_USER',
+      message: 'Нужен telegramUserId.',
+    }
+  }
+
+  const channelSlug = getKickRequiredChannel()
+  let channel
+  try {
+    channel = await resolveKickChannelBySlug(channelSlug, options)
+  } catch (error) {
+    return {
+      success: false,
+      code: 'CHANNEL_RESOLVE_FAILED',
+      message: error?.code || 'Не удалось найти Kick-канал.',
+    }
+  }
+
+  return withStore((store) => {
+    const user = store.users[String(userId)]
+    if (!user) {
+      return { success: false, code: 'MISSING_USER', message: 'Пользователь не найден.' }
+    }
+
+    const connection = getKickConnectionForUser(store, userId)
+    if (!connection?.connected || !connection.kickUserId) {
+      return {
+        success: false,
+        code: 'KICK_NOT_CONNECTED',
+        message: 'У пользователя нет привязанного Kick.',
+      }
+    }
+
+    recordKickFollowOnStore(store, {
+      followerKickUserId: connection.kickUserId,
+      broadcasterUserId: channel.broadcasterUserId,
+      channelSlug: channel.slug,
+      source: 'admin',
+    })
+
+    const grant = grantKickFollowReward(store, user)
+    return {
+      success: true,
+      completed: true,
+      rewarded: Boolean(grant.granted),
+      alreadyCompleted: Boolean(grant.alreadyCompleted),
+      reward: grant.reward,
+      kickUserId: connection.kickUserId,
+      message: grant.granted
+        ? `Фоллоу подтверждён админом. Начислено ${grant.reward} монет.`
+        : 'Задание уже было выполнено.',
+    }
+  })
+}
+
+export async function adminRefreshKickFollowSubscription(options = {}) {
+  return bootstrapKickFollowInfrastructure(options)
 }

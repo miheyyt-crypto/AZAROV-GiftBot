@@ -115,17 +115,21 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
       }
 
       const notDone =
-        result.code === 'NOT_SUBSCRIBED' || result.code === 'NOT_FOLLOWING'
+        result.code === 'NOT_SUBSCRIBED' ||
+        result.code === 'NOT_FOLLOWING' ||
+        result.code === 'FOLLOW_WEBHOOK_PENDING'
       showNotification({
         type: notDone ? 'warning' : 'error',
         title: notDone ? 'Ещё не выполнено' : 'Проверка не удалась',
         message:
           result.message ||
-          (result.code === 'NOT_FOLLOWING'
-            ? 'Сначала зафолловь канал kick.com/azarov7777.'
-            : notDone
-              ? 'Сначала подпишись на канал @azarov222.'
-              : 'Не удалось проверить задание. Попробуй ещё раз позже.'),
+          (result.code === 'FOLLOW_WEBHOOK_PENDING'
+            ? 'Отпишись от kick.com/azarov7777 и подпишись снова, подожди несколько секунд и нажми «Проверить».'
+            : result.code === 'NOT_FOLLOWING'
+              ? 'Сначала зафолловь канал kick.com/azarov7777.'
+              : notDone
+                ? 'Сначала подпишись на канал @azarov222.'
+                : 'Не удалось проверить задание. Попробуй ещё раз позже.'),
       })
     } finally {
       setIsLoading(false)
