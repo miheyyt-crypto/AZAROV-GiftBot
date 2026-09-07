@@ -76,7 +76,7 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
       showNotification({
         type: 'info',
         title: 'Подпишись на канал',
-        message: 'После подписки нажми «Проверить» ещё раз.',
+        message: 'После подписки вернись и нажми «Проверить».',
       })
       return
     }
@@ -86,18 +86,23 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
       const result = await handleTaskAction(task.id)
       if (result.success) {
         showNotification({
-          type: 'reward',
-          title: 'Задание выполнено',
+          type: result.alreadyCompleted ? 'success' : 'reward',
+          title: result.alreadyCompleted ? 'Уже выполнено' : 'Задание выполнено',
           message: result.message || `+${formatBalance(task.reward)} монет`,
         })
         close()
         return
       }
 
+      const notSubscribed = result.code === 'NOT_SUBSCRIBED'
       showNotification({
-        type: result.message ? 'warning' : 'error',
-        title: 'Проверка',
-        message: result.message || 'Задание ещё не выполнено. Попробуй позже.',
+        type: notSubscribed ? 'warning' : 'error',
+        title: notSubscribed ? 'Ещё не подписан' : 'Проверка не удалась',
+        message:
+          result.message ||
+          (notSubscribed
+            ? 'Сначала подпишись на канал @azarov222.'
+            : 'Не удалось проверить подписку. Попробуй ещё раз позже.'),
       })
     } finally {
       setIsLoading(false)

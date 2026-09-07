@@ -72,19 +72,35 @@ function applyRemoteUser(user: Parameters<typeof mapRemoteAccount>[0] | undefine
 
 export async function handleTaskAction(
   taskId: string,
-): Promise<{ success: boolean; message?: string }> {
+): Promise<{ success: boolean; message?: string; code?: string; alreadyCompleted?: boolean }> {
   if (taskId === 'telegram-subscribe') {
     try {
       const result = await checkTelegramSubscribe(createPurchaseRequestId())
       applyRemoteUser(result.user)
+
+      if (result.alreadyCompleted || (result.success && result.completed)) {
+        return {
+          success: true,
+          alreadyCompleted: Boolean(result.alreadyCompleted),
+          code: result.code,
+          message:
+            result.message ||
+            (result.alreadyCompleted
+              ? 'Задание уже выполнено.'
+              : 'Подписка подтверждена. Награда начислена.'),
+        }
+      }
+
       return {
-        success: Boolean(result.success),
-        message: result.message,
+        success: false,
+        code: result.code,
+        message: result.message || 'Сначала подпишись на канал @azarov222.',
       }
     } catch {
       return {
         success: false,
-        message: 'Не удалось проверить подписку. Попробуй ещё раз.',
+        code: 'NETWORK_ERROR',
+        message: 'Не удалось проверить подписку. Попробуй ещё раз позже.',
       }
     }
   }

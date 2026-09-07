@@ -57,7 +57,7 @@ Do not commit `dist/`.
 | `BOT_USERNAME` | yes (for referral links) | Bot username without `@` |
 | `REFERRAL_REWARD` | optional | Coins for both sides on first referral registration (default `500`) |
 | `WEBAPP_URL` | yes | Public HTTPS URL of the Mini App |
-| `TELEGRAM_CHANNEL` | recommended | Channel for subscribe task |
+| `TELEGRAM_CHANNEL` | recommended | Channel for subscribe task (`@azarov222`). Bot must be an **administrator** of this channel so `getChatMember` works. |
 | `PORT` | set by Railway | HTTP listen port |
 | `HOST` | optional | Default `0.0.0.0` |
 | `NODE_ENV` | yes (`production`) | Enables production checks |
@@ -221,6 +221,18 @@ Requirements:
 - `WEBAPP_URL` set (otherwise `/start` warns that Mini App is unavailable)
 
 Long polling only (no webhook setup required).
+
+### Channel subscribe task (`@azarov222`)
+
+The task `telegram-subscribe` calls Telegram Bot API `getChatMember`.
+
+Required setup:
+
+1. Add `@AZAROV_GiftBot` (your bot) to the channel `@azarov222` as an **administrator**.
+2. Admin rights can be minimal, but the bot must be able to see members (`getChatMember`).
+3. Set Railway env `TELEGRAM_CHANNEL=@azarov222` (or the channel numeric id `-100…`).
+
+If the bot is not in the channel, users see a clear error instead of a silent failure, and server logs include `classified: bot_access`.
 
 ---
 

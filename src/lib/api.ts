@@ -30,6 +30,16 @@ export interface ApiUserResponse {
     reason: string
     message?: string
   }
+  completed?: boolean
+  alreadyCompleted?: boolean
+  rewarded?: boolean
+  reward?: number
+  activation?: {
+    success?: boolean
+    rewarded?: boolean
+    reason?: string
+    message?: string
+  }
   referralStats?: {
     referralCode: string
     referralLink: string
