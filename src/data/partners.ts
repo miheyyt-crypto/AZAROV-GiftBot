@@ -47,12 +47,15 @@ function createPartnerTasks(
     id: `${partnerId}-task-1`,
     order: 1,
     type: 'account_link',
-    title: `Привяжи аккаунт ${partnerName}`,
+    title: `Привязать аккаунт ${partnerName}`,
     description:
-      'Привяжи аккаунт: перейди по нашей ссылке, заведи или войди в профиль и пришли свой ID.',
+      `1. Зарегистрируйтесь в ${partnerName} по нашей ссылке.\n` +
+      `2. После регистрации найдите свой ${partnerName} ID.\n` +
+      `3. Введите ID и загрузите скриншот регистрации.\n` +
+      `4. Отправьте заявку — администратор проверит вручную.`,
     reward: ACCOUNT_LINK_REWARD,
     actionUrl,
-    actionLabel: `Открыть ${partnerName} >`,
+    actionLabel: 'ЗАРЕГИСТРИРОВАТЬСЯ',
     verificationType: 'account-link',
   }
 

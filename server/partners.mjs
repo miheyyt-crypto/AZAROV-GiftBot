@@ -28,7 +28,7 @@ function createPartnerTasks(partnerId, partnerName) {
     id: `${partnerId}-task-1`,
     order: 1,
     type: 'account_link',
-    title: `Привяжи аккаунт ${partnerName}`,
+    title: `Привязать аккаунт ${partnerName}`,
     reward: ACCOUNT_LINK_REWARD,
     depositAmount: null,
   }

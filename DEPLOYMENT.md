@@ -67,6 +67,8 @@ Do not commit `dist/`.
 | `NODE_ENV` | yes (`production`) | Enables production checks |
 | `CORS_ORIGINS` | optional if `WEBAPP_URL` set | Extra allowed origins |
 | `ADMIN_API_KEY` | yes (≥ 32 chars) | Admin moderation header |
+| `ADMIN_TELEGRAM_IDS` | recommended | Telegram user IDs for bot Approve/Reject |
+| `ADMIN_CHAT_ID` | optional | Chat/group for partner submission photos |
 | `AZAROV_STORE_DIR` | **required on Railway** | JSON store directory (Volume) |
 | `AZAROV_UPLOADS_DIR` | **required on Railway** | Uploads base directory (Volume) |
 | `VITE_API_URL` | leave empty | Same-origin `/api` in production |
@@ -92,6 +94,16 @@ Do **not** use `*` in production.
 
 Secret for admin partner-submission endpoints (`X-Admin-Key`).
 Generate a long random string (≥ 32 characters). Never commit the real value.
+
+### ADMIN_TELEGRAM_IDS
+
+Comma-separated Telegram **user** IDs allowed to press Approve/Reject on partner (Welvura) submission messages in the bot. Get an ID via `@userinfobot`.
+
+Without this, submissions still work in Mini App + HTTP admin API, but Telegram buttons will deny non-listed users.
+
+### ADMIN_CHAT_ID
+
+Optional chat/group ID where new partner submissions (text + screenshot + buttons) are posted. If empty, each `ADMIN_TELEGRAM_IDS` user is DMed instead.
 
 ### AZAROV_STORE_DIR
 

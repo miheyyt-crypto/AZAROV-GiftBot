@@ -164,10 +164,6 @@ export function PartnerTaskItem({
               <span className="text-xs font-medium text-white/40">{lockedHint}</span>
             )}
 
-            {isPending && (
-              <span className="text-xs font-semibold text-amber-300/90">Отправлено на проверку</span>
-            )}
-
             {!isCompleted && !isLocked && !isPending && (
               <button
                 type="button"
@@ -180,10 +176,29 @@ export function PartnerTaskItem({
             )}
           </div>
 
+          {isPending && (
+            <div className="mt-3 rounded-[14px] border border-amber-300/30 bg-amber-300/10 px-3 py-2.5">
+              <p className="text-xs font-semibold text-amber-200">⏳ На проверке</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-amber-100/80">
+                Заявка отправлена администратору. Повторно отправить нельзя, пока идёт проверка.
+              </p>
+            </div>
+          )}
+
+          {isCompleted && (
+            <div className="mt-3 rounded-[14px] border border-kick/30 bg-kick/10 px-3 py-2.5">
+              <p className="text-xs font-semibold text-kick-light">✅ Подтверждено</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-white/70">
+                Задание выполнено, награда начислена.
+              </p>
+            </div>
+          )}
+
           {isRejected && (
             <p className="mt-2 rounded-lg border border-pink/30 bg-pink/10 px-3 py-2 text-xs text-pink">
-              Заявка отклонена
-              {submission?.rejectionReason ? `: ${submission.rejectionReason}` : '.'}
+              ❌ Заявка отклонена
+              {submission?.rejectionReason ? `: ${submission.rejectionReason}` : '.'} Можно
+              отправить новую заявку.
             </p>
           )}
 
@@ -193,7 +208,9 @@ export function PartnerTaskItem({
                 type="text"
                 inputMode="numeric"
                 autoComplete="off"
-                placeholder="ID партнёрского аккаунта"
+                placeholder={
+                  task.type === 'account_link' ? 'Введите Welvura ID' : 'ID партнёрского аккаунта'
+                }
                 value={partnerAccountId}
                 onChange={(event) => setPartnerAccountId(event.target.value.replace(/[^\d]/g, ''))}
                 disabled={isLoading}
@@ -210,7 +227,7 @@ export function PartnerTaskItem({
                   onClick={() => fileInputRef.current?.click()}
                   className="rounded-[12px] border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/85 disabled:opacity-60"
                 >
-                  {fileName ? 'Сменить скриншот' : 'Прикрепить скриншот'}
+                  {fileName ? 'Сменить скриншот' : '📷 Загрузить скриншот'}
                 </button>
                 {fileName && (
                   <span className="max-w-[180px] truncate text-[11px] text-white/50">{fileName}</span>

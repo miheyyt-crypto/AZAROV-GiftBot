@@ -5,6 +5,10 @@ import { Markup, Telegraf } from 'telegraf'
 
 import { registerBotStart } from './referrals.mjs'
 import { extractReferralCode } from './users.mjs'
+import {
+  handlePartnerModerationCallback,
+  handlePartnerRejectReasonMessage,
+} from './partner-admin.mjs'
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 loadEnv({ path: path.join(rootDir, '.env') })
@@ -95,6 +99,38 @@ export function createBot() {
     } catch (error) {
       console.error('[Telegram Bot] Failed to reply to /start', {
         telegramId: telegramUser.id,
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+    }
+  })
+
+  bot.on('callback_query', async (ctx) => {
+    try {
+      const handled = await handlePartnerModerationCallback(ctx)
+      if (!handled && ctx.callbackQuery?.id) {
+        await ctx.answerCbQuery().catch(() => {})
+      }
+    } catch (error) {
+      console.error('[Telegram Bot] callback_query failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+      try {
+        await ctx.answerCbQuery('Ошибка обработки').catch(() => {})
+      } catch {
+        // ignore
+      }
+    }
+  })
+
+  bot.on('text', async (ctx) => {
+    // Ignore /commands — only consume plain text as rejection reasons.
+    if (String(ctx.message?.text || '').startsWith('/')) {
+      return
+    }
+    try {
+      await handlePartnerRejectReasonMessage(ctx)
+    } catch (error) {
+      console.error('[Telegram Bot] reject-reason text failed', {
         message: error instanceof Error ? error.message : 'unknown_error',
       })
     }

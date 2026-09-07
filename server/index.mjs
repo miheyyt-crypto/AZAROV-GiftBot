@@ -38,6 +38,10 @@ import {
   listMyPartnerSubmissions,
   rejectPartnerSubmission,
 } from './partner-submissions.mjs'
+import {
+  notifyAdminsNewPartnerSubmission,
+  notifyUserPartnerDecision,
+} from './partner-admin.mjs'
 import { listPartnersPublic } from './partners.mjs'
 import { MAX_SCREENSHOT_BYTES, isForbiddenOriginalName } from './uploads.mjs'
 import { purchaseProduct, getUserOrders, getOrder, cancelOrder } from './shop.mjs'
@@ -806,6 +810,15 @@ app.post(
       req.file,
     )
 
+    if (result.success && result.submission?.status === 'pending') {
+      void notifyAdminsNewPartnerSubmission(result.submission).catch((error) => {
+        console.error('[partner-admin] notify failed', {
+          submissionId: result.submission?.submissionId,
+          message: error instanceof Error ? error.message : 'unknown_error',
+        })
+      })
+    }
+
     res.json({
       ...result,
       user: toPublicUser(getUser(telegramUser.id)),
@@ -952,6 +965,9 @@ app.post(
       reviewedBy,
       requestId,
     )
+    if (result.success && result.submission?.status === 'approved') {
+      void notifyUserPartnerDecision(result.submission).catch(() => {})
+    }
     res.json(result)
   }),
 )
@@ -975,6 +991,9 @@ app.post(
       rejectionReason,
       requestId,
     )
+    if (result.success && result.submission?.status === 'rejected') {
+      void notifyUserPartnerDecision(result.submission).catch(() => {})
+    }
     res.json(result)
   }),
 )
