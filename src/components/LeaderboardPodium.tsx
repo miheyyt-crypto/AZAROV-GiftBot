@@ -38,44 +38,46 @@ function PodiumPlayer({ player }: { player: LeaderboardPlayer }) {
   const initial = getPlayerInitial(player.displayName)
 
   return (
-    <div className={['flex flex-1 flex-col items-center', styles.lift].join(' ')}>
-      <div className="relative mb-2">
-        <div
-          className={[
-            'relative overflow-hidden rounded-full border-[3px]',
-            styles.ring,
-            styles.avatar,
-          ].join(' ')}
-        >
-          {player.photoUrl ? (
-            <img
-              src={player.photoUrl}
-              alt={player.displayName}
-              className="size-full object-cover"
-            />
-          ) : (
-            <div className="flex size-full items-center justify-center bg-gradient-to-br from-purple to-neon-purple font-bold text-white">
-              {initial}
-            </div>
-          )}
+    <div className="flex flex-1 flex-col items-center">
+      <div className={['flex flex-col items-center', styles.lift].join(' ')}>
+        <div className="relative mb-2">
+          <div
+            className={[
+              'relative overflow-hidden rounded-full border-[3px]',
+              styles.ring,
+              styles.avatar,
+            ].join(' ')}
+          >
+            {player.photoUrl ? (
+              <img
+                src={player.photoUrl}
+                alt={player.displayName}
+                className="size-full object-cover"
+              />
+            ) : (
+              <div className="flex size-full items-center justify-center bg-gradient-to-br from-purple to-neon-purple font-bold text-white">
+                {initial}
+              </div>
+            )}
+          </div>
+          <span
+            className={[
+              'absolute -bottom-1 left-1/2 flex size-5 -translate-x-1/2 items-center justify-center rounded-full text-[10px] font-bold',
+              styles.badge,
+            ].join(' ')}
+          >
+            {player.rank}
+          </span>
         </div>
-        <span
-          className={[
-            'absolute -bottom-1 left-1/2 flex size-5 -translate-x-1/2 items-center justify-center rounded-full text-[10px] font-bold',
-            styles.badge,
-          ].join(' ')}
-        >
-          {player.rank}
-        </span>
-      </div>
 
-      <p className="max-w-[92px] truncate text-center text-xs font-medium text-white">
-        {player.displayName}
-      </p>
-      <p className={['mt-1 flex items-center gap-1 text-sm font-bold', styles.balance].join(' ')}>
-        <span aria-hidden>🪙</span>
-        {formatBalance(player.balance)}
-      </p>
+        <p className="max-w-[92px] truncate text-center text-xs font-medium text-white">
+          {player.displayName}
+        </p>
+        <p className={['mt-1 flex items-center gap-1 text-sm font-bold', styles.balance].join(' ')}>
+          <span aria-hidden>🪙</span>
+          {formatBalance(player.balance)}
+        </p>
+      </div>
 
       <div
         className={[
