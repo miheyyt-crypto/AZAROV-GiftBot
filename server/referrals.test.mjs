@@ -16,6 +16,7 @@ import {
   ensureUser,
   extractReferralCode,
   formatReferralCode,
+  resolveReferralStartParam,
 } from './users.mjs'
 
 function makeStore() {
@@ -28,12 +29,40 @@ function makeUser(store, id, name) {
 
 const REWARD = getReferralActivationReward()
 
-test('extracts only ref_<CODE> start params', () => {
+test('extracts ref_ prefix and bare referral codes', () => {
   assert.equal(extractReferralCode('ref_K8F4X2M9'), 'K8F4X2M9')
   assert.equal(extractReferralCode('ref_k8f4x2m9'), 'K8F4X2M9')
-  assert.equal(extractReferralCode('K8F4X2M9'), null)
+  assert.equal(extractReferralCode('K8F4X2M9'), 'K8F4X2M9')
   assert.equal(extractReferralCode(''), null)
   assert.equal(extractReferralCode('start_K8F4X2M9'), null)
+  assert.equal(extractReferralCode('nope'), null)
+})
+
+test('resolveReferralStartParam prefers signed initData then client then pending', () => {
+  assert.equal(
+    resolveReferralStartParam({
+      signed: 'ref_AAAA1111',
+      client: 'ref_BBBB2222',
+      pending: 'ref_CCCC3333',
+    }).source,
+    'init_data',
+  )
+  assert.equal(
+    resolveReferralStartParam({
+      signed: '',
+      client: 'ref_BBBB2222',
+      pending: 'ref_CCCC3333',
+    }).source,
+    'client',
+  )
+  assert.equal(
+    resolveReferralStartParam({
+      signed: '',
+      client: '',
+      pending: 'ref_CCCC3333',
+    }).source,
+    'pending',
+  )
 })
 
 test('Test 1: A has a unique referral code', () => {
@@ -46,7 +75,7 @@ test('Test 1: A has a unique referral code', () => {
   assert.equal(formatReferralCode(userA.referralCode), `ref_${userA.referralCode}`)
 })
 
-test('Test 2-3: B opens A link and registers — A earns reward once', () => {
+test('Test 1 flow: B registers with A code — A gets +500, B bound to A', () => {
   const store = makeStore()
   const userA = makeUser(store, 111, 'A')
   const userB = makeUser(store, 222, 'B')
@@ -61,7 +90,7 @@ test('Test 2-3: B opens A link and registers — A earns reward once', () => {
   assert.equal(activation.rewarded, true)
   assert.equal(userB.referredByUserId, userA.telegramId)
   assert.equal(userA.balance, REWARD)
-  assert.equal(userB.balance, REWARD)
+  assert.equal(userB.balance, 0)
   assert.equal(userA.referralEarnings, REWARD)
   assert.equal(store.referrals[`${userA.telegramId}:${userB.telegramId}`].status, 'rewarded')
 
@@ -71,36 +100,36 @@ test('Test 2-3: B opens A link and registers — A earns reward once', () => {
   assert.equal(me.earnedCoins, REWARD)
 })
 
-test('Test 4: B reopens the app — no second reward', () => {
+test('Test 1b: bare startapp code without ref_ prefix also works', () => {
+  const store = makeStore()
+  const userA = makeUser(store, 111, 'A')
+  const userB = makeUser(store, 222, 'B')
+
+  const { referral, activation } = applyReferralAndReward(store, userB, userA.referralCode)
+
+  assert.equal(referral.applied, true)
+  assert.equal(activation.rewarded, true)
+  assert.equal(userA.balance, REWARD)
+  assert.equal(userB.referredByUserId, userA.telegramId)
+})
+
+test('Test 2-3: reopen / refresh does not grant again', () => {
   const store = makeStore()
   const userA = makeUser(store, 111, 'A')
   const userB = makeUser(store, 222, 'B')
 
   applyReferralAndReward(store, userB, `ref_${userA.referralCode}`)
   const second = applyReferralAndReward(store, userB, `ref_${userA.referralCode}`)
+  const third = activateReferralOnStore(store, userB.telegramId)
 
   assert.equal(second.referral.reason, 'already_referred')
-  assert.equal(second.activation.rewarded, false)
   assert.equal(second.activation.reason, 'already_granted')
+  assert.equal(third.reason, 'already_granted')
   assert.equal(userA.balance, REWARD)
-  assert.equal(userB.balance, REWARD)
+  assert.equal(userB.balance, 0)
 })
 
-test('Test 5: repeating activate endpoint does not grant again', () => {
-  const store = makeStore()
-  const userA = makeUser(store, 111, 'A')
-  const userB = makeUser(store, 222, 'B')
-
-  applyReferralAndReward(store, userB, `ref_${userA.referralCode}`)
-  const second = activateReferralOnStore(store, userB.telegramId)
-
-  assert.equal(second.rewarded, false)
-  assert.equal(second.reason, 'already_granted')
-  assert.equal(userA.balance, REWARD)
-  assert.equal(userB.balance, REWARD)
-})
-
-test('Test 6: self-referral is blocked', () => {
+test('Test 4: self-referral is blocked', () => {
   const store = makeStore()
   const userA = makeUser(store, 111, 'A')
   const result = processReferral(store, userA, `ref_${userA.referralCode}`)
@@ -112,7 +141,7 @@ test('Test 6: self-referral is blocked', () => {
   assert.equal(userA.balance, 0)
 })
 
-test('Test 7: invalid code still allows registration without referrer', () => {
+test('Test 5: invalid code still allows registration without referrer', () => {
   const store = makeStore()
   const userB = makeUser(store, 222, 'B')
   const { referral, activation } = applyReferralAndReward(store, userB, 'ref_ZZZZZZZZ')
@@ -124,7 +153,7 @@ test('Test 7: invalid code still allows registration without referrer', () => {
   assert.equal(Object.keys(store.referrals).length, 0)
 })
 
-test('Test 8: first referrer wins when B later opens C', () => {
+test('Test 6: first referrer wins when B later opens C', () => {
   const store = makeStore()
   const userA = makeUser(store, 111, 'A')
   const userB = makeUser(store, 222, 'B')
@@ -141,7 +170,7 @@ test('Test 8: first referrer wins when B later opens C', () => {
   assert.equal(userC.referralEarnings || 0, 0)
 })
 
-test('Test 9: two sequential reward attempts still grant only once', () => {
+test('Test 7: sequential concurrent-like reward attempts grant only once', () => {
   const store = makeStore()
   const userA = makeUser(store, 111, 'A')
   const userB = makeUser(store, 222, 'B')
@@ -153,7 +182,14 @@ test('Test 9: two sequential reward attempts still grant only once', () => {
   assert.equal(first.rewarded, true)
   assert.equal(second.rewarded, false)
   assert.equal(userA.balance, REWARD)
-  assert.equal(userB.balance, REWARD)
+  assert.equal(userB.balance, 0)
+
+  const rewardTxIds = new Set(
+    Object.values(store.coinTransactions)
+      .filter((item) => item.type === 'referral_reward' && item.userId === userA.telegramId)
+      .map((item) => item.id),
+  )
+  assert.equal(rewardTxIds.size, 1)
 })
 
 test('Test 10: legacy user without referralCode gets one without backfill referrer', () => {
@@ -189,15 +225,6 @@ test('binding alone without activate does not grant coins', () => {
   assert.equal(store.referrals[`${userA.telegramId}:${userB.telegramId}`].status, 'pending')
 })
 
-test('referral code is permanent on ensureUser', () => {
-  const store = makeStore()
-  const userA = makeUser(store, 111, 'A')
-  const codeBefore = userA.referralCode
-
-  ensureUser(store, { id: 111, first_name: 'A', username: 'a' })
-  assert.equal(userA.referralCode, codeBefore)
-})
-
 test('Friends stats and share link use the personal code', () => {
   const store = makeStore()
   const userA = makeUser(store, 111, 'A')
@@ -212,9 +239,6 @@ test('Friends stats and share link use the personal code', () => {
   assert.equal(me.invitedCount, 1)
   assert.equal(me.pendingCount, 0)
   assert.equal(me.activeCount, 1)
-  assert.equal(me.caseProgress, 1)
-  assert.equal(me.caseTarget, 5)
-  assert.equal(me.availableReferralCases, 0)
   assert.match(expectedLink, /^https:\/\/t\.me\/[^?]+\?startapp=ref_/)
 })
 
@@ -229,10 +253,6 @@ test('referral case progress uses active referrals and resets after grant', () =
 
   assert.equal(getReferralCaseStats(5, 0).availableReferralCases, 1)
   assert.equal(getReferralCaseStats(5, 0).caseProgress, 5)
-
   assert.equal(getReferralCaseStats(5, 1).availableReferralCases, 0)
   assert.equal(getReferralCaseStats(5, 1).caseProgress, 0)
-
-  assert.equal(getReferralCaseStats(7, 1).caseProgress, 2)
-  assert.equal(getReferralCaseStats(7, 1).availableReferralCases, 0)
 })

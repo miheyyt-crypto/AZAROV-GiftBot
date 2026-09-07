@@ -34,14 +34,46 @@ export function formatReferralCode(code) {
   return normalized ? `${REFERRAL_CODE_PREFIX}${normalized}` : ''
 }
 
+/**
+ * Accept both `ref_XXXXXXXX` (our public links) and bare `XXXXXXXX`
+ * (Telegram startapp / manual deep links without prefix).
+ */
 export function extractReferralCode(startParam) {
   const raw = String(startParam || '').trim()
-  const match = raw.match(/^ref_([A-Za-z0-9]{6,12})$/)
-  if (!match) {
+  if (!raw) {
     return null
   }
 
-  return match[1].toUpperCase()
+  const withPrefix = raw.match(/^ref_([A-Za-z0-9]{6,12})$/i)
+  if (withPrefix) {
+    return withPrefix[1].toUpperCase()
+  }
+
+  const bare = raw.match(/^([A-Za-z0-9]{6,12})$/)
+  if (bare) {
+    return bare[1].toUpperCase()
+  }
+
+  return null
+}
+
+/**
+ * Pick the first usable referral payload from signed initData, client hint, or bot /start pending.
+ */
+export function resolveReferralStartParam({ signed = '', client = '', pending = '' } = {}) {
+  const candidates = [
+    { value: String(signed || '').trim(), source: 'init_data' },
+    { value: String(client || '').trim(), source: 'client' },
+    { value: String(pending || '').trim(), source: 'pending' },
+  ]
+
+  for (const candidate of candidates) {
+    if (extractReferralCode(candidate.value)) {
+      return candidate
+    }
+  }
+
+  return { value: '', source: 'none' }
 }
 
 export function buildReferralLink(referralCode) {

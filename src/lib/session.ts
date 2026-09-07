@@ -9,7 +9,8 @@ import {
   restoreWebSession,
 } from '@/lib/auth'
 import { hydrateBalanceFromAccount } from '@/lib/balance'
-import { getStartParam } from '@/lib/referral'
+import { clearStoredStartParam, getStartParam } from '@/lib/referral'
+import { initTelegramWebApp } from '@/lib/telegram'
 import { getTelegramUser } from '@/lib/user'
 import type { UserAccount } from '@/types/account'
 
@@ -43,6 +44,9 @@ export function mapRemoteAccount(remote: UserAccount): UserAccount {
 }
 
 export async function bootstrapSession(): Promise<UserAccount> {
+  // Ensure WebApp.ready() runs before we read initData / start_param.
+  initTelegramWebApp()
+
   // Mini App: signed initData is the source of truth.
   if (isMiniAppAuthAvailable()) {
     const user = getTelegramUser()
@@ -57,6 +61,12 @@ export async function bootstrapSession(): Promise<UserAccount> {
             referralLink: response.user.referralLink || response.referralStats?.referralLink || '',
           }),
         )
+      }
+      // Start param is only needed for the first authenticated bootstrap.
+      if (response.referral?.applied || response.referral?.reason === 'already_referred') {
+        clearStoredStartParam()
+      } else if (response.referral?.reason === 'invalid_code' || response.referral?.reason === 'self_referral') {
+        clearStoredStartParam()
       }
     } catch {
       // Keep local snapshot if API is unavailable inside Telegram.

@@ -484,10 +484,14 @@ app.post(
       return
     }
 
-    // Only trust start_param from signed Telegram initData — never from client body.
-    const startParam = auth.startParam || ''
+    // Prefer signed start_param from Telegram initData.
+    // Fall back to client-reported startapp/tgWebAppStartParam (same Mini App session)
+    // and then to bot /start pending payload. Referral rewards stay server-side + idempotent.
+    const signedStartParam = auth.startParam || ''
+    const clientStartParam =
+      typeof req.body?.startParam === 'string' ? req.body.startParam.trim().slice(0, 64) : ''
 
-    const result = bootstrapUser(auth.user, startParam)
+    const result = bootstrapUser(auth.user, signedStartParam, { clientStartParam })
     const user = getUser(auth.user.id)
 
     res.json({
@@ -495,6 +499,7 @@ app.post(
       user: toPublicUser(user),
       referral: result.referral,
       referralStats: result.me,
+      activation: result.activation,
     })
   }),
 )

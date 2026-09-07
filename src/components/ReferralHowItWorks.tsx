@@ -12,8 +12,8 @@ const steps = [
     tone: 'purple' as const,
   },
   {
-    title: `Вы оба получаете по ${REFERRAL_ACTIVATION_REWARD} монет`,
-    text: 'Один раз за каждого нового друга, сразу после первой успешной регистрации. Тебе и ему.',
+    title: `Ты получаешь ${REFERRAL_ACTIVATION_REWARD} монет`,
+    text: 'Один раз за каждого нового друга, сразу после его первой успешной регистрации по твоей ссылке.',
     tone: 'gold' as const,
   },
   {

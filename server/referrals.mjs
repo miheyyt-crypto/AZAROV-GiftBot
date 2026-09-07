@@ -11,6 +11,7 @@ import {
   hydrateUserReferrals,
   normalizeReferralCode,
   referralPairKey,
+  resolveReferralStartParam,
 } from './users.mjs'
 import { withStore } from './store.mjs'
 import { maybeGrantInviteFriendsTask } from './tasks.mjs'
@@ -145,6 +146,11 @@ export function processReferral(store, invitee, startParam) {
     }
   }
 
+  logReferral('referral_owner_found', {
+    inviteeId: invitee.telegramId,
+    referrerId: referrer.telegramId,
+  })
+
   if (Number(referrer.telegramId) === Number(invitee.telegramId)) {
     logReferral('self_referral_prevented', { userId: invitee.telegramId })
     return {
@@ -202,8 +208,8 @@ export function processReferral(store, invitee, startParam) {
 }
 
 /**
- * Grant referral coins once per invitee↔referrer pair.
- * Idempotent via wallet event ids + referral.status.
+ * Grant referral coins once to the referrer for each invitee.
+ * Idempotent via wallet event id + referral.status.
  * Kick verification is NOT required — reward fires after successful Telegram registration bind.
  */
 export function activateReferralOnStore(store, userId) {
@@ -245,12 +251,11 @@ export function activateReferralOnStore(store, userId) {
   }
 
   const inviterEventId = `referral_reward:${referral.id}:inviter`
-  const inviteeEventId = `referral_reward:${referral.id}:invitee`
   const alreadyRewarded =
     referral.status === 'rewarded' ||
     invitee.referralRewardClaimed ||
     invitee.invitedRewardGranted ||
-    (hasEvent(store, inviterEventId) && hasEvent(store, inviteeEventId))
+    hasEvent(store, inviterEventId)
 
   if (alreadyRewarded) {
     logReferral('duplicate_reward_prevented', {
@@ -287,17 +292,7 @@ export function activateReferralOnStore(store, userId) {
     {
       referenceId: referral.id,
       description: 'Награда за реферала',
-    },
-  )
-  const inviteeGrant = addCoins(
-    store,
-    invitee,
-    rewardAmount,
-    TX_TYPE.REFERRAL_REWARD,
-    inviteeEventId,
-    {
-      referenceId: referral.id,
-      description: 'Награда за реферала',
+      referredUserId: invitee.telegramId,
     },
   )
 
@@ -305,16 +300,7 @@ export function activateReferralOnStore(store, userId) {
     throw new Error('referral_reward_inviter_failed')
   }
 
-  if (!inviteeGrant.granted && inviteeGrant.reason !== 'already_granted') {
-    throw new Error('referral_reward_invitee_failed')
-  }
-
-  if (inviterGrant.granted) {
-    referrer.referralEarnings += rewardAmount
-  }
-
-  // If wallet events already existed (partial prior write), treat as duplicate.
-  if (!inviterGrant.granted && !inviteeGrant.granted) {
+  if (!inviterGrant.granted) {
     logReferral('duplicate_reward_prevented', {
       referralId: referral.id,
       inviteeId: invitee.telegramId,
@@ -334,6 +320,8 @@ export function activateReferralOnStore(store, userId) {
       message: 'Награда уже получена.',
     }
   }
+
+  referrer.referralEarnings += rewardAmount
 
   referral.status = 'rewarded'
   referral.rewardedAt = now
@@ -356,7 +344,7 @@ export function activateReferralOnStore(store, userId) {
     success: true,
     rewarded: true,
     reason: 'rewarded',
-    message: `Реферал активирован. Вы оба получили по ${rewardAmount} монет.`,
+    message: `Реферал активирован. Начислено ${rewardAmount} монет.`,
   }
 }
 
@@ -394,18 +382,31 @@ export function getReferralMe(store, user) {
   }
 }
 
-export function bootstrapUser(telegramUser, startParam) {
+export function bootstrapUser(telegramUser, startParam, options = {}) {
   return withStore((store) => {
     migrateAllReferrals(store)
     const user = ensureUser(store, telegramUser)
-    // Prefer signed start_param from Telegram initData; fall back to bot /start pending payload.
-    const fromRequest = String(startParam || '').trim()
-    const fromPending = String(user.pendingStartParam || '').trim()
-    const effectiveStartParam = fromRequest || fromPending
-    const { referral, activation } = applyReferralAndReward(store, user, effectiveStartParam)
+    const clientStartParam = String(options.clientStartParam || '').trim()
+    const resolved = resolveReferralStartParam({
+      signed: startParam,
+      client: clientStartParam,
+      pending: user.pendingStartParam,
+    })
+
+    if (resolved.value) {
+      logReferral('start_param_received', {
+        inviteeId: user.telegramId,
+        source: resolved.source,
+        codePrefix: extractReferralCode(resolved.value)?.slice(0, 2) || null,
+      })
+    }
+
+    const { referral, activation } = applyReferralAndReward(store, user, resolved.value)
+
     if (user.pendingStartParam) {
       user.pendingStartParam = null
     }
+
     maybeGrantInviteFriendsTask(store, user)
     return { referral, activation, me: getReferralMe(store, user) }
   })
@@ -424,6 +425,10 @@ export function registerBotStart(telegramUser, startPayload) {
 
     if (extractReferralCode(payload)) {
       user.pendingStartParam = payload
+      console.info('[referral] bot_start_pending_saved', {
+        telegramId: user.telegramId,
+        codePrefix: extractReferralCode(payload)?.slice(0, 2) || null,
+      })
     }
 
     return {

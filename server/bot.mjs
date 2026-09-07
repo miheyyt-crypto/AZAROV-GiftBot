@@ -4,6 +4,7 @@ import path from 'node:path'
 import { Markup, Telegraf } from 'telegraf'
 
 import { registerBotStart } from './referrals.mjs'
+import { extractReferralCode } from './users.mjs'
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 loadEnv({ path: path.join(rootDir, '.env') })
@@ -73,8 +74,14 @@ export function createBot() {
     }
 
     const text = buildWelcomeText(ctx.from?.first_name)
-    const keyboard = webappUrl
-      ? Markup.inlineKeyboard([Markup.button.webApp('🎁 Открыть GiftBot', webappUrl)])
+    let openUrl = webappUrl
+    if (webappUrl && extractReferralCode(startPayload)) {
+      const separator = webappUrl.includes('?') ? '&' : '?'
+      openUrl = `${webappUrl}${separator}startapp=${encodeURIComponent(startPayload)}`
+    }
+
+    const keyboard = openUrl
+      ? Markup.inlineKeyboard([Markup.button.webApp('🎁 Открыть GiftBot', openUrl)])
       : undefined
 
     try {

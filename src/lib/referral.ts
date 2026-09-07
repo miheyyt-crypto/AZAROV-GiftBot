@@ -31,21 +31,59 @@ export function getCurrentReferralLink(): string {
 }
 
 export function getStartParam(): string {
-  const fromTelegram = getTelegramWebApp()?.initDataUnsafe.start_param?.trim()
-  if (fromTelegram) {
-    return fromTelegram
+  const START_PARAM_STORAGE_KEY = 'azarov_tg_start_param'
+
+  const fromTelegram = getTelegramWebApp()?.initDataUnsafe.start_param?.trim() || ''
+
+  let fromUrl = ''
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search)
+    fromUrl =
+      params.get('tgWebAppStartParam')?.trim() ||
+      params.get('startapp')?.trim() ||
+      ''
+
+    // Telegram sometimes puts launch params in the hash.
+    if (!fromUrl && window.location.hash) {
+      const hash = window.location.hash.replace(/^#/, '')
+      const hashParams = new URLSearchParams(hash.startsWith('?') ? hash.slice(1) : hash)
+      fromUrl =
+        hashParams.get('tgWebAppStartParam')?.trim() ||
+        hashParams.get('startapp')?.trim() ||
+        ''
+    }
   }
 
-  if (typeof window === 'undefined') {
-    return ''
+  const found = fromTelegram || fromUrl
+  if (found && typeof sessionStorage !== 'undefined') {
+    try {
+      sessionStorage.setItem(START_PARAM_STORAGE_KEY, found)
+    } catch {
+      // Ignore quota / private mode failures.
+    }
+    return found
   }
 
-  const params = new URLSearchParams(window.location.search)
-  return (
-    params.get('startapp')?.trim() ||
-    params.get('tgWebAppStartParam')?.trim() ||
-    ''
-  )
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      return sessionStorage.getItem(START_PARAM_STORAGE_KEY)?.trim() || ''
+    } catch {
+      return ''
+    }
+  }
+
+  return ''
+}
+
+export function clearStoredStartParam(): void {
+  if (typeof sessionStorage === 'undefined') {
+    return
+  }
+  try {
+    sessionStorage.removeItem('azarov_tg_start_param')
+  } catch {
+    // ignore
+  }
 }
 
 export function onKickConnected(): Promise<{ success: boolean; message?: string }> {
