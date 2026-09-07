@@ -19,6 +19,8 @@ import {
   toStreakCalendarDate,
   updateKickLivestreamStateOnStore,
 } from './kick-streak.mjs'
+import { STREAK_FREEZE_PRODUCT_ID } from './constants.mjs'
+import { getCoinHistory } from './profile.mjs'
 import { withStore } from './store.mjs'
 import { createUser } from './users.mjs'
 
@@ -794,5 +796,363 @@ test('disconnected user sees connect message and zero streak', async () => {
     assert.equal(streak.kickConnected, false)
     assert.equal(streak.currentStreak, 0)
     assert.match(streak.message || '', /Привяжи Kick/)
+  })
+})
+
+function seedFreezeOrder(store, telegramId, orderId = 'FRZ001') {
+  store.orders = store.orders || {}
+  const user = store.users[String(telegramId)]
+  user.orderIds = user.orderIds || []
+  const createdAt = new Date().toISOString()
+  store.orders[orderId] = {
+    orderId,
+    userId: Number(telegramId),
+    productId: STREAK_FREEZE_PRODUCT_ID,
+    productName: 'Заморозка стрика',
+    price: 1000,
+    status: 'pending',
+    createdAt,
+    updatedAt: createdAt,
+    completedAt: null,
+    metadata: {},
+  }
+  user.orderIds = [...user.orderIds, orderId]
+  return orderId
+}
+
+function setFreshLive(store) {
+  updateKickLivestreamStateOnStore(store, {
+    broadcasterUserId: '37093990',
+    channelSlug: 'azarov7777',
+    isLive: true,
+    startedAt: utcDateOffset(-5),
+    source: 'test',
+  })
+  store.kickLivestreamState.updatedAt = new Date().toISOString()
+}
+
+test('applyChatActivityToStreak: next day does not use freeze flag', () => {
+  const record = {
+    telegramId: 1,
+    kickUserId: '9',
+    currentStreak: 3,
+    lastActiveDate: '2026-09-01',
+    longestStreak: 3,
+    activeDays: ['2026-09-01'],
+  }
+  const r = applyChatActivityToStreak(record, '2026-09-02', { useFreeze: true })
+  assert.equal(r.reason, 'continued')
+  assert.equal(r.record.currentStreak, 4)
+  assert.equal(r.freezeUsed, false)
+})
+
+test('applyChatActivityToStreak: one-day gap with freeze keeps streak', () => {
+  const record = {
+    telegramId: 1,
+    kickUserId: '9',
+    currentStreak: 8,
+    lastActiveDate: '2026-09-02',
+    longestStreak: 8,
+    activeDays: ['2026-09-01', '2026-09-02'],
+  }
+  const r = applyChatActivityToStreak(record, '2026-09-04', { useFreeze: true })
+  assert.equal(r.reason, 'freeze_saved')
+  assert.equal(r.freezeUsed, true)
+  assert.equal(r.record.currentStreak, 8)
+  assert.equal(r.record.lastActiveDate, '2026-09-04')
+})
+
+test('one missed day + Freeze → streak kept, freeze -1, ledger note', async () => {
+  await withTempStore(async () => {
+    withStore((store) => {
+      linkUser(store, 70, '7001')
+      seedFreezeOrder(store, 70, 'FRZ70')
+      setFreshLive(store)
+      return true
+    })
+
+    await processChatMessageSent(
+      chatPayload({ senderId: '7001', messageId: 'f1', createdAt: utcDateOffset(-3) }),
+      { messageId: 'evt-f1', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+    await processChatMessageSent(
+      chatPayload({ senderId: '7001', messageId: 'f2', createdAt: utcDateOffset(-2) }),
+      { messageId: 'evt-f2', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+
+    const before = getKickStreakForUser(70)
+    assert.equal(before.currentStreak, 2)
+    assert.equal(before.freezeAvailable, 1)
+    assert.equal(before.freezeAutoConsume, true)
+
+    // Skip -1 → gap of one calendar day before today
+    const saved = await processChatMessageSent(
+      chatPayload({ senderId: '7001', messageId: 'f3', createdAt: utcDateOffset(0) }),
+      { messageId: 'evt-f3', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+    assert.equal(saved.reason, 'freeze_saved')
+    assert.equal(saved.freezeUsed, true)
+    assert.equal(saved.currentStreak, 2)
+    assert.equal(saved.freezeAvailable, 0)
+
+    const after = getKickStreakForUser(70)
+    assert.equal(after.currentStreak, 2)
+    assert.equal(after.freezeAvailable, 0)
+
+    withStore((store) => {
+      assert.equal(store.orders.FRZ70.status, 'completed')
+      assert.equal(store.orders.FRZ70.metadata.consumedForDate, toStreakCalendarDate(utcDateOffset(0)))
+      assert.ok(store.coinTransactions[`streak:freeze:70:${toStreakCalendarDate(utcDateOffset(0))}`])
+      assert.equal(
+        store.coinTransactions[`streak:freeze:70:${toStreakCalendarDate(utcDateOffset(0))}`].type,
+        'streak_freeze',
+      )
+      return true
+    })
+
+    const history = getCoinHistory(70, 'all')
+    assert.ok(history.transactions.some((t) => t.type === 'streak_freeze' && t.amount === 0))
+  })
+})
+
+test('one missed day without Freeze → reset', async () => {
+  await withTempStore(async () => {
+    withStore((store) => {
+      linkUser(store, 71, '7002')
+      setFreshLive(store)
+      return true
+    })
+
+    await processChatMessageSent(
+      chatPayload({ senderId: '7002', messageId: 'g1', createdAt: utcDateOffset(-2) }),
+      { messageId: 'evt-g1', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+    const reset = await processChatMessageSent(
+      chatPayload({ senderId: '7002', messageId: 'g2', createdAt: utcDateOffset(0) }),
+      { messageId: 'evt-g2', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+    assert.equal(reset.reason, 'reset')
+    assert.equal(reset.freezeUsed, false)
+    assert.equal(reset.currentStreak, 1)
+  })
+})
+
+test('two missed days + Freeze → reset, freeze not spent', async () => {
+  await withTempStore(async () => {
+    withStore((store) => {
+      linkUser(store, 72, '7003')
+      seedFreezeOrder(store, 72, 'FRZ72')
+      setFreshLive(store)
+      return true
+    })
+
+    await processChatMessageSent(
+      chatPayload({ senderId: '7003', messageId: 'h1', createdAt: utcDateOffset(-3) }),
+      { messageId: 'evt-h1', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+    const reset = await processChatMessageSent(
+      chatPayload({ senderId: '7003', messageId: 'h2', createdAt: utcDateOffset(0) }),
+      { messageId: 'evt-h2', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+    assert.equal(reset.reason, 'reset')
+    assert.equal(reset.freezeUsed, false)
+    assert.equal(reset.currentStreak, 1)
+    assert.equal(getKickStreakForUser(72).freezeAvailable, 1)
+
+    withStore((store) => {
+      assert.equal(store.orders.FRZ72.status, 'pending')
+      return true
+    })
+  })
+})
+
+test('next day +1 does not spend Freeze; same day no change', async () => {
+  await withTempStore(async () => {
+    withStore((store) => {
+      linkUser(store, 73, '7004')
+      seedFreezeOrder(store, 73, 'FRZ73')
+      setFreshLive(store)
+      return true
+    })
+
+    await processChatMessageSent(
+      chatPayload({ senderId: '7004', messageId: 'i1', createdAt: utcDateOffset(-1) }),
+      { messageId: 'evt-i1', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+    const cont = await processChatMessageSent(
+      chatPayload({ senderId: '7004', messageId: 'i2', createdAt: utcDateOffset(0) }),
+      { messageId: 'evt-i2', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+    assert.equal(cont.reason, 'continued')
+    assert.equal(cont.freezeUsed, false)
+    assert.equal(cont.currentStreak, 2)
+    assert.equal(getKickStreakForUser(73).freezeAvailable, 1)
+
+    const same = await processChatMessageSent(
+      chatPayload({ senderId: '7004', messageId: 'i3', createdAt: utcDateOffset(0) }),
+      { messageId: 'evt-i3', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+    assert.equal(same.reason, 'same_day')
+    assert.equal(same.freezeUsed, false)
+    assert.equal(getKickStreakForUser(73).freezeAvailable, 1)
+  })
+})
+
+test('duplicate event after freeze does not spend twice', async () => {
+  await withTempStore(async () => {
+    withStore((store) => {
+      linkUser(store, 74, '7005')
+      seedFreezeOrder(store, 74, 'FRZ74A')
+      seedFreezeOrder(store, 74, 'FRZ74B')
+      setFreshLive(store)
+      return true
+    })
+
+    await processChatMessageSent(
+      chatPayload({ senderId: '7005', messageId: 'j1', createdAt: utcDateOffset(-2) }),
+      { messageId: 'evt-j1', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+
+    const payload = chatPayload({
+      senderId: '7005',
+      messageId: 'j2',
+      createdAt: utcDateOffset(0),
+    })
+    const first = await processChatMessageSent(payload, {
+      messageId: 'evt-j2',
+      options: { fetchImpl: liveFetchImpl(true) },
+    })
+    assert.equal(first.freezeUsed, true)
+    assert.equal(first.currentStreak, 1)
+    assert.equal(getKickStreakForUser(74).freezeAvailable, 1)
+
+    const dup = await processChatMessageSent(payload, {
+      messageId: 'evt-j2',
+      options: { fetchImpl: liveFetchImpl(true) },
+    })
+    assert.equal(dup.reason, 'duplicate_event')
+    assert.equal(getKickStreakForUser(74).freezeAvailable, 1)
+  })
+})
+
+test('two near-simultaneous events after gap spend at most one freeze', async () => {
+  await withTempStore(async () => {
+    withStore((store) => {
+      linkUser(store, 75, '7006')
+      seedFreezeOrder(store, 75, 'FRZ75')
+      setFreshLive(store)
+      return true
+    })
+
+    await processChatMessageSent(
+      chatPayload({ senderId: '7006', messageId: 'k0', createdAt: utcDateOffset(-2) }),
+      { messageId: 'evt-k0', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+
+    const a = await processChatMessageSent(
+      chatPayload({ senderId: '7006', messageId: 'k1', createdAt: utcDateOffset(0) }),
+      { messageId: 'evt-k1', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+    const b = await processChatMessageSent(
+      chatPayload({ senderId: '7006', messageId: 'k2', createdAt: utcDateOffset(0) }),
+      { messageId: 'evt-k2', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+
+    assert.equal(a.freezeUsed, true)
+    assert.equal(b.reason, 'same_day')
+    assert.equal(b.freezeUsed, false)
+    assert.equal(getKickStreakForUser(75).freezeAvailable, 0)
+    assert.equal(getKickStreakForUser(75).currentStreak, 1)
+  })
+})
+
+test('wrong channel / offline / unlinked do not spend freeze', async () => {
+  await withTempStore(async () => {
+    withStore((store) => {
+      linkUser(store, 76, '7007')
+      seedFreezeOrder(store, 76, 'FRZ76')
+      setFreshLive(store)
+      store.kickStreamStreaks['76'] = {
+        telegramId: 76,
+        kickUserId: '7007',
+        currentStreak: 5,
+        lastActiveDate: toStreakCalendarDate(utcDateOffset(-2)),
+        longestStreak: 5,
+        activeDays: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      return true
+    })
+
+    const wrong = await processChatMessageSent(
+      chatPayload({
+        senderId: '7007',
+        broadcasterId: '999',
+        slug: 'azarov7777',
+        messageId: 'w1',
+      }),
+      { messageId: 'evt-w1', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+    assert.equal(wrong.reason, 'wrong_channel')
+    assert.equal(getKickStreakForUser(76).freezeAvailable, 1)
+
+    withStore((store) => {
+      store.kickLivestreamState.isLive = false
+      store.kickLivestreamState.updatedAt = new Date().toISOString()
+      return true
+    })
+    const offline = await processChatMessageSent(
+      chatPayload({ senderId: '7007', messageId: 'w2' }),
+      { messageId: 'evt-w2', options: { fetchImpl: liveFetchImpl(false) } },
+    )
+    assert.equal(offline.reason, 'not_live')
+    assert.equal(getKickStreakForUser(76).freezeAvailable, 1)
+
+    withStore((store) => {
+      setFreshLive(store)
+      return true
+    })
+    const unlinked = await processChatMessageSent(
+      chatPayload({ senderId: '99999', messageId: 'w3' }),
+      { messageId: 'evt-w3', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+    assert.equal(unlinked.reason, 'unlinked_kick')
+    assert.equal(getKickStreakForUser(76).freezeAvailable, 1)
+  })
+})
+
+test('multiple freezes spend one per separate single-day gap', async () => {
+  await withTempStore(async () => {
+    withStore((store) => {
+      linkUser(store, 77, '7008')
+      seedFreezeOrder(store, 77, 'FRZ77A')
+      seedFreezeOrder(store, 77, 'FRZ77B')
+      setFreshLive(store)
+      return true
+    })
+
+    // Day -4
+    await processChatMessageSent(
+      chatPayload({ senderId: '7008', messageId: 'm1', createdAt: utcDateOffset(-4) }),
+      { messageId: 'evt-m1', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+    // Skip -3 → activity -2 with freeze
+    const s1 = await processChatMessageSent(
+      chatPayload({ senderId: '7008', messageId: 'm2', createdAt: utcDateOffset(-2) }),
+      { messageId: 'evt-m2', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+    assert.equal(s1.reason, 'freeze_saved')
+    assert.equal(s1.currentStreak, 1)
+    assert.equal(getKickStreakForUser(77).freezeAvailable, 1)
+
+    // Skip -1 → activity 0 with second freeze
+    const s2 = await processChatMessageSent(
+      chatPayload({ senderId: '7008', messageId: 'm3', createdAt: utcDateOffset(0) }),
+      { messageId: 'evt-m3', options: { fetchImpl: liveFetchImpl(true) } },
+    )
+    assert.equal(s2.reason, 'freeze_saved')
+    assert.equal(s2.currentStreak, 1)
+    assert.equal(getKickStreakForUser(77).freezeAvailable, 0)
   })
 })

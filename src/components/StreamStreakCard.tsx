@@ -39,6 +39,7 @@ export function StreamStreakCard() {
   const connected = Boolean(streak?.kickConnected)
   const current = Number(streak?.currentStreak) || 0
   const creditedToday = Boolean(streak?.creditedToday)
+  const freezeAvailable = Number(streak?.freezeAvailable) || 0
 
   let title = 'Стрик стримов'
   let subtitle = 'Загрузка…'
@@ -68,6 +69,9 @@ export function StreamStreakCard() {
       <div className="relative z-10 min-w-0 flex-1">
         <h2 className="text-base font-semibold text-white">{title}</h2>
         <p className="mt-1 text-xs leading-relaxed text-muted">{subtitle}</p>
+        {connected && !loading && streak ? (
+          <p className="mt-1.5 text-xs text-white/70">🧊 Заморозок: {freezeAvailable}</p>
+        ) : null}
       </div>
     </article>
   )

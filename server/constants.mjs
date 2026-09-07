@@ -38,7 +38,7 @@ export const KICK_OAUTH_STATE_TTL_MS = 10 * 60 * 1000
  * Kick event timestamps are ISO/UTC; store ledgers use UTC ISO — keep streak days in UTC.
  */
 export const KICK_STREAK_TIMEZONE = 'UTC'
-/** Product id for streak freeze shop item (orders only today — no auto-consume yet). */
+/** Product id for streak freeze shop item (auto-consumed from pending shop orders). */
 export const STREAK_FREEZE_PRODUCT_ID = 'streak-freeze'
 
 export function getKickRequiredChannel() {

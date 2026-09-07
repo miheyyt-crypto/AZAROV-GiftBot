@@ -48,6 +48,7 @@ const TRANSACTION_LABELS = {
   case_reward: 'Выигрыш из кейса',
   case_purchase: 'Открытие кейса',
   shop_purchase: 'Покупка в магазине',
+  streak_freeze: 'Заморозка стрика',
   admin_adjustment: 'Корректировка баланса',
   refund: 'Возврат',
 }

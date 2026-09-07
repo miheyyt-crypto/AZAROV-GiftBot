@@ -6,6 +6,7 @@ export const TX_TYPE = {
   CASE_REWARD: 'case_reward',
   CASE_PURCHASE: 'case_purchase',
   SHOP_PURCHASE: 'shop_purchase',
+  STREAK_FREEZE: 'streak_freeze',
   ADMIN_ADJUSTMENT: 'admin_adjustment',
   REFUND: 'refund',
 }
@@ -19,6 +20,7 @@ const LEGACY_TYPE_MAP = {
   CASE_REWARD: TX_TYPE.CASE_REWARD,
   CASE_PURCHASE: TX_TYPE.CASE_PURCHASE,
   SHOP_PURCHASE: TX_TYPE.SHOP_PURCHASE,
+  STREAK_FREEZE: TX_TYPE.STREAK_FREEZE,
   REFERRAL_CASE: TX_TYPE.CASE_REWARD,
   DEV_TEST_GRANT: TX_TYPE.ADMIN_ADJUSTMENT,
   ADMIN_ADJUSTMENT: TX_TYPE.ADMIN_ADJUSTMENT,
@@ -191,6 +193,58 @@ export function spendCoins(store, user, amount, reason, eventId, meta = {}) {
     reason: result.applied ? 'spent' : result.reason,
     user: result.user,
     transaction: result.transaction,
+  }
+}
+
+/**
+ * Idempotent ledger row with amount 0 (inventory / non-balance events).
+ * Does not change user.balance.
+ */
+export function recordLedgerNote(store, user, type, eventId, meta = {}) {
+  ensureLedger(store)
+  const txType = normalizeTxType(type)
+  if (!ALLOWED_TYPES.has(txType)) {
+    throw new Error('invalid_tx_type')
+  }
+
+  const referenceId = meta.referenceId ? String(meta.referenceId) : ''
+  const uniqueKey = referenceId ? `${txType}:${referenceId}:${user.telegramId}` : ''
+
+  if (alreadyProcessed(store, eventId, uniqueKey)) {
+    return {
+      applied: false,
+      reason: 'already_granted',
+      user,
+      transaction: store.coinTransactions[eventId] || store.coinTransactions[uniqueKey] || null,
+    }
+  }
+
+  const createdAt = utcNow()
+  const balanceAfter = getUserBalance(user)
+  const transaction = {
+    id: eventId,
+    userId: user.telegramId,
+    amount: 0,
+    type: txType,
+    referenceId: referenceId || null,
+    description: meta.description ? String(meta.description).slice(0, 240) : null,
+    balanceAfter,
+    createdAt,
+  }
+
+  store.events[eventId] = { eventId, ...transaction }
+  store.coinTransactions[eventId] = transaction
+
+  if (uniqueKey) {
+    store.events[uniqueKey] = store.events[eventId]
+    store.coinTransactions[uniqueKey] = transaction
+  }
+
+  return {
+    applied: true,
+    reason: 'applied',
+    user,
+    transaction,
   }
 }
 

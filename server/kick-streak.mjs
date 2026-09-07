@@ -5,7 +5,9 @@ import {
 } from './constants.mjs'
 import { fetchKickChannelLiveStatus, resolveKickChannelBySlug } from './kick-api.mjs'
 import { getKickConnectionForUser } from './kick-oauth.mjs'
+import { normalizeOrderStatus } from './shop.mjs'
 import { withStore, withStoreRead } from './store.mjs'
+import { hasEvent, recordLedgerNote, TX_TYPE, utcNow } from './wallet.mjs'
 
 const WEBHOOK_EVENT_TTL_MS = 7 * 24 * 60 * 60 * 1000
 /** Fresh livestream.status.updated / API snapshot window (ms). */
@@ -145,13 +147,108 @@ export function isMessageDuringLive(store, messageAtIso, liveApi = null, { nowMs
 }
 
 /**
- * Apply calendar-day chat activity to a streak record (idempotent per day).
- * Freeze product is NOT auto-consumed — shop only creates orders today.
+ * Available streak-freeze units from shop orders (not yet auto-consumed).
+ * Purchase creates pending orders; consume marks them completed.
  */
-export function applyChatActivityToStreak(record, activityDate, { nowIso } = {}) {
+export function listAvailableStreakFreezeOrders(store, telegramUserId) {
+  store.orders = store.orders || {}
+  return Object.values(store.orders)
+    .filter((order) => {
+      if (!order || Number(order.userId) !== Number(telegramUserId)) {
+        return false
+      }
+      if (String(order.productId) !== STREAK_FREEZE_PRODUCT_ID) {
+        return false
+      }
+      const status = normalizeOrderStatus(order.status)
+      if (status !== 'pending' && status !== 'processing') {
+        return false
+      }
+      if (order.consumedAt || order.metadata?.consumedForDate) {
+        return false
+      }
+      return true
+    })
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+}
+
+export function countAvailableStreakFreezes(store, telegramUserId) {
+  return listAvailableStreakFreezeOrders(store, telegramUserId).length
+}
+
+export function streakFreezeEventId(telegramUserId, activityDate) {
+  return `streak:freeze:${telegramUserId}:${activityDate}`
+}
+
+/**
+ * Atomically consume one available freeze for a calendar gap day.
+ * Idempotent per (telegramId, activityDate) via ledger event id.
+ */
+export function consumeStreakFreezeOnStore(store, telegramUserId, activityDate) {
+  const eventId = streakFreezeEventId(telegramUserId, activityDate)
+  if (hasEvent(store, eventId)) {
+    return {
+      consumed: false,
+      reason: 'already_consumed_for_date',
+      eventId,
+      orderId: store.events[eventId]?.referenceId || null,
+    }
+  }
+
+  const available = listAvailableStreakFreezeOrders(store, telegramUserId)
+  if (!available.length) {
+    return { consumed: false, reason: 'no_freeze', eventId, orderId: null }
+  }
+
+  const user = store.users[String(telegramUserId)]
+  if (!user) {
+    return { consumed: false, reason: 'missing_user', eventId, orderId: null }
+  }
+
+  const order = available[0]
+  const now = utcNow()
+  order.status = 'completed'
+  order.completedAt = order.completedAt || now
+  order.updatedAt = now
+  order.consumedAt = now
+  order.metadata = {
+    ...(order.metadata || {}),
+    consumedForDate: String(activityDate),
+    consumedReason: 'streak_gap',
+  }
+
+  const note = recordLedgerNote(store, user, TX_TYPE.STREAK_FREEZE, eventId, {
+    referenceId: order.orderId,
+    description: 'Заморозка стрика: стрик сохранён после пропуска одного дня',
+  })
+
+  if (!note.applied && note.reason === 'already_granted') {
+    return {
+      consumed: false,
+      reason: 'already_consumed_for_date',
+      eventId,
+      orderId: order.orderId,
+    }
+  }
+
+  return {
+    consumed: true,
+    reason: 'consumed',
+    eventId,
+    orderId: order.orderId,
+    transaction: note.transaction,
+  }
+}
+
+/**
+ * Apply calendar-day chat activity to a streak record (idempotent per day).
+ * When useFreeze=true and exactly one calendar day was skipped, keep streak
+ * and only advance lastActiveDate (caller must consume a freeze first).
+ */
+export function applyChatActivityToStreak(record, activityDate, { nowIso, useFreeze = false } = {}) {
   const date = String(activityDate || '')
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return { changed: false, reason: 'invalid_date', record }
+    return { changed: false, reason: 'invalid_date', record, freezeUsed: false }
   }
 
   const now = nowIso || new Date().toISOString()
@@ -161,24 +258,34 @@ export function applyChatActivityToStreak(record, activityDate, { nowIso } = {})
   }
 
   if (next.lastActiveDate === date) {
-    return { changed: false, reason: 'same_day', record: next }
+    return { changed: false, reason: 'same_day', record: next, freezeUsed: false }
   }
 
   const previous = next.lastActiveDate
   let currentStreak = Number(next.currentStreak) || 0
+  let reason = 'started'
+  let freezeUsed = false
 
   if (!previous) {
     currentStreak = 1
+    reason = 'started'
   } else {
     const diff = streakDayDiff(previous, date)
     if (diff == null) {
       currentStreak = 1
+      reason = 'reset'
     } else if (diff === 1) {
       currentStreak = currentStreak + 1
+      reason = 'continued'
+    } else if (diff === 2 && useFreeze) {
+      // Keep streak; skipped day is covered by freeze (no +1 for the gap).
+      freezeUsed = true
+      reason = 'freeze_saved'
     } else if (diff > 1) {
       currentStreak = 1
+      reason = 'reset'
     } else {
-      return { changed: false, reason: 'out_of_order', record: next }
+      return { changed: false, reason: 'out_of_order', record: next, freezeUsed: false }
     }
   }
 
@@ -198,15 +305,17 @@ export function applyChatActivityToStreak(record, activityDate, { nowIso } = {})
 
   return {
     changed: true,
-    reason: previous ? (streakDayDiff(previous, date) === 1 ? 'continued' : 'reset') : 'started',
+    reason,
     record: next,
+    freezeUsed,
   }
 }
 
 /**
  * If last activity is older than yesterday, streak is broken until next credit.
+ * Exactly one missed day can still be saved by an available freeze on next chat.
  */
-export function reconcileStreakForToday(record, todayDate) {
+export function reconcileStreakForToday(record, todayDate, { freezeAvailable = 0 } = {}) {
   if (!record) {
     return null
   }
@@ -222,6 +331,9 @@ export function reconcileStreakForToday(record, todayDate) {
     return record
   }
   if (diff <= 1) {
+    return record
+  }
+  if (diff === 2 && Number(freezeAvailable) > 0) {
     return record
   }
   return {
@@ -467,15 +579,40 @@ export async function processChatMessageSent(payload, { messageId, options = {} 
     existing.telegramId = Number(telegramId)
 
     const activityDate = toStreakCalendarDate(createdAt)
-    const applied = applyChatActivityToStreak(existing, activityDate)
+    const previousDate = existing.lastActiveDate || null
+    const gap =
+      previousDate && activityDate && previousDate !== activityDate
+        ? streakDayDiff(previousDate, activityDate)
+        : null
+
+    let useFreeze = false
+    let freezeConsume = null
+    if (gap === 2) {
+      freezeConsume = consumeStreakFreezeOnStore(store, telegramId, activityDate)
+      useFreeze =
+        Boolean(freezeConsume.consumed) ||
+        freezeConsume.reason === 'already_consumed_for_date'
+      if (freezeConsume.consumed) {
+        logKickStreak('freeze_consumed', {
+          telegramId,
+          date: activityDate,
+          orderId: freezeConsume.orderId,
+          remaining: countAvailableStreakFreezes(store, telegramId),
+        })
+      }
+    }
+
+    const applied = applyChatActivityToStreak(existing, activityDate, { useFreeze })
     store.kickStreamStreaks[streakKey] = applied.record
 
     markChatEventProcessed(store, keys, {
       type: 'chat.message.sent',
-      outcome: applied.changed ? 'credited' : applied.reason,
+      outcome: applied.changed ? applied.reason : applied.reason,
       kickMessageId: payloadMessageId || null,
       senderKickUserId,
       telegramId,
+      freezeUsed: Boolean(applied.freezeUsed),
+      freezeOrderId: freezeConsume?.orderId || null,
     })
 
     if (applied.changed) {
@@ -485,6 +622,7 @@ export async function processChatMessageSent(payload, { messageId, options = {} 
         date: activityDate,
         currentStreak: applied.record.currentStreak,
         reason: applied.reason,
+        freezeUsed: Boolean(applied.freezeUsed),
       })
     }
 
@@ -495,6 +633,8 @@ export async function processChatMessageSent(payload, { messageId, options = {} 
       telegramId,
       currentStreak: applied.record.currentStreak,
       lastActiveDate: applied.record.lastActiveDate,
+      freezeUsed: Boolean(applied.freezeUsed),
+      freezeAvailable: countAvailableStreakFreezes(store, telegramId),
     }
   })
 }
@@ -507,9 +647,10 @@ export function getKickStreakForUser(telegramUserId) {
     store.kickStreamStreaks = store.kickStreamStreaks || {}
     const key = String(telegramUserId)
     let record = store.kickStreamStreaks[key] || null
+    const freezeAvailable = connected ? countAvailableStreakFreezes(store, telegramUserId) : 0
 
     if (record) {
-      const reconciled = reconcileStreakForToday(record, today)
+      const reconciled = reconcileStreakForToday(record, today, { freezeAvailable })
       if (reconciled && reconciled.currentStreak !== record.currentStreak) {
         store.kickStreamStreaks[key] = reconciled
         record = reconciled
@@ -519,13 +660,6 @@ export function getKickStreakForUser(telegramUserId) {
     const lastActiveDate = record?.lastActiveDate || null
     const creditedToday = Boolean(lastActiveDate && lastActiveDate === today)
     const currentStreak = Number(record?.currentStreak) || 0
-
-    const freezeOrders = Object.values(store.orders || {}).filter(
-      (order) =>
-        Number(order?.userId) === Number(telegramUserId) &&
-        String(order?.productId) === STREAK_FREEZE_PRODUCT_ID &&
-        ['pending', 'processing', 'completed'].includes(String(order?.status || '').toLowerCase()),
-    )
 
     return {
       success: true,
@@ -538,8 +672,8 @@ export function getKickStreakForUser(telegramUserId) {
       lastActiveDate: connected ? lastActiveDate : null,
       creditedToday: connected ? creditedToday : false,
       todayDate: today,
-      freezeAvailable: freezeOrders.length,
-      freezeAutoConsume: false,
+      freezeAvailable: connected ? freezeAvailable : 0,
+      freezeAutoConsume: true,
       message: !connected
         ? 'Привяжи Kick, чтобы участвовать в стрике'
         : creditedToday
