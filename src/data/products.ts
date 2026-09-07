@@ -87,7 +87,7 @@ export const products: ShopProduct[] = [
     currency: 'coins',
     category: 'donate',
     image: musicImage,
-    imageClassName: 'object-contain scale-[0.9]',
+    imageClassName: 'object-contain scale-[1.15] translate-y-[5px]',
     description: 'Заказ трека на стрим.',
     detailText: 'Напиши @username — администратор уточнит трек и поставит его на стрим.',
     infoText: ADMIN_ORDERS_INFO,
