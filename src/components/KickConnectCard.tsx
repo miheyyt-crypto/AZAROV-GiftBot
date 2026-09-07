@@ -2,11 +2,9 @@ import { useEffect, useState } from 'react'
 
 import kickLogo from '@/assets/partners/kick-logo.png'
 import { useNotifications } from '@/components/NotificationProvider'
-import { applyAccountSnapshot, getCurrentAccount } from '@/lib/account'
-import { hydrateBalanceFromAccount } from '@/lib/balance'
+import { useUserAccount } from '@/hooks/useUserAccount'
 import {
   applyKickConnectionFromAccount,
-  consumeKickReturnQuery,
   fetchKickConnectionRemote,
   getKickConnection,
   initiateKickOAuth,
@@ -15,8 +13,8 @@ import type { KickConnection } from '@/types'
 
 export function KickConnectCard() {
   const { showNotification } = useNotifications()
+  const account = useUserAccount()
   const [connection, setConnection] = useState<KickConnection>(() => {
-    const account = getCurrentAccount()
     if (account.kickConnected || account.kickUserId) {
       return applyKickConnectionFromAccount(account)
     }
@@ -27,52 +25,26 @@ export function KickConnectCard() {
 
   useEffect(() => {
     let cancelled = false
-
-    const returned = consumeKickReturnQuery()
-    if (returned) {
-      if (returned.status === 'connected' || returned.status === 'already') {
-        showNotification({
-          type: 'success',
-          title: 'Kick подключён',
-          message: returned.message || 'Аккаунт Kick успешно привязан.',
-        })
-      } else if (returned.status === 'cancelled') {
-        showNotification({
-          type: 'info',
-          title: 'Подключение отменено',
-          message: returned.message || 'Подключение отменено.',
-        })
-      } else {
-        showNotification({
-          type: 'error',
-          title: 'Kick',
-          message: returned.message || 'Не удалось привязать Kick.',
-        })
-        setMessage(returned.message || 'Не удалось привязать Kick.')
-      }
-    }
-
     void fetchKickConnectionRemote().then((next) => {
       if (!cancelled) {
         setConnection(next)
-        const account = getCurrentAccount()
-        if (next.connected) {
-          applyAccountSnapshot({
-            ...account,
-            kickConnected: true,
-            kickUsername: next.username || account.kickUsername,
-            kickUserId: next.userId || account.kickUserId,
-            kickAvatarUrl: next.avatarUrl || account.kickAvatarUrl,
-          })
-          hydrateBalanceFromAccount()
-        }
       }
     })
-
     return () => {
       cancelled = true
     }
-  }, [showNotification])
+  }, [])
+
+  useEffect(() => {
+    if (account.kickConnected || account.kickUserId) {
+      setConnection(applyKickConnectionFromAccount(account))
+    }
+  }, [
+    account.kickConnected,
+    account.kickUserId,
+    account.kickUsername,
+    account.kickAvatarUrl,
+  ])
 
   async function handleConnect() {
     if (connection.connected || isLoading) {
@@ -86,13 +58,23 @@ export function KickConnectCard() {
       const result = await initiateKickOAuth()
       setConnection(getKickConnection())
 
-      if (!result.success && result.message) {
+      if (result.success) {
+        showNotification({
+          type: 'info',
+          title: 'Kick',
+          message: 'Подтверди вход в Kick. После возврата в бота статус обновится сам.',
+        })
+      } else if (result.message) {
         setMessage(result.message)
         showNotification({
           type: result.code === 'already_connected' ? 'info' : 'warning',
           title: 'Kick',
           message: result.message,
         })
+        if (result.code === 'already_connected') {
+          const next = await fetchKickConnectionRemote()
+          setConnection(next)
+        }
       }
     } finally {
       setIsLoading(false)

@@ -18,6 +18,8 @@ import {
   isKickOAuthConfigured,
   readKickConnection,
 } from './kick-oauth.mjs'
+import { bootstrapKickFollowInfrastructure } from './kick-api.mjs'
+import { checkKickFollow, handleKickFollowWebhook } from './kick-follow.mjs'
 import { startPartnerTask, verifyPartnerTask } from './partner-tasks.mjs'
 import {
   approvePartnerSubmission,
@@ -161,7 +163,17 @@ function partnerScreenshotUpload(req, res, next) {
 }
 
 app.disable('x-powered-by')
-app.use(express.json({ limit: '64kb' }))
+app.use(
+  express.json({
+    limit: '256kb',
+    verify(req, _res, buf) {
+      // Keep raw body for Kick webhook RSA signature verification.
+      if (req.originalUrl?.startsWith('/api/kick/webhooks')) {
+        req.rawBody = buf.toString('utf8')
+      }
+    },
+  }),
+)
 
 const corsMiddleware = createCorsMiddleware()
 
@@ -638,6 +650,36 @@ app.post(
 )
 
 app.post(
+  '/api/tasks/kick-follow/check',
+  withUser(async (req, res, telegramUser) => {
+    const requestId = parseRequestId(req.body?.requestId)
+    bootstrapUser(telegramUser, '')
+    const result = await checkKickFollow(telegramUser.id, requestId)
+    res.json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+/**
+ * Kick Events webhook receiver (channel.followed).
+ * Configure this exact URL in Kick Developer → Enable Webhooks.
+ * Does not require Telegram auth; signature is verified with Kick public key.
+ */
+app.post(
+  '/api/kick/webhooks',
+  asyncHandler(async (req, res) => {
+    const result = await handleKickFollowWebhook(req)
+    res.status(result.status || (result.ok ? 200 : 400)).json({
+      ok: Boolean(result.ok),
+      ignored: Boolean(result.ignored),
+      message: result.message || undefined,
+    })
+  }),
+)
+
+app.post(
   '/api/tasks/invite-friends/claim',
   withUser(async (req, res, telegramUser) => {
     const requestId = parseRequestId(req.body?.requestId)
@@ -1052,6 +1094,18 @@ export function startHttpServer() {
     if (canServeFrontend) {
       console.log(`[boot] Serving frontend from ${distDir}`)
     }
+    void bootstrapKickFollowInfrastructure().then((result) => {
+      if (result?.ok) {
+        console.info('[kick-follow] webhook subscription ready', {
+          slug: result.channel?.slug,
+          broadcasterUserId: result.channel?.broadcasterUserId,
+        })
+      } else if (result?.reason && result.reason !== 'kick_not_configured') {
+        console.warn('[kick-follow] webhook bootstrap skipped/failed', {
+          reason: result.reason,
+        })
+      }
+    })
   })
   return server
 }

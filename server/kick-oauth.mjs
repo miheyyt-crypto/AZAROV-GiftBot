@@ -126,10 +126,25 @@ function maybeCompleteKickConnectTask(store, user) {
   return { granted: Boolean(grant.granted) }
 }
 
+function applyKickTokenBundle(account, tokenBundle) {
+  if (!account || !tokenBundle?.accessToken) {
+    return
+  }
+  const expiresIn = Number(tokenBundle.expiresIn) || 0
+  account.accessToken = String(tokenBundle.accessToken)
+  if (tokenBundle.refreshToken) {
+    account.refreshToken = String(tokenBundle.refreshToken)
+  }
+  account.tokenScope = String(tokenBundle.scope || account.tokenScope || '')
+  account.tokenExpiresAt = new Date(Date.now() + Math.max(expiresIn, 60) * 1000).toISOString()
+  account.tokenUpdatedAt = new Date().toISOString()
+}
+
 /**
  * Atomically link Kick ↔ Telegram with 1:1 uniqueness indexes.
+ * Optional tokenBundle stores server-only OAuth tokens for later follow checks.
  */
-export function linkKickAccountOnStore(store, telegramUserId, kickProfile) {
+export function linkKickAccountOnStore(store, telegramUserId, kickProfile, tokenBundle = null) {
   store.kickAccounts = store.kickAccounts || {}
   store.kickByTelegram = store.kickByTelegram || {}
 
@@ -156,6 +171,7 @@ export function linkKickAccountOnStore(store, telegramUserId, kickProfile) {
         account.displayName = kickProfile.displayName
         account.avatarUrl = kickProfile.avatarUrl
         account.updatedAt = new Date().toISOString()
+        applyKickTokenBundle(account, tokenBundle)
       }
       user.kickVerified = true
       user.kickUserId = kickKey
@@ -198,6 +214,7 @@ export function linkKickAccountOnStore(store, telegramUserId, kickProfile) {
       store.kickByTelegram[tgKey] = kickKey
       user.kickVerified = true
       user.kickUserId = kickKey
+      applyKickTokenBundle(existingAccount, tokenBundle)
       return {
         ok: true,
         code: 'already_connected',
@@ -228,6 +245,7 @@ export function linkKickAccountOnStore(store, telegramUserId, kickProfile) {
     createdAt: now,
     updatedAt: now,
   }
+  applyKickTokenBundle(store.kickAccounts[kickKey], tokenBundle)
   store.kickByTelegram[tgKey] = kickKey
 
   user.kickVerified = true
@@ -391,7 +409,7 @@ export async function exchangeKickAuthorizationCode(code, codeVerifier, options 
 
   return {
     accessToken: String(payload.access_token),
-    // Intentionally not persisted unless needed later.
+    refreshToken: payload.refresh_token ? String(payload.refresh_token) : '',
     expiresIn: Number(payload.expires_in) || 0,
     scope: String(payload.scope || ''),
   }
@@ -482,8 +500,15 @@ export async function completeKickOAuthCallback({ code, state, error, errorDescr
   const codeVerifier = consumeResult.state.codeVerifier
 
   let profile
+  let tokenBundle = null
   try {
     const token = await exchangeKickAuthorizationCode(code, codeVerifier, options)
+    tokenBundle = {
+      accessToken: token.accessToken,
+      refreshToken: token.refreshToken,
+      expiresIn: token.expiresIn,
+      scope: token.scope,
+    }
     profile = await fetchKickAuthorizedUser(token.accessToken, options)
   } catch (err) {
     const codeName = err?.code || err?.message || 'kick_api_unavailable'
@@ -502,7 +527,7 @@ export async function completeKickOAuthCallback({ code, state, error, errorDescr
   }
 
   return withStore((store) => {
-    const result = linkKickAccountOnStore(store, telegramUserId, profile)
+    const result = linkKickAccountOnStore(store, telegramUserId, profile, tokenBundle)
     if (!result.ok) {
       return {
         success: false,

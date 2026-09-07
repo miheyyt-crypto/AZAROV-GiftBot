@@ -100,6 +100,7 @@ export function createEmptyStore() {
     kickAccounts: {},
     kickByTelegram: {},
     kickOAuthStates: {},
+    kickFollows: {},
   }
 }
 
@@ -117,6 +118,7 @@ function migrateStore(store) {
   store.kickAccounts = store.kickAccounts || {}
   store.kickByTelegram = store.kickByTelegram || {}
   store.kickOAuthStates = store.kickOAuthStates || {}
+  store.kickFollows = store.kickFollows || {}
   return store
 }
 

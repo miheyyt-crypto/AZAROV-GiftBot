@@ -26,7 +26,14 @@ export function Tasks() {
   const partners = useMemo(() => getPartners(), [])
   const allTasks = useMemo(
     () => getVisibleTasks(),
-    [account.invitedCount, account.claimedTaskIds, account.startedPartnerTasks],
+    [
+      account.invitedCount,
+      account.claimedTaskIds,
+      account.startedPartnerTasks,
+      account.kickConnected,
+      account.kickUserId,
+      account.activeReferrals,
+    ],
   )
 
   const filteredTasks = useMemo(

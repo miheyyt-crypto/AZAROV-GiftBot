@@ -34,6 +34,7 @@ export interface ApiUserResponse {
   alreadyCompleted?: boolean
   rewarded?: boolean
   reward?: number
+  following?: boolean
   activation?: {
     success?: boolean
     rewarded?: boolean
@@ -91,6 +92,13 @@ export function bootstrapRemoteSession(startParam: string): Promise<ApiUserRespo
 
 export function checkTelegramSubscribe(requestId: string): Promise<ApiUserResponse> {
   return request('/api/tasks/telegram-subscribe/check', {
+    method: 'POST',
+    body: JSON.stringify({ requestId }),
+  })
+}
+
+export function checkKickFollow(requestId: string): Promise<ApiUserResponse> {
+  return request('/api/tasks/kick-follow/check', {
     method: 'POST',
     body: JSON.stringify({ requestId }),
   })

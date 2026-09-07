@@ -30,7 +30,7 @@ export const tasks: Task[] = [
   {
     id: 'kick-follow',
     title: 'Зафолловься на канал Kick',
-    description: 'Подпишись на канал на Kick.',
+    description: 'Подпишись на канал kick.com/azarov7777 с привязанного Kick аккаунта.',
     category: 'kick',
     reward: 500,
     type: 'kick_follow',

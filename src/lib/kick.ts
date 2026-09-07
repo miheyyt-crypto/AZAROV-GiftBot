@@ -1,5 +1,9 @@
+import { applyAccountSnapshot, getCurrentAccount } from '@/lib/account'
+import { hydrateBalanceFromAccount } from '@/lib/balance'
+import { mapRemoteAccount } from '@/lib/session'
 import { getTelegramInitData, getTelegramWebApp } from '@/lib/telegram'
 import type { KickConnection } from '@/types'
+import type { UserAccount } from '@/types/account'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
@@ -21,13 +25,105 @@ export function applyKickConnectionFromAccount(account: {
   kickUsername?: string | null
   kickUserId?: string | null
   kickAvatarUrl?: string | null
+  kickDisplayName?: string | null
 }): KickConnection {
   return setKickConnection({
     connected: Boolean(account.kickConnected || account.kickUserId),
     username: account.kickUsername || undefined,
     userId: account.kickUserId || undefined,
     avatarUrl: account.kickAvatarUrl || undefined,
+    displayName: account.kickDisplayName || undefined,
   })
+}
+
+/**
+ * Refresh Kick link status from the server and sync UserAccount.
+ * Source of truth is backend (Telegram session), never client-supplied Kick ids.
+ */
+export async function refreshKickAccountState(): Promise<KickConnection> {
+  try {
+    const result = await kickRequest('/api/kick/me', { method: 'GET' })
+    if (result.connection) {
+      setKickConnection(result.connection)
+    } else if (result.user) {
+      applyKickConnectionFromAccount(result.user)
+    }
+
+    if (result.user) {
+      const account = getCurrentAccount()
+      if (account.telegramId > 0) {
+        applyAccountSnapshot(
+          mapRemoteAccount({
+            ...account,
+            ...result.user,
+            telegramId: result.user.telegramId || account.telegramId,
+            kickConnected: Boolean(
+              result.user.kickConnected ||
+                result.connection?.connected ||
+                result.user.kickUserId ||
+                result.connection?.userId,
+            ),
+            kickUserId:
+              result.user.kickUserId ||
+              result.connection?.userId ||
+              account.kickUserId ||
+              null,
+            kickUsername:
+              result.user.kickUsername ||
+              result.connection?.username ||
+              account.kickUsername ||
+              null,
+            kickAvatarUrl:
+              result.user.kickAvatarUrl ||
+              result.connection?.avatarUrl ||
+              account.kickAvatarUrl ||
+              null,
+          } as UserAccount),
+        )
+        hydrateBalanceFromAccount()
+      } else {
+        applyKickConnectionFromAccount(result.user)
+      }
+    }
+
+    return getKickConnection()
+  } catch {
+    return getKickConnection()
+  }
+}
+
+let kickPollTimer: ReturnType<typeof setInterval> | null = null
+
+export function stopKickConnectionPolling(): void {
+  if (kickPollTimer) {
+    clearInterval(kickPollTimer)
+    kickPollTimer = null
+  }
+}
+
+/** Poll Kick link status while the user finishes OAuth in an external browser. */
+export function startKickConnectionPolling(options?: {
+  intervalMs?: number
+  timeoutMs?: number
+  onConnected?: (connection: KickConnection) => void
+}): void {
+  stopKickConnectionPolling()
+  const intervalMs = options?.intervalMs ?? 2500
+  const timeoutMs = options?.timeoutMs ?? 120_000
+  const startedAt = Date.now()
+
+  kickPollTimer = setInterval(() => {
+    void refreshKickAccountState().then((connection) => {
+      if (connection.connected) {
+        stopKickConnectionPolling()
+        options?.onConnected?.(connection)
+        return
+      }
+      if (Date.now() - startedAt >= timeoutMs) {
+        stopKickConnectionPolling()
+      }
+    })
+  }, intervalMs)
 }
 
 async function kickRequest(path: string, init: RequestInit = {}): Promise<{
@@ -38,10 +134,14 @@ async function kickRequest(path: string, init: RequestInit = {}): Promise<{
   configured?: boolean
   connection?: KickConnection
   user?: {
+    telegramId?: number
     kickConnected?: boolean
     kickUsername?: string | null
     kickUserId?: string | null
     kickAvatarUrl?: string | null
+    claimedTaskIds?: string[]
+    completedTasks?: string[]
+    balance?: number
   }
 }> {
   const initData = getTelegramInitData()
@@ -65,10 +165,14 @@ async function kickRequest(path: string, init: RequestInit = {}): Promise<{
     configured?: boolean
     connection?: KickConnection
     user?: {
+      telegramId?: number
       kickConnected?: boolean
       kickUsername?: string | null
       kickUserId?: string | null
       kickAvatarUrl?: string | null
+      claimedTaskIds?: string[]
+      completedTasks?: string[]
+      balance?: number
     }
   } | null
 
@@ -88,18 +192,7 @@ async function kickRequest(path: string, init: RequestInit = {}): Promise<{
 }
 
 export async function fetchKickConnectionRemote(): Promise<KickConnection> {
-  try {
-    const result = await kickRequest('/api/kick/me', { method: 'GET' })
-    if (result.connection) {
-      return setKickConnection(result.connection)
-    }
-    if (result.user) {
-      return applyKickConnectionFromAccount(result.user)
-    }
-  } catch {
-    // Keep last known local snapshot.
-  }
-  return getKickConnection()
+  return refreshKickAccountState()
 }
 
 export function isKickOAuthConfigured(): boolean {
@@ -148,6 +241,9 @@ export async function initiateKickOAuth(): Promise<{
     } else {
       window.location.href = result.authorizationUrl
     }
+
+    // OAuth finishes in an external browser; Mini App must poll until linked.
+    startKickConnectionPolling()
 
     return { success: true }
   } catch {

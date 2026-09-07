@@ -1,11 +1,16 @@
 import { applyAccountSnapshot, getCurrentAccount } from '@/lib/account'
-import { claimInviteFriendsTask, checkTelegramSubscribe } from '@/lib/api'
+import { claimInviteFriendsTask, checkKickFollow, checkTelegramSubscribe } from '@/lib/api'
 import { hydrateBalanceFromAccount } from '@/lib/balance'
 import {
   REFERRAL_INVITE_TASK_ID,
   REFERRAL_INVITE_TASK_REQUIRED,
 } from '@/lib/constants'
 import { getTasks } from '@/data/tasks'
+import {
+  getKickConnection,
+  initiateKickOAuth,
+  refreshKickAccountState,
+} from '@/lib/kick'
 import { mapRemoteAccount } from '@/lib/session'
 import { createPurchaseRequestId } from '@/lib/shop'
 import type { FilterCategory, Task } from '@/types'
@@ -26,8 +31,18 @@ export function shouldShowRegularTasks(category: FilterCategory): boolean {
   return category !== 'partners'
 }
 
+function isKickLinked(account = getCurrentAccount()): boolean {
+  return Boolean(
+    account.kickConnected ||
+      account.kickUserId ||
+      getKickConnection().connected ||
+      getKickConnection().userId,
+  )
+}
+
 export function getVisibleTasks(): Task[] {
   const account = getCurrentAccount()
+  const kickLinked = isKickLinked(account)
 
   return getTasks().map((task) => {
     if (task.type === 'referral') {
@@ -45,6 +60,35 @@ export function getVisibleTasks(): Task[] {
           required: REFERRAL_INVITE_TASK_REQUIRED,
           label: task.progress?.label ?? 'Прогресс',
         },
+      }
+    }
+
+    if (task.type === 'kick_connect') {
+      const claimed = account.claimedTaskIds.includes(task.id)
+      const completed = claimed || kickLinked
+      return {
+        ...task,
+        status: completed ? 'completed' : 'available',
+        completed,
+        rewardClaimed: claimed,
+      }
+    }
+
+    // Follow/nickname require a linked Kick account — connection ≠ follow check.
+    if ((task.type === 'kick_follow' || task.type === 'kick_nickname') && !kickLinked) {
+      if (account.claimedTaskIds.includes(task.id)) {
+        return {
+          ...task,
+          status: 'completed',
+          completed: true,
+          rewardClaimed: true,
+        }
+      }
+      return {
+        ...task,
+        status: 'locked',
+        completed: false,
+        rewardClaimed: false,
       }
     }
 
@@ -101,6 +145,83 @@ export async function handleTaskAction(
         success: false,
         code: 'NETWORK_ERROR',
         message: 'Не удалось проверить подписку. Попробуй ещё раз позже.',
+      }
+    }
+  }
+
+  if (taskId === 'kick-connect') {
+    await refreshKickAccountState()
+    if (isKickLinked()) {
+      return {
+        success: true,
+        alreadyCompleted: true,
+        code: 'ALREADY_CONNECTED',
+        message: 'Kick уже подключён.',
+      }
+    }
+
+    const started = await initiateKickOAuth()
+    if (started.code === 'already_connected') {
+      await refreshKickAccountState()
+      return {
+        success: true,
+        alreadyCompleted: true,
+        code: 'ALREADY_CONNECTED',
+        message: started.message || 'Kick уже подключён.',
+      }
+    }
+
+    return {
+      success: Boolean(started.success),
+      code: started.code,
+      message:
+        started.message ||
+        (started.success
+          ? 'Открой Kick и подтверди привязку. После возврата статус обновится автоматически.'
+          : 'Не удалось начать привязку Kick.'),
+    }
+  }
+
+  if (taskId === 'kick-follow') {
+    try {
+      // Always refresh link status first — Mini App may still hold a stale snapshot
+      // after OAuth completed in an external browser.
+      await refreshKickAccountState()
+
+      if (!isKickLinked()) {
+        return {
+          success: false,
+          code: 'KICK_NOT_CONNECTED',
+          message: 'Сначала привяжи Kick в профиле, затем проверь фоллоу на azarov7777.',
+        }
+      }
+
+      const result = await checkKickFollow(createPurchaseRequestId())
+      applyRemoteUser(result.user)
+
+      if (result.alreadyCompleted || (result.success && result.completed)) {
+        return {
+          success: true,
+          alreadyCompleted: Boolean(result.alreadyCompleted),
+          code: result.code,
+          message:
+            result.message ||
+            (result.alreadyCompleted
+              ? 'Задание уже выполнено.'
+              : 'Фоллоу подтверждён. Награда начислена.'),
+        }
+      }
+
+      return {
+        success: false,
+        code: result.code,
+        message: result.message || 'Сначала зафолловь канал kick.com/azarov7777.',
+      }
+    } catch {
+      return {
+        success: false,
+        code: 'NETWORK_ERROR',
+        message: 'Не удалось проверить фоллоу. Попробуй ещё раз позже.',
       }
     }
   }

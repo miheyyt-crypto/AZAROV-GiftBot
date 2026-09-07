@@ -32,7 +32,7 @@ export function mapRemoteAccount(remote: UserAccount): UserAccount {
     activeReferrals: remote.activeReferrals,
     pendingCount: remote.pendingCount ?? 0,
     referralEarnings: remote.referralEarnings,
-    kickConnected: remote.kickConnected,
+    kickConnected: Boolean(remote.kickConnected || remote.kickUserId),
     kickUserId: remote.kickUserId ?? null,
     kickUsername: remote.kickUsername ?? null,
     kickDisplayName: remote.kickDisplayName ?? null,

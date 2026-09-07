@@ -50,7 +50,7 @@ test('authorize URL includes required Kick OAuth params', () => {
   assert.equal(parsed.origin + parsed.pathname, 'https://id.kick.com/oauth/authorize')
   assert.equal(parsed.searchParams.get('response_type'), 'code')
   assert.equal(parsed.searchParams.get('code_challenge_method'), 'S256')
-  assert.equal(parsed.searchParams.get('scope'), 'user:read')
+  assert.equal(parsed.searchParams.get('scope'), 'user:read channel:read')
 })
 
 test('Test 1: Telegram A links Kick X successfully', () => {

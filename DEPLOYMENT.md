@@ -61,6 +61,7 @@ Do not commit `dist/`.
 | `KICK_CLIENT_ID` | for Kick link | Kick OAuth client id |
 | `KICK_CLIENT_SECRET` | for Kick link | Kick OAuth client secret (server only) |
 | `KICK_REDIRECT_URI` | for Kick link | Exact callback URL registered in Kick Developer settings |
+| `KICK_REQUIRED_CHANNEL` | for Kick follow task | Channel slug to follow (default `azarov7777`) |
 | `PORT` | set by Railway | HTTP listen port |
 | `HOST` | optional | Default `0.0.0.0` |
 | `NODE_ENV` | yes (`production`) | Enables production checks |
@@ -254,7 +255,7 @@ Required setup:
 
 If the bot is not in the channel, users see a clear error instead of a silent failure, and server logs include `classified: bot_access`.
 
-### Kick OAuth account linking
+### Kick OAuth account linking + follow task
 
 Required Railway variables:
 
@@ -263,12 +264,31 @@ Required Railway variables:
 | `KICK_CLIENT_ID` | Kick Developer application client id |
 | `KICK_CLIENT_SECRET` | Kick Developer application secret (server only) |
 | `KICK_REDIRECT_URI` | Exact callback URL registered in Kick |
+| `KICK_REQUIRED_CHANNEL` | Follow-task channel slug (default `azarov7777`) |
 
 Production redirect URI:
 
 `https://azarov-giftbot-production.up.railway.app/api/kick/callback`
 
-In Kick Developer settings register that exact redirect. Flow uses OAuth 2.1 + PKCE (`user:read`) and enforces **1 Telegram ↔ 1 Kick** via unique indexes `kickByTelegram` and `kickAccounts`.
+In Kick Developer settings:
+
+1. Register that exact OAuth redirect.
+2. Enable Webhooks → URL `https://azarov-giftbot-production.up.railway.app/api/kick/webhooks` (backup for `channel.followed`).
+
+OAuth scopes requested by the app: **`user:read channel:read`**.
+
+- `user:read` — Kick identity on link
+- `channel:read` — channel / followed-channels reads for the follow task
+
+Flow uses OAuth 2.1 + PKCE and enforces **1 Telegram ↔ 1 Kick** via unique indexes `kickByTelegram` and `kickAccounts`.
+
+Follow task check endpoint (Telegram auth required):
+
+`POST /api/tasks/kick-follow/check` with `{ "requestId": "..." }`
+
+Server resolves `@KICK_REQUIRED_CHANNEL` via official `GET /public/v1/channels?slug=…` (App Access Token), then verifies follow using the **stored** Kick user OAuth token (never trust frontend Kick ids). Access/refresh tokens stay server-only.
+
+Users who linked Kick **before** token persistence was added must reconnect Kick once so the server can store tokens for follow checks.
 
 ---
 

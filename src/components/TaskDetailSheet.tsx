@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 
 import { useNotifications } from '@/components/NotificationProvider'
 import { formatBalance } from '@/lib/balance'
-import { TELEGRAM_CHANNEL_URL } from '@/lib/constants'
+import { KICK_REQUIRED_CHANNEL_URL, TELEGRAM_CHANNEL_URL } from '@/lib/constants'
 import { handleTaskAction } from '@/lib/tasks'
 import { getTelegramWebApp } from '@/lib/telegram'
 import type { Task, TaskCategory } from '@/types'
@@ -39,6 +39,15 @@ function openTelegramChannel(): void {
   window.open(TELEGRAM_CHANNEL_URL, '_blank', 'noopener,noreferrer')
 }
 
+function openKickRequiredChannel(): void {
+  const webApp = getTelegramWebApp()
+  if (webApp?.openLink) {
+    webApp.openLink(KICK_REQUIRED_CHANNEL_URL)
+    return
+  }
+  window.open(KICK_REQUIRED_CHANNEL_URL, '_blank', 'noopener,noreferrer')
+}
+
 export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
   const { showNotification } = useNotifications()
   const [visible, setVisible] = useState(false)
@@ -48,6 +57,8 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
   const isCompleted = task.status === 'completed'
   const isLocked = task.status === 'locked'
   const isSubscribeTask = task.type === 'telegram_subscribe'
+  const isKickFollowTask = task.type === 'kick_follow'
+  const isTwoStepVerify = isSubscribeTask || isKickFollowTask
   const showProgress = Boolean(task.progress)
 
   useEffect(() => {
@@ -70,14 +81,23 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
       return
     }
 
-    if (isSubscribeTask && !awaitingCheck) {
-      openTelegramChannel()
+    if (isTwoStepVerify && !awaitingCheck) {
+      if (isSubscribeTask) {
+        openTelegramChannel()
+        showNotification({
+          type: 'info',
+          title: 'Подпишись на канал',
+          message: 'После подписки вернись и нажми «Проверить».',
+        })
+      } else {
+        openKickRequiredChannel()
+        showNotification({
+          type: 'info',
+          title: 'Зафолловь канал Kick',
+          message: 'После фоллоу на kick.com/azarov7777 вернись и нажми «Проверить».',
+        })
+      }
       setAwaitingCheck(true)
-      showNotification({
-        type: 'info',
-        title: 'Подпишись на канал',
-        message: 'После подписки вернись и нажми «Проверить».',
-      })
       return
     }
 
@@ -94,15 +114,18 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
         return
       }
 
-      const notSubscribed = result.code === 'NOT_SUBSCRIBED'
+      const notDone =
+        result.code === 'NOT_SUBSCRIBED' || result.code === 'NOT_FOLLOWING'
       showNotification({
-        type: notSubscribed ? 'warning' : 'error',
-        title: notSubscribed ? 'Ещё не подписан' : 'Проверка не удалась',
+        type: notDone ? 'warning' : 'error',
+        title: notDone ? 'Ещё не выполнено' : 'Проверка не удалась',
         message:
           result.message ||
-          (notSubscribed
-            ? 'Сначала подпишись на канал @azarov222.'
-            : 'Не удалось проверить подписку. Попробуй ещё раз позже.'),
+          (result.code === 'NOT_FOLLOWING'
+            ? 'Сначала зафолловь канал kick.com/azarov7777.'
+            : notDone
+              ? 'Сначала подпишись на канал @azarov222.'
+              : 'Не удалось проверить задание. Попробуй ещё раз позже.'),
       })
     } finally {
       setIsLoading(false)
@@ -112,10 +135,12 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
   const ctaLabel = isCompleted
     ? 'Выполнено'
     : isLocked
-      ? 'Заблокировано'
+      ? isKickFollowTask
+        ? 'Сначала привяжи Kick'
+        : 'Заблокировано'
       : isLoading
         ? 'Проверяем...'
-        : isSubscribeTask && !awaitingCheck
+        : isTwoStepVerify && !awaitingCheck
           ? 'Выполнить'
           : 'Проверить'
 
@@ -207,6 +232,12 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
           </div>
 
           <p className="mt-4 text-[14px] leading-relaxed text-white/65">{task.description}</p>
+
+          {isLocked && isKickFollowTask && (
+            <p className="mt-3 text-sm text-amber-300/90">
+              Привяжи Kick в профиле — после этого можно проверить фоллоу на azarov7777.
+            </p>
+          )}
 
           {showProgress && progress && (
             <div className="mt-5">

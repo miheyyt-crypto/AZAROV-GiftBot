@@ -43,19 +43,28 @@ export function createAccount(telegramId: number): UserAccount {
 }
 
 function normalizeAccount(account: UserAccount, telegramId: number): UserAccount {
-  return {
+  const merged = {
     ...createAccount(telegramId),
     ...account,
     telegramId,
-    referralCode: account.referralCode || '',
-    referralLink: account.referralLink || '',
-    invitedUserIds: account.invitedUserIds ?? [],
-    claimedTaskIds: account.claimedTaskIds ?? account.completedTasks ?? [],
-    startedPartnerTasks: account.startedPartnerTasks ?? [],
-    openedReferralCases: Math.max(0, account.openedReferralCases ?? 0),
-    pendingCount: account.pendingCount ?? 0,
-    referredByUserId: account.referredByUserId ?? null,
-    balance: Math.max(0, account.balance ?? 0),
+  }
+
+  return {
+    ...merged,
+    referralCode: merged.referralCode || '',
+    referralLink: merged.referralLink || '',
+    invitedUserIds: merged.invitedUserIds ?? [],
+    claimedTaskIds: merged.claimedTaskIds ?? merged.completedTasks ?? [],
+    startedPartnerTasks: merged.startedPartnerTasks ?? [],
+    openedReferralCases: Math.max(0, merged.openedReferralCases ?? 0),
+    pendingCount: merged.pendingCount ?? 0,
+    referredByUserId: merged.referredByUserId ?? null,
+    balance: Math.max(0, merged.balance ?? 0),
+    kickConnected: Boolean(merged.kickConnected || merged.kickUserId),
+    kickUserId: merged.kickUserId ?? null,
+    kickUsername: merged.kickUsername ?? null,
+    kickDisplayName: merged.kickDisplayName ?? null,
+    kickAvatarUrl: merged.kickAvatarUrl ?? null,
   }
 }
 
