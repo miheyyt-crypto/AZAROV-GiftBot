@@ -1,4 +1,4 @@
-import bannerFriends from '@/assets/banners/banner-friends.svg'
+import bannerFriends from '@/assets/banners/banner-friends.png'
 import bannerShop from '@/assets/banners/banner-shop.png'
 import bannerTasks from '@/assets/banners/banner-tasks.png'
 import { ROUTES } from '@/lib/constants'
