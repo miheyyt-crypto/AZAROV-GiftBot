@@ -66,8 +66,8 @@ Do not commit `dist/`.
 | `NODE_ENV` | yes (`production`) | Enables production checks |
 | `CORS_ORIGINS` | optional if `WEBAPP_URL` set | Extra allowed origins |
 | `ADMIN_API_KEY` | yes (≥ 32 chars) | Admin moderation header |
-| `AZAROV_STORE_DIR` | recommended on Railway | JSON store directory |
-| `AZAROV_UPLOADS_DIR` | recommended on Railway | Uploads base directory |
+| `AZAROV_STORE_DIR` | **required on Railway** | JSON store directory (Volume) |
+| `AZAROV_UPLOADS_DIR` | **required on Railway** | Uploads base directory (Volume) |
 | `VITE_API_URL` | leave empty | Same-origin `/api` in production |
 
 See `.env.example` for comments.
@@ -94,17 +94,19 @@ Generate a long random string (≥ 32 characters). Never commit the real value.
 
 ### AZAROV_STORE_DIR
 
-Directory for `store.json` (and lock/temp files).
+Directory for `store.json` (and lock/temp/backup files).
 
-- Local default: `server/data`
-- Railway Volume example: `/data` → file `/data/store.json`
+- Local default: `server/data` (fine for local only — wiped on Railway redeploy)
+- Railway **required**: `/data` → `/data/store.json` (+ `.bak` backups)
+
+Without a Volume, production boot **exits** (unless `AZAROV_ALLOW_EPHEMERAL_STORE=1`).
 
 ### AZAROV_UPLOADS_DIR
 
 Base directory for partner screenshots.
 
 - Local default: `<project>/uploads`
-- Railway example: `/data/uploads` → files in `/data/uploads/partner-submissions/`
+- Railway **required**: `/data/uploads` → files in `/data/uploads/partner-submissions/`
 
 Relative screenshot paths in the store stay `partner-submissions/<id>.<ext>` (unchanged).
 
@@ -159,28 +161,32 @@ Keep `npm start` / `npm run start:bot` for local/API-only use.
 
 ---
 
-## 7. Railway Volume
+## 7. Railway Volume (REQUIRED)
 
-JSON store and uploads must survive redeploys.
+**This is why balances and completed tasks reset to zero.** Railway’s container disk is ephemeral: every redeploy/restart wipes `server/data`. Account ledger lives in `store.json` — it must sit on a **Volume**.
 
-1. Create a Volume in Railway.
+1. Railway → your service → **Volumes** → create a Volume.
 2. Mount path: `/data`
-3. Set:
+3. Variables:
    - `AZAROV_STORE_DIR=/data`
    - `AZAROV_UPLOADS_DIR=/data/uploads`
+4. Keep **one replica** only.
+5. Redeploy, then open `GET /api/health` and confirm `store.persistent: true`.
 
 Expected layout:
 
 ```text
 /data
 ├── store.json
-├── store.json.lock   (runtime)
+├── store.json.bak      (auto backup)
+├── store.json.bak.1
+├── store.json.lock     (runtime)
 └── uploads/
     └── partner-submissions/
         └── <submissionId>.jpg|png|webp
 ```
 
-**Important:** run **one** replica only. The JSON store is not safe across multiple instances.
+Data lost **before** the Volume was mounted cannot be recovered from the app image. After the Volume is mounted, new balances/tasks persist across redeploys.
 
 ---
 
@@ -190,13 +196,24 @@ Expected layout:
 GET /api/health
 ```
 
-Expected:
+Expected (with Volume):
 
 ```json
-{ "ok": true }
+{
+  "ok": true,
+  "store": {
+    "persistent": true,
+    "source": "AZAROV_STORE_DIR",
+    "exists": true,
+    "backupExists": true,
+    "usersCount": 12
+  }
+}
 ```
 
-No auth required. Does not expose tokens or user data.
+If `store.persistent` is `false`, balances/tasks will reset on the next redeploy — fix the Volume first.
+
+No auth required. Does not expose tokens or user PII.
 
 Use this URL in Railway health checks if configured.
 

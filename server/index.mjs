@@ -40,7 +40,11 @@ import {
   getInventory,
   getPendingOrders,
 } from './profile.mjs'
-import { getUser } from './store.mjs'
+import {
+  assertPersistentStoreOrExit,
+  getStoreDiagnostics,
+  getUser,
+} from './store.mjs'
 import {
   assertNoClientFinancialOverrides,
   parseCaseId,
@@ -99,6 +103,7 @@ function assertProductionEnv() {
 }
 
 assertProductionEnv()
+assertPersistentStoreOrExit()
 
 const adminAuthLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 })
 const partnerUploadLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 10 })
@@ -358,8 +363,17 @@ function withAdmin(handler) {
 }
 
 app.get('/api/health', (_req, res) => {
+  const store = getStoreDiagnostics()
   res.json({
     ok: true,
+    store: {
+      persistent: store.persistent,
+      source: store.source,
+      exists: store.exists,
+      backupExists: store.backupExists,
+      usersCount: store.usersCount,
+      ...(store.error ? { error: store.error } : {}),
+    },
   })
 })
 

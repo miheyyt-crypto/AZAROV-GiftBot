@@ -80,3 +80,74 @@ test('withStoreRead does not rewrite store file', async () => {
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('saveStore writes rotating .bak and restores when primary missing', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'azarov-store-bak-'))
+  process.env.AZAROV_STORE_DIR = dir
+
+  try {
+    const { withStore, loadStore } = await import(`./store.mjs?t=${Date.now() + 2}`)
+    const storePath = path.join(dir, 'store.json')
+    const bakPath = `${storePath}.bak`
+
+    withStore((store) => {
+      store.users['42'] = { telegramId: 42, balance: 500, completedTasks: ['telegram-subscribe'] }
+      return true
+    })
+
+    assert.ok(existsSync(bakPath))
+    const bak = JSON.parse(readFileSync(bakPath, 'utf8'))
+    assert.equal(bak.users['42'].balance, 500)
+
+    rmSync(storePath, { force: true })
+    assert.equal(existsSync(storePath), false)
+
+    const restored = loadStore()
+    assert.equal(restored.users['42'].balance, 500)
+    assert.deepEqual(restored.users['42'].completedTasks, ['telegram-subscribe'])
+    assert.ok(existsSync(storePath))
+  } finally {
+    delete process.env.AZAROV_STORE_DIR
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('corrupt primary falls back to .bak', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'azarov-store-bak2-'))
+  process.env.AZAROV_STORE_DIR = dir
+
+  try {
+    const { withStore, loadStore } = await import(`./store.mjs?t=${Date.now() + 3}`)
+    const storePath = path.join(dir, 'store.json')
+
+    withStore((store) => {
+      store.users['9'] = { telegramId: 9, balance: 77 }
+      return true
+    })
+
+    writeFileSync(storePath, '{broken', 'utf8')
+    const restored = loadStore()
+    assert.equal(restored.users['9'].balance, 77)
+  } finally {
+    delete process.env.AZAROV_STORE_DIR
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('isPersistentStoreDir treats project server/data as ephemeral', async () => {
+  const previous = process.env.AZAROV_STORE_DIR
+  delete process.env.AZAROV_STORE_DIR
+
+  try {
+    const { getDataDir, isPersistentStoreDir } = await import(`./store.mjs?t=${Date.now() + 4}`)
+    const dir = getDataDir()
+    assert.equal(isPersistentStoreDir(dir), false)
+    assert.match(dir.replace(/\\/g, '/'), /server\/data$/)
+  } finally {
+    if (previous === undefined) {
+      delete process.env.AZAROV_STORE_DIR
+    } else {
+      process.env.AZAROV_STORE_DIR = previous
+    }
+  }
+})

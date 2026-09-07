@@ -7,27 +7,16 @@ import {
   openSync,
   readFileSync,
   renameSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const defaultDataDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data')
-
-function getDataDir() {
-  return process.env.AZAROV_STORE_DIR
-    ? path.resolve(process.env.AZAROV_STORE_DIR)
-    : defaultDataDir
-}
-
-function getStorePath() {
-  return path.join(getDataDir(), 'store.json')
-}
-
-function getLockPath() {
-  return `${getStorePath()}.lock`
-}
+const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+const defaultDataDir = path.join(moduleDir, 'data')
+const projectRoot = path.resolve(moduleDir, '..')
 
 const LOCK_TIMEOUT_MS = 15_000
 const LOCK_RETRY_MS = 25
@@ -40,6 +29,59 @@ export class StoreCorruptError extends Error {
     this.code = 'STORE_CORRUPT'
     this.cause = cause
   }
+}
+
+/**
+ * Resolve the JSON store directory.
+ * Prefer AZAROV_STORE_DIR. In production, fall back to Railway Volume mount `/data`
+ * when present — otherwise the container filesystem is wiped on every redeploy.
+ */
+export function getDataDir() {
+  const fromEnv = String(process.env.AZAROV_STORE_DIR || '').trim()
+  if (fromEnv) {
+    return path.resolve(fromEnv)
+  }
+
+  if (process.env.NODE_ENV === 'production' && existsSync('/data')) {
+    return '/data'
+  }
+
+  return defaultDataDir
+}
+
+export function getStorePath() {
+  return path.join(getDataDir(), 'store.json')
+}
+
+function getLockPath() {
+  return `${getStorePath()}.lock`
+}
+
+function getBackupPath(storePath = getStorePath()) {
+  return `${storePath}.bak`
+}
+
+/**
+ * True when the store dir is expected to survive Railway redeploys.
+ * Ephemeral = inside the app image (`server/data` / project tree).
+ */
+export function isPersistentStoreDir(dir = getDataDir()) {
+  const normalized = path.resolve(dir)
+  const ephemeralDefault = path.resolve(defaultDataDir)
+
+  if (normalized === ephemeralDefault || normalized.startsWith(`${ephemeralDefault}${path.sep}`)) {
+    return false
+  }
+
+  // Explicitly under the project checkout (still wiped on redeploy without a volume).
+  if (
+    normalized === projectRoot ||
+    normalized.startsWith(`${projectRoot}${path.sep}`)
+  ) {
+    return false
+  }
+
+  return true
 }
 
 export function createEmptyStore() {
@@ -158,23 +200,7 @@ function releaseFileLock(lock) {
   }
 }
 
-/**
- * Load store. Fail closed if the file exists but is unreadable/corrupt —
- * never return an empty store that would wipe production data on save.
- */
-export function loadStore() {
-  const storePath = getStorePath()
-  if (!existsSync(storePath)) {
-    return createEmptyStore()
-  }
-
-  let raw
-  try {
-    raw = readFileSync(storePath, 'utf8')
-  } catch (error) {
-    throw new StoreCorruptError('store_unreadable', error)
-  }
-
+function parseStoreRaw(raw, storePath) {
   if (!String(raw).trim()) {
     throw new StoreCorruptError('store_empty')
   }
@@ -189,12 +215,63 @@ export function loadStore() {
       ...parsed,
     })
   } catch (error) {
+    if (error instanceof StoreCorruptError) {
+      throw error
+    }
     try {
       copyFileSync(storePath, `${storePath}.corrupt-${Date.now()}`)
     } catch {
       // Best-effort quarantine copy.
     }
     throw new StoreCorruptError('store_parse_failed', error)
+  }
+}
+
+/**
+ * Load store. Fail closed if the file exists but is unreadable/corrupt —
+ * never return an empty store that would wipe production data on save.
+ * If primary is missing, try `.bak` restore before creating an empty store.
+ */
+export function loadStore() {
+  const storePath = getStorePath()
+  const backupPath = getBackupPath(storePath)
+
+  if (!existsSync(storePath) && existsSync(backupPath)) {
+    try {
+      ensureDataDir()
+      copyFileSync(backupPath, storePath)
+      console.warn('[store] primary store.json missing — restored from store.json.bak')
+    } catch (error) {
+      throw new StoreCorruptError('store_backup_restore_failed', error)
+    }
+  }
+
+  if (!existsSync(storePath)) {
+    return createEmptyStore()
+  }
+
+  let raw
+  try {
+    raw = readFileSync(storePath, 'utf8')
+  } catch (error) {
+    throw new StoreCorruptError('store_unreadable', error)
+  }
+
+  try {
+    return parseStoreRaw(raw, storePath)
+  } catch (error) {
+    // Corrupt primary: try backup before failing closed.
+    if (existsSync(backupPath)) {
+      try {
+        const bakRaw = readFileSync(backupPath, 'utf8')
+        const restored = parseStoreRaw(bakRaw, backupPath)
+        console.warn('[store] primary store.json corrupt — loaded from store.json.bak')
+        return restored
+      } catch {
+        // fall through
+      }
+    }
+    throw error
   }
 }
 
@@ -218,6 +295,18 @@ export function saveStore(store) {
   }
 
   renameSync(tempPath, storePath)
+
+  // Rotating backups on the same volume so a bad write can be recovered.
+  try {
+    const bak = getBackupPath(storePath)
+    const bakPrev = `${storePath}.bak.1`
+    if (existsSync(bak)) {
+      copyFileSync(bak, bakPrev)
+    }
+    copyFileSync(storePath, bak)
+  } catch {
+    // Backup is best-effort; primary write already succeeded.
+  }
 }
 
 export function userKey(telegramId) {
@@ -269,4 +358,91 @@ export async function withStoreAsync(updater, { readOnly = false } = {}) {
   } finally {
     releaseFileLock(lock)
   }
+}
+
+/**
+ * Safe diagnostics for boot logs / health (no secrets, no user PII dumps).
+ */
+export function getStoreDiagnostics() {
+  const dir = getDataDir()
+  const storePath = getStorePath()
+  const backupPath = getBackupPath(storePath)
+  const persistent = isPersistentStoreDir(dir)
+  const fromEnv = Boolean(String(process.env.AZAROV_STORE_DIR || '').trim())
+  let usersCount = 0
+  let bytes = 0
+  let exists = false
+  let backupExists = existsSync(backupPath)
+
+  try {
+    exists = existsSync(storePath)
+    if (exists) {
+      bytes = statSync(storePath).size
+      const store = loadStore()
+      usersCount = Object.keys(store.users || {}).length
+    }
+  } catch (error) {
+    return {
+      dir,
+      storePath,
+      exists,
+      backupExists,
+      persistent,
+      source: fromEnv ? 'AZAROV_STORE_DIR' : dir === '/data' ? 'railway_/data' : 'default_ephemeral',
+      usersCount: 0,
+      bytes: 0,
+      error: error instanceof Error ? error.message : 'store_diag_failed',
+    }
+  }
+
+  return {
+    dir,
+    storePath,
+    exists,
+    backupExists,
+    persistent,
+    source: fromEnv ? 'AZAROV_STORE_DIR' : dir === '/data' ? 'railway_/data' : 'default_ephemeral',
+    usersCount,
+    bytes,
+  }
+}
+
+/**
+ * Fail production boot when the store would live on ephemeral disk
+ * (balances/tasks wiped on every Railway redeploy).
+ */
+export function assertPersistentStoreOrExit() {
+  if (process.env.NODE_ENV !== 'production') {
+    return getStoreDiagnostics()
+  }
+
+  if (String(process.env.AZAROV_ALLOW_EPHEMERAL_STORE || '').trim() === '1') {
+    console.warn(
+      '[store] AZAROV_ALLOW_EPHEMERAL_STORE=1 — balances/tasks WILL be lost on redeploy.',
+    )
+    return getStoreDiagnostics()
+  }
+
+  const diag = getStoreDiagnostics()
+  if (!diag.persistent) {
+    console.error('[store] FATAL: account data would be stored on ephemeral disk.')
+    console.error(`[store] current dir: ${diag.dir}`)
+    console.error(
+      '[store] On Railway: create a Volume, mount it at /data, set AZAROV_STORE_DIR=/data and AZAROV_UPLOADS_DIR=/data/uploads, use a single replica.',
+    )
+    console.error(
+      '[store] Without a Volume, every deploy resets balances and completed tasks to empty.',
+    )
+    process.exit(1)
+  }
+
+  console.info('[store] persistent storage ok', {
+    dir: diag.dir,
+    source: diag.source,
+    usersCount: diag.usersCount,
+    exists: diag.exists,
+    backupExists: diag.backupExists,
+  })
+
+  return diag
 }
