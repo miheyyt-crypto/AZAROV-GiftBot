@@ -6,7 +6,7 @@ const REQUEST_ID_RE = /^[A-Za-z0-9_-]{8,128}$/
 const ENTITY_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
 const ORDER_ID_RE = /^[A-Z0-9]{4,32}$/
 const CASE_IDS = new Set(['poor', 'medium', 'rich', 'referral'])
-const COIN_HISTORY_FILTERS = new Set(['all', 'income', 'expense'])
+const COIN_HISTORY_FILTERS = new Set(['all', 'income', 'expense', 'purchases', 'rewards'])
 const METADATA_KEYS = new Set(['telegramUsername', 'usdtAddress', 'kickUsername'])
 
 const FORBIDDEN_CLIENT_KEYS = new Set([

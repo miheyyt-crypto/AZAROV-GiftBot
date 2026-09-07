@@ -1,15 +1,16 @@
 export type Currency = 'COINS' | 'RUB'
 
+/** Mirrors server TX_TYPE from store.coinTransactions. */
 export type OperationType =
-  | 'referral_reward'
   | 'task_reward'
-  | 'case_purchase'
+  | 'referral_reward'
+  | 'partner_reward'
   | 'case_reward'
-  | 'order_purchase'
-  | 'order_refund'
-  | 'bonus'
-  | 'withdrawal'
-  | 'correction'
+  | 'case_purchase'
+  | 'shop_purchase'
+  | 'admin_adjustment'
+  | 'refund'
+  | string
 
 export type OperationStatus = 'completed' | 'pending' | 'failed'
 
@@ -20,44 +21,56 @@ export interface Operation {
   type: OperationType
   title: string
   description: string
+  /** Signed ledger amount: >0 credit, <0 debit. */
   amount: number
   currency: Currency
   status: OperationStatus
   createdAt: string
+  balanceAfter?: number | null
   /** Optional emoji / icon hint for UI */
   icon?: string
 }
 
-/** Positive / negative is derived from type (and amount sign for corrections). */
-export const OPERATION_INCOME_TYPES: ReadonlySet<OperationType> = new Set([
-  'referral_reward',
-  'task_reward',
-  'case_reward',
-  'order_refund',
-  'bonus',
-])
-
-export const OPERATION_PURCHASE_TYPES: ReadonlySet<OperationType> = new Set([
+export const OPERATION_PURCHASE_TYPES: ReadonlySet<string> = new Set([
   'case_purchase',
-  'order_purchase',
-  'withdrawal',
+  'shop_purchase',
 ])
 
-export const OPERATION_REWARD_TYPES: ReadonlySet<OperationType> = new Set([
-  'referral_reward',
+export const OPERATION_REWARD_TYPES: ReadonlySet<string> = new Set([
   'task_reward',
+  'referral_reward',
+  'partner_reward',
   'case_reward',
-  'bonus',
 ])
 
+/** Ledger amounts are already signed. */
 export function isOperationIncome(operation: Operation): boolean {
-  if (operation.type === 'correction') {
-    return operation.amount >= 0
-  }
-  return OPERATION_INCOME_TYPES.has(operation.type)
+  return Number(operation.amount) >= 0
 }
 
 export function getSignedOperationAmount(operation: Operation): number {
-  const abs = Math.abs(operation.amount)
-  return isOperationIncome(operation) ? abs : -abs
+  return Number(operation.amount) || 0
+}
+
+export function iconForOperationType(type: string, income: boolean): string {
+  switch (type) {
+    case 'referral_reward':
+      return '👥'
+    case 'partner_reward':
+      return '💰'
+    case 'task_reward':
+      return '🎮'
+    case 'case_reward':
+      return '🎉'
+    case 'case_purchase':
+      return '🎁'
+    case 'shop_purchase':
+      return '🛒'
+    case 'refund':
+      return '♻️'
+    case 'admin_adjustment':
+      return '⚙️'
+    default:
+      return income ? '🪙' : '💸'
+  }
 }

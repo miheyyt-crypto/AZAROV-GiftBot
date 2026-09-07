@@ -10,6 +10,7 @@ import { formatRelativeDay } from '@/lib/format'
 import { getOperations } from '@/services/api/operations'
 import {
   getSignedOperationAmount,
+  iconForOperationType,
   isOperationIncome,
   type Operation,
   type OperationFilter,
@@ -27,7 +28,7 @@ function defaultIcon(operation: Operation): string {
   if (operation.icon) {
     return operation.icon
   }
-  return isOperationIncome(operation) ? '🪙' : '🎁'
+  return iconForOperationType(operation.type, isOperationIncome(operation))
 }
 
 export function OperationsHistoryPage() {
@@ -98,7 +99,7 @@ export function OperationsHistoryPage() {
       {loadState === 'empty' && (
         <EmptyState
           icon="📜"
-          title="История пока пуста"
+          title="История операций пуста"
           description="Здесь будут отображаться твои награды, покупки и другие операции."
         />
       )}
@@ -137,6 +138,11 @@ export function OperationsHistoryPage() {
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-white/85">{operation.description}</p>
+                    {typeof operation.balanceAfter === 'number' && (
+                      <p className="mt-1 text-xs text-muted">
+                        Баланс: {formatBalance(operation.balanceAfter)}
+                      </p>
+                    )}
                   </div>
                 </div>
               </article>

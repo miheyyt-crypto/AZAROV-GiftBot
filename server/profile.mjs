@@ -52,6 +52,14 @@ const TRANSACTION_LABELS = {
   refund: 'Возврат',
 }
 
+const PURCHASE_TYPES = new Set(['case_purchase', 'shop_purchase'])
+const REWARD_TYPES = new Set([
+  'task_reward',
+  'referral_reward',
+  'partner_reward',
+  'case_reward',
+])
+
 function getCaseName(caseId) {
   return CASE_NAMES[caseId] || caseId
 }
@@ -91,6 +99,14 @@ export function getCoinHistory(userId, filter = 'all') {
 
     if (filter === 'expense') {
       transactions = transactions.filter((item) => item.amount < 0)
+    }
+
+    if (filter === 'purchases') {
+      transactions = transactions.filter((item) => PURCHASE_TYPES.has(item.type))
+    }
+
+    if (filter === 'rewards') {
+      transactions = transactions.filter((item) => REWARD_TYPES.has(item.type))
     }
 
     return { success: true, transactions }
