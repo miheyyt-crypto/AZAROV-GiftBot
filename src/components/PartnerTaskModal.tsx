@@ -67,7 +67,13 @@ export function PartnerTaskModal({ partner, onClose }: PartnerTaskModalProps) {
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
 
-    void loadMyPartnerSubmissions().then((map) => {
+    let cancelled = false
+
+    async function refreshSubmissions() {
+      const map = await loadMyPartnerSubmissions()
+      if (cancelled) {
+        return
+      }
       const scoped: Record<string, PartnerSubmission> = {}
       for (const task of partner.tasks) {
         if (map[task.id]) {
@@ -75,13 +81,29 @@ export function PartnerTaskModal({ partner, onClose }: PartnerTaskModalProps) {
         }
       }
       setSubmissionsByTask(scoped)
-    })
+    }
+
+    void refreshSubmissions()
+    // Admin may reject in Telegram while this modal stays open — poll for status.
+    const pollTimer = window.setInterval(() => {
+      void refreshSubmissions()
+    }, 2500)
+
+    function onVisibility() {
+      if (document.visibilityState === 'visible') {
+        void refreshSubmissions()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
 
     return () => {
+      cancelled = true
       window.cancelAnimationFrame(frame)
+      window.clearInterval(pollTimer)
+      document.removeEventListener('visibilitychange', onVisibility)
       document.body.style.overflow = previousOverflow
     }
-  }, [partner.tasks])
+  }, [partner.id, partner.tasks])
 
   function closeModal() {
     setVisible(false)

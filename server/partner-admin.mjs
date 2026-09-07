@@ -234,14 +234,20 @@ export async function notifyAdminsNewPartnerSubmission(submission, options = {})
 }
 
 export async function notifyUserPartnerDecision(submission, options = {}) {
-  const chatId = Number(submission.telegramUserId)
-  if (!Number.isFinite(chatId)) {
+  // Prefer string chat_id — avoids Number() precision issues on large Telegram IDs.
+  const chatId = String(submission?.telegramUserId ?? '').trim()
+  if (!/^-?\d+$/.test(chatId)) {
+    console.warn('[partner-admin] user notify skipped — missing telegramUserId', {
+      submissionId: submission?.submissionId || null,
+      status: submission?.status || null,
+    })
     return { ok: false, reason: 'missing_user' }
   }
 
   const partnerName = submission.partnerName || 'Partner'
+  const status = String(submission.status || '').toLowerCase()
   let text
-  if (submission.status === 'approved') {
+  if (status === 'approved') {
     const reward = Number(submission.reward) || 0
     text = [
       `✅ <b>${escapeHtml(partnerName)} подтверждён!</b>`,
@@ -249,19 +255,39 @@ export async function notifyUserPartnerDecision(submission, options = {}) {
       'Ваша заявка успешно проверена.',
       `🎁 Вам начислено <b>${reward}</b> монет.`,
     ].join('\n')
-  } else if (submission.status === 'rejected') {
+  } else if (status === 'rejected') {
     text = [
-      `❌ <b>${escapeHtml(partnerName)} не подтверждён</b>`,
+      `❌ <b>Ваша заявка ${escapeHtml(partnerName)} отклонена.</b>`,
       '',
       `Причина: ${escapeHtml(submission.rejectionReason || 'Заявка отклонена.')}`,
       '',
-      'Вы можете отправить новую заявку после исправления.',
+      'Вы можете исправить данные и подать заявку повторно.',
     ].join('\n')
   } else {
+    console.warn('[partner-admin] user notify skipped — not final status', {
+      submissionId: submission?.submissionId || null,
+      status: submission?.status || null,
+    })
     return { ok: false, reason: 'not_final' }
   }
 
-  return sendTelegramMessage(chatId, text, {}, options)
+  const result = await sendTelegramMessage(chatId, text, {}, options)
+  if (!result.ok) {
+    console.warn('[partner-admin] user notify failed', {
+      submissionId: submission?.submissionId || null,
+      status,
+      chatId,
+      error: result.error || null,
+      description: result.description || null,
+    })
+  } else {
+    console.info('[partner-admin] user notified', {
+      submissionId: submission?.submissionId || null,
+      status,
+      chatId,
+    })
+  }
+  return result
 }
 
 /**
@@ -330,7 +356,14 @@ export async function handlePartnerModerationCallback(ctx) {
 
     await answerPartnerCallback(ctx, '✅ Заявка подтверждена')
     await markModerationResult(ctx, '✅ APPROVED')
-    void notifyUserPartnerDecision(result.submission)
+    try {
+      await notifyUserPartnerDecision(result.submission)
+    } catch (error) {
+      console.error('[partner-admin] approve user notify threw', {
+        submissionId: parsed.submissionId,
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+    }
     try {
       await ctx.reply(
         `✅ Заявка <code>${escapeHtml(parsed.submissionId)}</code> подтверждена.\n${escapeHtml(result.message)}`,
@@ -342,7 +375,7 @@ export async function handlePartnerModerationCallback(ctx) {
     return true
   }
 
-  // reject → ask for reason
+  // reject → ask for reason (does NOT reject yet; «отмена» cancels this step only)
   setPendingRejectReason(adminId, parsed.submissionId)
   await answerPartnerCallback(ctx, 'Введите причину отклонения')
   try {
@@ -353,7 +386,7 @@ export async function handlePartnerModerationCallback(ctx) {
         'Ответьте на это сообщение причиной отклонения',
         'или напишите причину в личку боту.',
         '',
-        'Или напишите «отмена».',
+        'Чтобы отменить ввод причины (заявка останется на проверке), напишите «отмена».',
       ].join('\n'),
       { parse_mode: 'HTML' },
     )
@@ -365,6 +398,8 @@ export async function handlePartnerModerationCallback(ctx) {
 
 /**
  * Consume admin text as rejection reason when awaiting.
+ * «отмена» / «cancel» = abort reason entry only (submission stays pending).
+ * Any other text (including «отменить») = final reject with that reason + user notify.
  * @returns {boolean} true if message was consumed
  */
 export async function handlePartnerRejectReasonMessage(ctx) {
@@ -385,7 +420,7 @@ export async function handlePartnerRejectReasonMessage(ctx) {
 
   if (/^(отмена|cancel)$/i.test(text)) {
     clearPendingRejectReason(adminId)
-    await ctx.reply('Отклонение отменено.')
+    await ctx.reply('Отклонение отменено. Заявка по-прежнему на проверке.')
     return true
   }
 
@@ -411,6 +446,7 @@ export async function handlePartnerRejectReasonMessage(ctx) {
     submissionId: pending.submissionId,
     success: Boolean(result?.success),
     status: result?.submission?.status || null,
+    rejectionReason: result?.submission?.rejectionReason || null,
   })
 
   if (!result?.success) {
@@ -418,7 +454,15 @@ export async function handlePartnerRejectReasonMessage(ctx) {
     return true
   }
 
-  void notifyUserPartnerDecision(result.submission)
+  await markModerationResult(ctx, '❌ REJECTED')
+  try {
+    await notifyUserPartnerDecision(result.submission)
+  } catch (error) {
+    console.error('[partner-admin] reject user notify threw', {
+      submissionId: pending.submissionId,
+      message: error instanceof Error ? error.message : 'unknown_error',
+    })
+  }
   await ctx.reply(
     `❌ Заявка <code>${escapeHtml(pending.submissionId)}</code> отклонена.\nПричина: ${escapeHtml(text)}`,
     { parse_mode: 'HTML' },

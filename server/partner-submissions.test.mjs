@@ -125,6 +125,9 @@ test('rejected submission can be resent; pending blocks duplicates', () => {
     'reject-1',
   )
   assert.equal(rejected.success, true)
+  assert.equal(rejected.submission.status, 'rejected')
+  assert.equal(rejected.submission.rejectionReason, 'Плохой скрин')
+  assert.ok(rejected.submission.reviewedAt)
 
   const again = createPartnerSubmissionOnStore(
     store,
@@ -138,6 +141,7 @@ test('rejected submission can be resent; pending blocks duplicates', () => {
   )
   assert.equal(again.success, true)
   assert.equal(again.submission.status, 'pending')
+  assert.notEqual(again.submission.submissionId, first.submission.submissionId)
 
   // Old rejected screenshot must be safely removed on resubmit (one primary file).
   const oldRecord = store.partnerSubmissions[first.submission.submissionId]

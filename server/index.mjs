@@ -1023,7 +1023,12 @@ app.post(
       requestId,
     )
     if (result.success && result.submission?.status === 'approved') {
-      void notifyUserPartnerDecision(result.submission).catch(() => {})
+      void notifyUserPartnerDecision(result.submission).catch((error) => {
+        console.error('[partner-admin] approve HTTP notify failed', {
+          submissionId: result.submission?.submissionId,
+          message: error instanceof Error ? error.message : 'unknown_error',
+        })
+      })
     }
     res.json(result)
   }),
@@ -1049,7 +1054,12 @@ app.post(
       requestId,
     )
     if (result.success && result.submission?.status === 'rejected') {
-      void notifyUserPartnerDecision(result.submission).catch(() => {})
+      void notifyUserPartnerDecision(result.submission).catch((error) => {
+        console.error('[partner-admin] reject HTTP notify failed', {
+          submissionId: result.submission?.submissionId,
+          message: error instanceof Error ? error.message : 'unknown_error',
+        })
+      })
     }
     res.json(result)
   }),
