@@ -100,17 +100,24 @@ test('Test 1 flow: B registers with A code — A gets +500, B bound to A', () =>
   assert.equal(me.earnedCoins, REWARD)
 })
 
-test('Test 1b: bare startapp code without ref_ prefix also works', () => {
+test('Test 1c: concrete production-style code ref_LMEK2RC6 binds and rewards once', () => {
   const store = makeStore()
   const userA = makeUser(store, 111, 'A')
-  const userB = makeUser(store, 222, 'B')
+  userA.referralCode = 'LMEK2RC6'
+  store.referralIndex.LMEK2RC6 = userA.telegramId
 
-  const { referral, activation } = applyReferralAndReward(store, userB, userA.referralCode)
+  const userB = makeUser(store, 222, 'B')
+  const { referral, activation } = applyReferralAndReward(store, userB, 'ref_LMEK2RC6')
 
   assert.equal(referral.applied, true)
   assert.equal(activation.rewarded, true)
+  assert.equal(userB.referredByUserId, 111)
   assert.equal(userA.balance, REWARD)
-  assert.equal(userB.referredByUserId, userA.telegramId)
+  assert.equal(userB.balance, 0)
+
+  const again = applyReferralAndReward(store, userB, 'ref_LMEK2RC6')
+  assert.equal(again.activation.rewarded, false)
+  assert.equal(userA.balance, REWARD)
 })
 
 test('Test 2-3: reopen / refresh does not grant again', () => {

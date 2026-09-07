@@ -5,10 +5,15 @@ import {
   REFERRAL_CODE_PREFIX,
   getTelegramLoginBotUsername,
 } from '@/lib/constants'
+import {
+  getCapturedStartParam,
+} from '@/lib/startParam'
 import { getTelegramWebApp } from '@/lib/telegram'
 import type { ReferralProgress } from '@/types'
 import type { UserAccount } from '@/types/account'
 import type { ReferralCaseStats } from '@/types/case'
+
+export { clearStoredStartParam, captureStartParam } from '@/lib/startParam'
 
 export interface ReferralState {
   progress: ReferralProgress
@@ -30,60 +35,12 @@ export function getCurrentReferralLink(): string {
   return account.referralLink || buildReferralLink(account.referralCode)
 }
 
+/**
+ * Referral launch parameter for the current Mini App session.
+ * Prefer signed initData / Telegram WebApp fields; fall back to early sessionStorage capture.
+ */
 export function getStartParam(): string {
-  const START_PARAM_STORAGE_KEY = 'azarov_tg_start_param'
-
-  const fromTelegram = getTelegramWebApp()?.initDataUnsafe.start_param?.trim() || ''
-
-  let fromUrl = ''
-  if (typeof window !== 'undefined') {
-    const params = new URLSearchParams(window.location.search)
-    fromUrl =
-      params.get('tgWebAppStartParam')?.trim() ||
-      params.get('startapp')?.trim() ||
-      ''
-
-    // Telegram sometimes puts launch params in the hash.
-    if (!fromUrl && window.location.hash) {
-      const hash = window.location.hash.replace(/^#/, '')
-      const hashParams = new URLSearchParams(hash.startsWith('?') ? hash.slice(1) : hash)
-      fromUrl =
-        hashParams.get('tgWebAppStartParam')?.trim() ||
-        hashParams.get('startapp')?.trim() ||
-        ''
-    }
-  }
-
-  const found = fromTelegram || fromUrl
-  if (found && typeof sessionStorage !== 'undefined') {
-    try {
-      sessionStorage.setItem(START_PARAM_STORAGE_KEY, found)
-    } catch {
-      // Ignore quota / private mode failures.
-    }
-    return found
-  }
-
-  if (typeof sessionStorage !== 'undefined') {
-    try {
-      return sessionStorage.getItem(START_PARAM_STORAGE_KEY)?.trim() || ''
-    } catch {
-      return ''
-    }
-  }
-
-  return ''
-}
-
-export function clearStoredStartParam(): void {
-  if (typeof sessionStorage === 'undefined') {
-    return
-  }
-  try {
-    sessionStorage.removeItem('azarov_tg_start_param')
-  } catch {
-    // ignore
-  }
+  return getCapturedStartParam()
 }
 
 export function onKickConnected(): Promise<{ success: boolean; message?: string }> {

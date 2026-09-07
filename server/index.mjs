@@ -8,7 +8,7 @@ import path from 'node:path'
 import { verifyTelegramInitData, verifyTelegramLoginWidget } from './auth.mjs'
 import { createCorsMiddleware } from './cors.mjs'
 import { asyncHandler, HttpError, sendSafeError } from './errors.mjs'
-import { toPublicUser } from './users.mjs'
+import { extractReferralCode, toPublicUser } from './users.mjs'
 import { bootstrapUser, activateReferral, readReferralMe } from './referrals.mjs'
 import { checkTelegramSubscribe, claimInviteFriendsTask } from './tasks.mjs'
 import { startPartnerTask, verifyPartnerTask } from './partner-tasks.mjs'
@@ -491,8 +491,25 @@ app.post(
     const clientStartParam =
       typeof req.body?.startParam === 'string' ? req.body.startParam.trim().slice(0, 64) : ''
 
+    console.info('[referral] session_start_param', {
+      telegramId: auth.user.id,
+      hasSigned: Boolean(signedStartParam),
+      hasClient: Boolean(clientStartParam),
+      signedCode: extractReferralCode(signedStartParam),
+      clientCode: extractReferralCode(clientStartParam),
+    })
+
     const result = bootstrapUser(auth.user, signedStartParam, { clientStartParam })
     const user = getUser(auth.user.id)
+
+    console.info('[referral] session_result', {
+      telegramId: auth.user.id,
+      referralReason: result.referral?.reason || null,
+      referralApplied: Boolean(result.referral?.applied),
+      activationReason: result.activation?.reason || null,
+      activationRewarded: Boolean(result.activation?.rewarded),
+      referredByUserId: user?.referredByUserId || null,
+    })
 
     res.json({
       success: true,

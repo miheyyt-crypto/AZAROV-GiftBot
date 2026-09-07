@@ -404,7 +404,10 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
     const { referral, activation } = applyReferralAndReward(store, user, resolved.value)
 
     if (user.pendingStartParam) {
-      user.pendingStartParam = null
+      // Clear pending only after we attempted with a usable payload (or pending was consumed).
+      if (resolved.value || resolved.source === 'pending') {
+        user.pendingStartParam = null
+      }
     }
 
     maybeGrantInviteFriendsTask(store, user)

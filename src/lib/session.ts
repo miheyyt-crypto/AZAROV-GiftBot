@@ -10,6 +10,7 @@ import {
 } from '@/lib/auth'
 import { hydrateBalanceFromAccount } from '@/lib/balance'
 import { clearStoredStartParam, getStartParam } from '@/lib/referral'
+import { captureStartParam } from '@/lib/startParam'
 import { initTelegramWebApp } from '@/lib/telegram'
 import { getTelegramUser } from '@/lib/user'
 import type { UserAccount } from '@/types/account'
@@ -44,8 +45,13 @@ export function mapRemoteAccount(remote: UserAccount): UserAccount {
 }
 
 export async function bootstrapSession(): Promise<UserAccount> {
-  // Ensure WebApp.ready() runs before we read initData / start_param.
+  // Capture launch start_param BEFORE ready() — hash/query can disappear afterward.
+  const startParam = captureStartParam() || getStartParam()
+
   initTelegramWebApp()
+
+  // Re-read after WebApp init in case initData became available only now.
+  const resolvedStartParam = captureStartParam() || startParam
 
   // Mini App: signed initData is the source of truth.
   if (isMiniAppAuthAvailable()) {
@@ -53,7 +59,7 @@ export async function bootstrapSession(): Promise<UserAccount> {
     setCurrentTelegramId(user.id)
 
     try {
-      const response = await bootstrapRemoteSession(getStartParam())
+      const response = await bootstrapRemoteSession(resolvedStartParam)
       if (response.user) {
         applyAccountSnapshot(
           mapRemoteAccount({
@@ -62,14 +68,23 @@ export async function bootstrapSession(): Promise<UserAccount> {
           }),
         )
       }
-      // Start param is only needed for the first authenticated bootstrap.
-      if (response.referral?.applied || response.referral?.reason === 'already_referred') {
-        clearStoredStartParam()
-      } else if (response.referral?.reason === 'invalid_code' || response.referral?.reason === 'self_referral') {
-        clearStoredStartParam()
+
+      const reason = response.referral?.reason
+      if (
+        response.referral?.applied ||
+        reason === 'already_referred' ||
+        reason === 'invalid_code' ||
+        reason === 'self_referral' ||
+        reason === 'already_invited' ||
+        reason === 'no_code'
+      ) {
+        // Keep storage on network/auth failure so a retry can still bind.
+        if (response.success !== false) {
+          clearStoredStartParam()
+        }
       }
     } catch {
-      // Keep local snapshot if API is unavailable inside Telegram.
+      // Keep local snapshot + stored start_param if API is unavailable inside Telegram.
     }
 
     hydrateBalanceFromAccount()

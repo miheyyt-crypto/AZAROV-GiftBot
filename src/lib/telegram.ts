@@ -31,6 +31,8 @@ export function initTelegramWebApp(): TelegramWebApp | null {
     return null
   }
 
+  // Do not call ready() here with side effects that depend on unread launch params —
+  // callers should capture start_param first via captureStartParam().
   webApp.ready()
   webApp.expand()
 

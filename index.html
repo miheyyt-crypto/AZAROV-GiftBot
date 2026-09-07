@@ -7,6 +7,36 @@
     <meta name="theme-color" content="#0B0914" />
     <title>AZAROV — GiftBot</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+      /* Capture referral start_param before React / WebApp.ready() can drop launch hash. */
+      (function () {
+        try {
+          var key = 'azarov_tg_start_param'
+          var sp = ''
+          var wa = window.Telegram && window.Telegram.WebApp
+          if (wa) {
+            if (wa.initData) {
+              sp = new URLSearchParams(wa.initData).get('start_param') || ''
+            }
+            if (!sp && wa.initDataUnsafe && wa.initDataUnsafe.start_param) {
+              sp = String(wa.initDataUnsafe.start_param)
+            }
+          }
+          if (!sp) {
+            var q = new URLSearchParams(location.search)
+            sp = q.get('tgWebAppStartParam') || q.get('startapp') || ''
+          }
+          if (!sp && location.hash) {
+            var h = location.hash.replace(/^#/, '')
+            var hp = new URLSearchParams(h.charAt(0) === '?' ? h.slice(1) : h)
+            sp = hp.get('tgWebAppStartParam') || hp.get('startapp') || ''
+          }
+          if (sp) {
+            sessionStorage.setItem(key, String(sp).trim())
+          }
+        } catch (e) {}
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
