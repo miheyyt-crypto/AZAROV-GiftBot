@@ -1,7 +1,7 @@
 import freezeImage from '@/assets/shop/freeze.svg'
 import premium6mImage from '@/assets/shop/premium-6m.png'
 import diamondImage from '@/assets/shop/diamond.png'
-import donateImage from '@/assets/shop/donate.svg'
+import donateImage from '@/assets/shop/donate.png'
 import type { Order } from '@/types/order'
 
 const now = Date.now()

@@ -1,6 +1,6 @@
 import cashImage from '@/assets/shop/cash.png'
 import diamondImage from '@/assets/shop/diamond.png'
-import donateImage from '@/assets/shop/donate.svg'
+import donateImage from '@/assets/shop/donate.png'
 import freezeImage from '@/assets/shop/freeze.png'
 import musicImage from '@/assets/shop/music.png'
 import premium6mImage from '@/assets/shop/premium-6m.png'
@@ -71,6 +71,7 @@ export const products: ShopProduct[] = [
     currency: 'coins',
     category: 'donate',
     image: donateImage,
+    imageClassName: 'object-contain scale-[1.15] translate-y-[5px]',
     description: 'Донат, который уйдёт на стрим.',
     detailText: 'Донат отправим на стрим после проверки заказа.',
     infoText: ADMIN_ORDERS_INFO,
