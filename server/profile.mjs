@@ -1,8 +1,13 @@
 import { getUserOrders, normalizeOrderStatus } from './shop.mjs'
 import { listUserInventoryItems } from './inventory.mjs'
-import { withStoreRead } from './store.mjs'
+import {
+  ACHIEVEMENTS,
+  achievementClaimEventId,
+  findAchievement,
+} from './achievements.mjs'
+import { withStore, withStoreRead } from './store.mjs'
 import { getReferralsByReferrer } from './users.mjs'
-import { listUserTransactions, normalizeTxType } from './wallet.mjs'
+import { addCoins, hasEvent, listUserTransactions, normalizeTxType, TX_TYPE } from './wallet.mjs'
 
 const CASE_NAMES = {
   poor: 'Нищий кейс',
@@ -11,36 +16,7 @@ const CASE_NAMES = {
   referral: 'Реферальный кейс',
 }
 
-const ACHIEVEMENTS = [
-  {
-    id: 'stream-hours',
-    title: '100 часов просмотра',
-    reward: 5000,
-    target: 100,
-    icon: 'clock',
-  },
-  {
-    id: 'chat-messages',
-    title: '1 000 сообщений',
-    reward: 3000,
-    target: 1000,
-    icon: 'message',
-  },
-  {
-    id: 'friends',
-    title: '10 друзей',
-    reward: 4000,
-    target: 10,
-    icon: 'users',
-  },
-  {
-    id: 'coins-earned',
-    title: '100 000 монет заработано',
-    reward: 5000,
-    target: 100_000,
-    icon: 'coins',
-  },
-]
+export { ACHIEVEMENTS, findAchievement, achievementClaimEventId } from './achievements.mjs'
 
 const TRANSACTION_LABELS = {
   task_reward: 'Награда за задание',
@@ -50,6 +26,7 @@ const TRANSACTION_LABELS = {
   case_purchase: 'Открытие кейса',
   shop_purchase: 'Покупка в магазине',
   streak_freeze: 'Заморозка стрика',
+  achievement_reward: 'Награда за достижение',
   admin_adjustment: 'Корректировка баланса',
   refund: 'Возврат',
 }
@@ -60,6 +37,7 @@ const REWARD_TYPES = new Set([
   'referral_reward',
   'partner_reward',
   'case_reward',
+  'achievement_reward',
 ])
 
 function getCaseName(caseId) {
@@ -72,6 +50,48 @@ function labelForType(type, item) {
   }
   const normalized = normalizeTxType(type)
   return TRANSACTION_LABELS[normalized] || normalized
+}
+
+function sumEarnedCoins(store, userId) {
+  return listUserTransactions(store, userId)
+    .filter((item) => item.amount > 0)
+    .reduce((sum, item) => sum + item.amount, 0)
+}
+
+export function readAchievementProgress(store, user) {
+  user.claimedAchievements = user.claimedAchievements || []
+  user.streamHours = user.streamHours || 0
+  user.chatMessages = user.chatMessages || 0
+
+  const invitedCount = getReferralsByReferrer(store, user.telegramId).length
+  const coinsEarned = sumEarnedCoins(store, user.telegramId)
+
+  const progressMap = {
+    'stream-hours': user.streamHours,
+    'chat-messages': user.chatMessages,
+    friends: invitedCount,
+    'coins-earned': coinsEarned,
+  }
+
+  return ACHIEVEMENTS.map((item) => {
+    const raw = Number(progressMap[item.id] ?? 0) || 0
+    const completed = raw >= item.target
+    const claimed = user.claimedAchievements.includes(item.id)
+    let status = 'in_progress'
+    if (claimed) {
+      status = 'claimed'
+    } else if (completed) {
+      status = 'claimable'
+    }
+
+    return {
+      ...item,
+      current: Math.min(raw, item.target),
+      completed,
+      claimed,
+      status,
+    }
+  })
 }
 
 export function getCoinHistory(userId, filter = 'all') {
@@ -193,12 +213,6 @@ export function getInventory(userId) {
   })
 }
 
-function sumEarnedCoins(store, userId) {
-  return listUserTransactions(store, userId)
-    .filter((item) => item.amount > 0)
-    .reduce((sum, item) => sum + item.amount, 0)
-}
-
 export function getAchievementsProgress(userId) {
   return withStoreRead((store) => {
     const user = store.users[String(userId)]
@@ -206,35 +220,96 @@ export function getAchievementsProgress(userId) {
       return { success: false, message: 'Пользователь не найден.', achievements: [] }
     }
 
-    user.claimedAchievements = user.claimedAchievements || []
-    user.streamHours = user.streamHours || 0
-    user.chatMessages = user.chatMessages || 0
-
-    const invitedCount = getReferralsByReferrer(store, user.telegramId).length
-    const coinsEarned = sumEarnedCoins(store, userId)
-
-    const progressMap = {
-      'stream-hours': user.streamHours,
-      'chat-messages': user.chatMessages,
-      friends: invitedCount,
-      'coins-earned': coinsEarned,
-    }
-
-    const list = ACHIEVEMENTS.map((item) => {
-      const current = progressMap[item.id] ?? 0
-      const completed = current >= item.target
-      const claimed = user.claimedAchievements.includes(item.id)
-
-      return {
-        ...item,
-        current: Math.min(current, item.target),
-        completed,
-        claimed,
-      }
-    })
-
-    return { success: true, achievements: list }
+    return { success: true, achievements: readAchievementProgress(store, user) }
   })
+}
+
+/**
+ * Claim achievement reward. Server-authoritative reward/target.
+ * Idempotent via ledger event `achievement:claim:{userId}:{achievementId}`.
+ */
+export function claimAchievementOnStore(store, userId, achievementId) {
+  const definition = findAchievement(achievementId)
+  if (!definition) {
+    return { success: false, code: 'UNKNOWN_ACHIEVEMENT', message: 'Достижение не найдено.' }
+  }
+
+  const user = store.users[String(userId)]
+  if (!user) {
+    return { success: false, message: 'Пользователь не найден.' }
+  }
+
+  user.claimedAchievements = user.claimedAchievements || []
+  const eventId = achievementClaimEventId(user.telegramId, definition.id)
+  const progressList = readAchievementProgress(store, user)
+  const progress = progressList.find((item) => item.id === definition.id)
+
+  if (!progress) {
+    return { success: false, code: 'UNKNOWN_ACHIEVEMENT', message: 'Достижение не найдено.' }
+  }
+
+  if (progress.claimed || hasEvent(store, eventId)) {
+    if (!user.claimedAchievements.includes(definition.id)) {
+      user.claimedAchievements = [...user.claimedAchievements, definition.id]
+    }
+    const refreshed = readAchievementProgress(store, user).find((item) => item.id === definition.id)
+    return {
+      success: true,
+      alreadyClaimed: true,
+      rewarded: false,
+      reward: 0,
+      message: 'Награда за это достижение уже получена.',
+      achievement: refreshed,
+      achievements: readAchievementProgress(store, user),
+    }
+  }
+
+  if (!progress.completed) {
+    return {
+      success: false,
+      code: 'NOT_COMPLETED',
+      message: 'Цель ещё не достигнута.',
+      achievement: progress,
+      achievements: progressList,
+    }
+  }
+
+  // Reward amount is server-only — never from client body.
+  const grant = addCoins(store, user, definition.reward, TX_TYPE.ACHIEVEMENT_REWARD, eventId, {
+    referenceId: definition.id,
+    description: `Награда за достижение: ${definition.title}`,
+  })
+
+  if (!grant.granted && grant.reason !== 'already_granted') {
+    return {
+      success: false,
+      message: 'Не удалось начислить награду.',
+      achievements: readAchievementProgress(store, user),
+    }
+  }
+
+  if (!user.claimedAchievements.includes(definition.id)) {
+    user.claimedAchievements = [...user.claimedAchievements, definition.id]
+  }
+
+  const refreshedList = readAchievementProgress(store, user)
+  const refreshed = refreshedList.find((item) => item.id === definition.id)
+
+  return {
+    success: true,
+    alreadyClaimed: grant.reason === 'already_granted',
+    rewarded: grant.granted,
+    reward: grant.granted ? definition.reward : 0,
+    message: grant.granted
+      ? `Начислено ${definition.reward.toLocaleString('ru-RU')} 🪙`
+      : 'Награда за это достижение уже получена.',
+    achievement: refreshed,
+    achievements: refreshedList,
+  }
+}
+
+export function claimAchievement(userId, achievementId) {
+  return withStore((store) => claimAchievementOnStore(store, userId, achievementId))
 }
 
 export function getPendingOrders(userId) {

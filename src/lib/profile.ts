@@ -1,4 +1,5 @@
 import { applyAccountSnapshot, getCurrentAccount } from '@/lib/account'
+import { hydrateBalanceFromAccount } from '@/lib/balance'
 import { mapRemoteAccount } from '@/lib/session'
 import { getTelegramInitData } from '@/lib/telegram'
 import { getUserStats } from '@/lib/user'
@@ -16,12 +17,17 @@ import type { UserAccount } from '@/types/account'
 export interface ProfileApiResponse {
   success: boolean
   message?: string
+  code?: string
   user?: UserAccount
   transactions?: CoinTransaction[]
   items?: InventoryItem[]
   caseOpenings?: CaseOpeningItem[]
   achievements?: AchievementProgress[]
+  achievement?: AchievementProgress
   orders?: ShopOrder[]
+  rewarded?: boolean
+  alreadyClaimed?: boolean
+  reward?: number
 }
 
 function apiUrl(path: string): string {
@@ -35,17 +41,23 @@ function applyRemoteUser(user: Parameters<typeof mapRemoteAccount>[0] | undefine
   }
 
   applyAccountSnapshot(mapRemoteAccount(user))
+  hydrateBalanceFromAccount()
 }
 
-async function request(path: string): Promise<ProfileApiResponse> {
+async function request(
+  path: string,
+  init: RequestInit = {},
+): Promise<ProfileApiResponse> {
   const initData = getTelegramInitData()
-  const headers = new Headers({ 'Content-Type': 'application/json' })
+  const headers = new Headers(init.headers)
+  headers.set('Content-Type', 'application/json')
 
   if (initData) {
     headers.set('Authorization', `tma ${initData}`)
   }
 
   const response = await fetch(apiUrl(path), {
+    ...init,
     headers,
     credentials: 'include',
   })
@@ -100,12 +112,14 @@ export function getLocalAchievementsProgress(): AchievementProgress[] {
   return getAchievements().map((item) => {
     const raw = progressMap[item.id] ?? 0
     const current = Math.min(raw, item.target)
+    const completed = raw >= item.target
 
     return {
       ...item,
       current,
-      completed: raw >= item.target,
+      completed,
       claimed: false,
+      status: completed ? 'claimable' : 'in_progress',
     }
   })
 }
@@ -122,6 +136,29 @@ export async function fetchAchievements(): Promise<AchievementProgress[]> {
   }
 
   return getLocalAchievementsProgress()
+}
+
+export async function claimAchievementReward(
+  achievementId: string,
+): Promise<{
+  success: boolean
+  message?: string
+  code?: string
+  achievements: AchievementProgress[]
+  achievement?: AchievementProgress
+}> {
+  const result = await request(`/api/achievements/${encodeURIComponent(achievementId)}/claim`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+  applyRemoteUser(result.user)
+  return {
+    success: Boolean(result.success),
+    message: result.message,
+    code: result.code,
+    achievements: result.achievements ?? [],
+    achievement: result.achievement,
+  }
 }
 
 export async function fetchPendingOrders(): Promise<ShopOrder[]> {

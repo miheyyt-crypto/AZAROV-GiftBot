@@ -52,6 +52,8 @@ export interface AchievementProgress extends AchievementDefinition {
   current: number
   completed: boolean
   claimed: boolean
+  /** in_progress | claimable | claimed */
+  status?: 'in_progress' | 'claimable' | 'claimed' | string
 }
 
 export type ProfileMenuId =

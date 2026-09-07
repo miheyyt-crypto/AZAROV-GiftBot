@@ -67,6 +67,7 @@ import {
   getCoinHistory,
   getInventory,
   getPendingOrders,
+  claimAchievement,
 } from './profile.mjs'
 import {
   assertPersistentStoreOrExit,
@@ -77,6 +78,7 @@ import {
 } from './store.mjs'
 import {
   assertNoClientFinancialOverrides,
+  parseAchievementId,
   parseCaseId,
   parseCoinHistoryFilter,
   parseOrderId,
@@ -1249,6 +1251,19 @@ app.get(
   withUser(async (_req, res, telegramUser) => {
     bootstrapUser(telegramUser, '')
     const result = getAchievementsProgress(telegramUser.id)
+    res.json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/achievements/:achievementId/claim',
+  withUser(async (req, res, telegramUser) => {
+    const achievementId = parseAchievementId(req.params.achievementId)
+    bootstrapUser(telegramUser, '')
+    const result = claimAchievement(telegramUser.id, achievementId)
     res.json({
       ...result,
       user: toPublicUser(getUser(telegramUser.id)),

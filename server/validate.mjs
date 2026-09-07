@@ -1,4 +1,5 @@
 import { HttpError } from './errors.mjs'
+import { findAchievement } from './achievements.mjs'
 import { findPartnerTask, PARTNER_TASKS } from './partners.mjs'
 import { findProduct } from './products.mjs'
 
@@ -78,6 +79,19 @@ export function parseCaseId(value) {
   }
 
   return caseId
+}
+
+export function parseAchievementId(value) {
+  if (typeof value !== 'string' || !ENTITY_ID_RE.test(value.trim())) {
+    throw new HttpError(400, 'Некорректный achievementId.', 'INVALID_ACHIEVEMENT_ID')
+  }
+
+  const achievementId = value.trim()
+  if (!findAchievement(achievementId)) {
+    throw new HttpError(404, 'Достижение не найдено.', 'ACHIEVEMENT_NOT_FOUND')
+  }
+
+  return achievementId
 }
 
 export function parsePartnerTaskId(value) {
