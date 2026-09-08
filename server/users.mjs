@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 
 import { REFERRAL_CASE_EVERY, REFERRAL_CODE_LENGTH, REFERRAL_CODE_PREFIX, TELEGRAM_BOT_USERNAME } from './constants.mjs'
+import { buildUserLevelSnapshot } from './level.mjs'
 import { loadStore } from './store.mjs'
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -329,6 +330,15 @@ export function toPublicUser(user, store = null) {
     caseProgress = REFERRAL_CASE_EVERY
   }
 
+  const watchSeconds = Math.max(
+    0,
+    Math.floor(
+      Number(source.kickWatchStats?.[String(user.telegramId)]?.totalWatchSeconds ?? user.watchSeconds) ||
+        0,
+    ),
+  )
+  const levelSnap = buildUserLevelSnapshot(user, watchSeconds)
+
   return {
     telegramId: user.telegramId,
     username: user.username,
@@ -358,5 +368,13 @@ export function toPublicUser(user, store = null) {
     caseProgress,
     caseTarget: REFERRAL_CASE_EVERY,
     referralLink: buildReferralLink(user.referralCode),
+    chatMessages: levelSnap.chatMessages,
+    watchSeconds: levelSnap.watchSeconds,
+    streamHours: levelSnap.streamHours,
+    level: levelSnap.level,
+    xp: levelSnap.xp,
+    xpForCurrentLevel: levelSnap.xpForCurrentLevel,
+    xpForNextLevel: levelSnap.xpForNextLevel,
+    xpProgress: levelSnap.progress,
   }
 }

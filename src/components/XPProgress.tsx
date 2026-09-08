@@ -2,10 +2,13 @@ interface XPProgressProps {
   level: number
   xp: number
   nextLevelXp: number
+  currentLevelXp?: number
 }
 
-export function XPProgress({ level, xp, nextLevelXp }: XPProgressProps) {
-  const progress = nextLevelXp > 0 ? Math.min((xp / nextLevelXp) * 100, 100) : 0
+export function XPProgress({ level, xp, nextLevelXp, currentLevelXp = 0 }: XPProgressProps) {
+  const span = Math.max(1, nextLevelXp - currentLevelXp)
+  const into = Math.min(span, Math.max(0, xp - currentLevelXp))
+  const progress = Math.min(100, (into / span) * 100)
   const formattedXp = new Intl.NumberFormat('ru-RU').format(xp)
   const formattedNext = new Intl.NumberFormat('ru-RU').format(nextLevelXp)
 
@@ -21,9 +24,9 @@ export function XPProgress({ level, xp, nextLevelXp }: XPProgressProps) {
       <div
         className="h-1.5 overflow-hidden rounded-full bg-white/10"
         role="progressbar"
-        aria-valuenow={xp}
+        aria-valuenow={into}
         aria-valuemin={0}
-        aria-valuemax={nextLevelXp}
+        aria-valuemax={span}
         aria-label={`Прогресс до следующего уровня: ${xp} из ${nextLevelXp} XP`}
       >
         <div

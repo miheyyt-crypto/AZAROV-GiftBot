@@ -60,8 +60,19 @@ function sumEarnedCoins(store, userId) {
 
 export function readAchievementProgress(store, user) {
   user.claimedAchievements = user.claimedAchievements || []
-  user.streamHours = user.streamHours || 0
-  user.chatMessages = user.chatMessages || 0
+  user.chatMessages = Math.max(0, Math.floor(Number(user.chatMessages) || 0))
+
+  const watchRaw =
+    store.kickWatchStats?.[String(user.telegramId)]?.totalWatchSeconds ?? user.watchSeconds
+  const watchSeconds = Math.max(0, Math.floor(Number(watchRaw) || 0))
+  if (watchRaw != null) {
+    user.watchSeconds = watchSeconds
+  }
+
+  // Prefer derived hours from watchSeconds; keep legacy streamHours as a floor for old data/tests.
+  const derivedHours = Math.floor(watchSeconds / 3600)
+  const legacyHours = Math.max(0, Math.floor(Number(user.streamHours) || 0))
+  user.streamHours = Math.max(derivedHours, legacyHours)
 
   const invitedCount = getReferralsByReferrer(store, user.telegramId).length
   const coinsEarned = sumEarnedCoins(store, user.telegramId)

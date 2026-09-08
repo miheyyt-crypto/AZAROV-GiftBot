@@ -88,7 +88,7 @@ export function isPersistentStoreDir(dir = getDataDir()) {
 
 export function createEmptyStore() {
   return {
-    version: 5,
+    version: 6,
     users: {},
     referralIndex: {},
     referrals: {},
@@ -107,6 +107,7 @@ export function createEmptyStore() {
     kickStreamStreaks: {},
     kickWebhookEvents: {},
     kickLivestreamState: null,
+    kickWatchStats: {},
   }
 }
 
@@ -131,12 +132,18 @@ function migrateStore(store) {
   if (store.kickLivestreamState === undefined) {
     store.kickLivestreamState = null
   }
+  store.kickWatchStats = store.kickWatchStats || {}
 
   // One-shot upgrade: pending streak-freeze orders → inventory (strategy B).
   if (Number(store.version) < 5) {
     ensureStreakFreezeInventoryMigration(store)
   } else {
     store.inventory = store.inventory || {}
+  }
+
+  // Additive v6: kick watch stats map (no data rewrite required).
+  if (Number(store.version) < 6) {
+    store.version = 6
   }
 
   return store

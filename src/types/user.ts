@@ -20,11 +20,15 @@ export interface UserProfile {
   level: number
   xp: number
   nextLevelXp: number
+  currentLevelXp?: number
 }
 
 export interface UserStats {
   streamHours: number
   chatMessages: number
+  watchSeconds: number
+  /** Formatted watch label for StatCard, e.g. "42 ч 15 мин". */
+  watchLabel: string
 }
 
 export interface KickUser {

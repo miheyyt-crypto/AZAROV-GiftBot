@@ -110,14 +110,15 @@ export function Profile() {
             level={profile.level}
             xp={profile.xp}
             nextLevelXp={profile.nextLevelXp}
+            currentLevelXp={profile.currentLevelXp}
           />
         </div>
 
         <div className="mt-5 flex gap-3">
           <StatCard
             theme="pink"
-            value={stats.streamHours}
-            label={'часов на\nстримах'}
+            value={stats.watchLabel}
+            label={'на стримах'}
           />
           <StatCard
             theme="green"

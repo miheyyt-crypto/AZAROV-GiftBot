@@ -39,6 +39,14 @@ export function createAccount(telegramId: number): UserAccount {
     claimedTaskIds: [],
     startedPartnerTasks: [],
     openedReferralCases: 0,
+    chatMessages: 0,
+    watchSeconds: 0,
+    streamHours: 0,
+    level: 1,
+    xp: 0,
+    xpForCurrentLevel: 0,
+    xpForNextLevel: 200,
+    xpProgress: 0,
   }
 }
 
@@ -65,6 +73,14 @@ function normalizeAccount(account: UserAccount, telegramId: number): UserAccount
     kickUsername: merged.kickUsername ?? null,
     kickDisplayName: merged.kickDisplayName ?? null,
     kickAvatarUrl: merged.kickAvatarUrl ?? null,
+    chatMessages: Math.max(0, merged.chatMessages ?? 0),
+    watchSeconds: Math.max(0, merged.watchSeconds ?? 0),
+    streamHours: Math.max(0, merged.streamHours ?? 0),
+    level: Math.max(1, merged.level ?? 1),
+    xp: Math.max(0, merged.xp ?? 0),
+    xpForCurrentLevel: Math.max(0, merged.xpForCurrentLevel ?? 0),
+    xpForNextLevel: Math.max(1, merged.xpForNextLevel ?? 200),
+    xpProgress: Math.max(0, merged.xpProgress ?? 0),
   }
 }
 

@@ -3,7 +3,7 @@ import { Clock, MessageCircle, type LucideIcon } from 'lucide-react'
 type StatTheme = 'pink' | 'green'
 
 interface StatCardProps {
-  value: number
+  value: number | string
   label: string
   theme: StatTheme
   icon?: LucideIcon
@@ -51,7 +51,7 @@ export function StatCard({ value, label, theme, icon }: StatCardProps) {
       >
         <Icon size={22} strokeWidth={2.6} className="text-[#101116]" />
       </div>
-      <p className="text-2xl font-bold text-white">{value}</p>
+      <p className="text-[22px] font-bold leading-tight text-white">{value}</p>
       <p className="mt-1 whitespace-pre-line text-[11px] leading-snug text-muted">
         {label}
       </p>

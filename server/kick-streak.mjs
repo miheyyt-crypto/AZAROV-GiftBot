@@ -6,6 +6,11 @@ import {
 } from './inventory.mjs'
 import { fetchKickChannelLiveStatus, resolveKickChannelBySlug } from './kick-api.mjs'
 import { getKickConnectionForUser } from './kick-oauth.mjs'
+import {
+  applyWatchActivityOnStore,
+  closeWatchSessionsOnStore,
+  recordChatMessageOnStore,
+} from './kick-stats.mjs'
 import { withStore, withStoreRead } from './store.mjs'
 
 const WEBHOOK_EVENT_TTL_MS = 7 * 24 * 60 * 60 * 1000
@@ -351,6 +356,13 @@ export async function processLivestreamStatusUpdated(payload, options = {}) {
   }
 
   const isLive = Boolean(payload?.is_live)
+  const livestreamId =
+    payload?.livestream?.id != null
+      ? String(payload.livestream.id)
+      : payload?.livestream_id != null
+        ? String(payload.livestream_id)
+        : null
+
   withStore((store) => {
     updateKickLivestreamStateOnStore(store, {
       broadcasterUserId,
@@ -360,6 +372,16 @@ export async function processLivestreamStatusUpdated(payload, options = {}) {
       endedAt: payload?.ended_at || null,
       source: 'webhook',
     })
+
+    if (!isLive) {
+      const streamKey =
+        livestreamId ||
+        (payload?.started_at ? `started:${payload.started_at}` : null)
+      closeWatchSessionsOnStore(store, {
+        streamId: streamKey,
+        endedAtIso: payload?.ended_at || new Date().toISOString(),
+      })
+    }
   })
 
   logKickStreak('livestream_status', {
@@ -469,14 +491,29 @@ export async function processChatMessageSent(payload, { messageId, options = {} 
     }
 
     if (!live.duringLive) {
+      const telegramIdOffline = findTelegramIdForKickUser(store, senderKickUserId)
+      if (telegramIdOffline) {
+        recordChatMessageOnStore(store, telegramIdOffline)
+      }
       markChatEventProcessed(store, keys, {
         type: 'chat.message.sent',
-        outcome: 'not_live',
+        outcome: telegramIdOffline ? 'offline_message' : 'not_live',
         kickMessageId: payloadMessageId || null,
         senderKickUserId,
+        telegramId: telegramIdOffline || null,
       })
-      logKickStreak('chat_ignored_offline', { senderKickUserId, broadcasterUserId })
-      return { ok: true, ignored: true, reason: 'not_live' }
+      logKickStreak('chat_ignored_offline', {
+        senderKickUserId,
+        broadcasterUserId,
+        countedMessage: Boolean(telegramIdOffline),
+      })
+      return {
+        ok: true,
+        ignored: true,
+        reason: 'not_live',
+        telegramId: telegramIdOffline || undefined,
+        countedMessage: Boolean(telegramIdOffline),
+      }
     }
 
     const telegramId = findTelegramIdForKickUser(store, senderKickUserId)
@@ -490,6 +527,18 @@ export async function processChatMessageSent(payload, { messageId, options = {} 
       logKickStreak('chat_ignored_unlinked', { senderKickUserId })
       return { ok: true, ignored: true, reason: 'unlinked_kick' }
     }
+
+    // Linked + live: message count, watch heartbeat, then streak.
+    recordChatMessageOnStore(store, telegramId)
+    const streamId =
+      store.kickLivestreamState?.startedAt != null
+        ? `started:${store.kickLivestreamState.startedAt}`
+        : null
+    applyWatchActivityOnStore(store, telegramId, {
+      atIso: createdAt,
+      streamId,
+      isLiveConfirmed: true,
+    })
 
     store.kickStreamStreaks = store.kickStreamStreaks || {}
     const streakKey = String(telegramId)

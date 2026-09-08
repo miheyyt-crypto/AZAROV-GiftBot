@@ -27,6 +27,14 @@ export interface UserAccount {
   availableReferralCases?: number
   caseProgress?: number
   caseTarget?: number
+  chatMessages?: number
+  watchSeconds?: number
+  streamHours?: number
+  level?: number
+  xp?: number
+  xpForCurrentLevel?: number
+  xpForNextLevel?: number
+  xpProgress?: number
 }
 
 export interface AppStoreData {

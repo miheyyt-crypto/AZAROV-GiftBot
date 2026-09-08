@@ -45,6 +45,14 @@ export function mapRemoteAccount(remote: UserAccount): UserAccount {
     availableReferralCases: remote.availableReferralCases,
     caseProgress: remote.caseProgress,
     caseTarget: remote.caseTarget,
+    chatMessages: remote.chatMessages ?? 0,
+    watchSeconds: remote.watchSeconds ?? 0,
+    streamHours: remote.streamHours ?? 0,
+    level: remote.level ?? 1,
+    xp: remote.xp ?? 0,
+    xpForCurrentLevel: remote.xpForCurrentLevel ?? 0,
+    xpForNextLevel: remote.xpForNextLevel ?? 200,
+    xpProgress: remote.xpProgress ?? 0,
   }
 }
 

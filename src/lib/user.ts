@@ -1,5 +1,6 @@
 import { getBalance } from '@/lib/balance'
 import { getWebAuthUser } from '@/lib/auth'
+import { getCurrentAccount } from '@/lib/account'
 import {
   getTelegramUserUnsafe,
   isTelegramEnvironment,
@@ -14,13 +15,18 @@ const DEMO_USER: TelegramUser = {
   isDemo: true,
 }
 
-const MOCK_LEVEL = 0
-const MOCK_XP = 0
-const MOCK_NEXT_LEVEL_XP = 1500
+export function formatWatchDuration(watchSeconds: number): string {
+  const total = Math.max(0, Math.floor(Number(watchSeconds) || 0))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
 
-const MOCK_STATS: UserStats = {
-  streamHours: 0,
-  chatMessages: 0,
+  if (hours <= 0) {
+    return `${minutes} мин`
+  }
+  if (minutes <= 0) {
+    return `${hours} ч`
+  }
+  return `${hours} ч ${minutes} мин`
 }
 
 function mapTelegramUser(raw: NonNullable<ReturnType<typeof getTelegramUserUnsafe>>): TelegramUser {
@@ -54,17 +60,27 @@ export function getTelegramUser(): TelegramUser {
 }
 
 export function getUserProfile(): UserProfile {
+  const account = getCurrentAccount()
   return {
     user: getTelegramUser(),
     balance: getBalance(),
-    level: MOCK_LEVEL,
-    xp: MOCK_XP,
-    nextLevelXp: MOCK_NEXT_LEVEL_XP,
+    level: Math.max(1, Number(account.level) || 1),
+    xp: Math.max(0, Number(account.xp) || 0),
+    nextLevelXp: Math.max(1, Number(account.xpForNextLevel) || 200),
+    currentLevelXp: Math.max(0, Number(account.xpForCurrentLevel) || 0),
   }
 }
 
 export function getUserStats(): UserStats {
-  return { ...MOCK_STATS }
+  const account = getCurrentAccount()
+  const watchSeconds = Math.max(0, Number(account.watchSeconds) || 0)
+  const chatMessages = Math.max(0, Number(account.chatMessages) || 0)
+  return {
+    streamHours: Math.max(0, Number(account.streamHours) || Math.floor(watchSeconds / 3600)),
+    chatMessages,
+    watchSeconds,
+    watchLabel: formatWatchDuration(watchSeconds),
+  }
 }
 
 export function getDisplayName(user: TelegramUser): string {
