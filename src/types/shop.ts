@@ -14,14 +14,19 @@ export type OrderStatus =
   | 'COMPLETED'
   | 'CANCELLED'
 
-export type ProductFulfillmentField = 'telegram_username' | 'usdt_trc20' | 'kick_username'
-
+export type ProductFulfillmentField =
+  | 'telegram_username'
+  | 'usdt_trc20'
+  | 'kick_username'
+  | 'donate_nickname'
+  | 'donate_text'
 
 export interface ProductCheckoutField {
   type: ProductFulfillmentField
   label: string
   placeholder: string
-  hint: string
+  hint?: string
+  maxLength?: number
 }
 
 export interface ShopProduct {
@@ -41,6 +46,8 @@ export interface ShopProduct {
   infoText: string
   /** Optional user data field required before purchase. */
   checkoutField?: ProductCheckoutField | null
+  /** Multiple checkout fields (e.g. stream donate nickname + message). */
+  checkoutFields?: ProductCheckoutField[]
   available: boolean
 }
 
@@ -61,4 +68,6 @@ export interface PurchaseFulfillmentData {
   telegramUsername?: string
   usdtAddress?: string
   kickUsername?: string
+  donateNickname?: string
+  donateText?: string
 }

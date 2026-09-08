@@ -40,6 +40,8 @@ export function mapShopOrderToOrder(order: ShopOrder): Order {
     telegramUsername: order.metadata?.telegramUsername,
     usdtAddress: order.metadata?.usdtAddress,
     kickUsername: order.metadata?.kickUsername,
+    donateNickname: order.metadata?.donateNickname,
+    donateText: order.metadata?.donateText,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt ?? order.completedAt ?? order.createdAt,
   }

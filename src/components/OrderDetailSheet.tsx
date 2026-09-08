@@ -131,6 +131,18 @@ export function OrderDetailSheet({ order, onClose }: OrderDetailSheetProps) {
               <dd className="font-medium text-white">{order.kickUsername}</dd>
             </div>
           )}
+          {order.donateNickname && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">Ник</dt>
+              <dd className="font-medium text-white">{order.donateNickname}</dd>
+            </div>
+          )}
+          {order.donateText && (
+            <div className="flex justify-between gap-3">
+              <dt className="shrink-0 text-muted">Текст доната</dt>
+              <dd className="break-words text-right font-medium text-white">{order.donateText}</dd>
+            </div>
+          )}
         </dl>
 
         {order.comment && (

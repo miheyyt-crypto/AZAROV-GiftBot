@@ -75,10 +75,21 @@ export const products: ShopProduct[] = [
     description: 'Донат, который уйдёт на стрим.',
     detailText: 'Донат отправим на стрим после проверки заказа.',
     infoText: ADMIN_ORDERS_INFO,
-    checkoutField: {
-      ...TELEGRAM_USERNAME_FIELD,
-      hint: 'Укажи @username — чтобы мы могли подтвердить заказ при необходимости.',
-    },
+    checkoutField: null,
+    checkoutFields: [
+      {
+        type: 'donate_nickname',
+        label: 'Твой Ник',
+        placeholder: 'Ник на стриме',
+        maxLength: 20,
+      },
+      {
+        type: 'donate_text',
+        label: 'Текст Доната',
+        placeholder: 'Текст для озвучки на стриме',
+        maxLength: 300,
+      },
+    ],
     available: true,
   },
   {

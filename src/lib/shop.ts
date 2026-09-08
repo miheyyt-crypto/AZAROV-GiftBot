@@ -68,6 +68,12 @@ export async function purchaseProduct(
   if (fulfillment.kickUsername) {
     metadata.kickUsername = fulfillment.kickUsername
   }
+  if (fulfillment.donateNickname) {
+    metadata.donateNickname = fulfillment.donateNickname
+  }
+  if (fulfillment.donateText) {
+    metadata.donateText = fulfillment.donateText
+  }
 
   try {
     const result = await purchaseProductRequest(productId, requestId, metadata)

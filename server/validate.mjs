@@ -8,7 +8,13 @@ const ENTITY_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
 const ORDER_ID_RE = /^[A-Z0-9]{4,32}$/
 const CASE_IDS = new Set(['poor', 'medium', 'rich', 'referral'])
 const COIN_HISTORY_FILTERS = new Set(['all', 'income', 'expense', 'purchases', 'rewards'])
-const METADATA_KEYS = new Set(['telegramUsername', 'usdtAddress', 'kickUsername'])
+const METADATA_LIMITS = {
+  telegramUsername: 256,
+  usdtAddress: 256,
+  kickUsername: 256,
+  donateNickname: 20,
+  donateText: 300,
+}
 
 const FORBIDDEN_CLIENT_KEYS = new Set([
   'balance',
@@ -142,10 +148,10 @@ export function sanitizePurchaseMetadata(metadata) {
     return safe
   }
 
-  for (const key of METADATA_KEYS) {
+  for (const [key, maxLength] of Object.entries(METADATA_LIMITS)) {
     const value = metadata[key]
     if (typeof value === 'string' && value.trim()) {
-      safe[key] = value.trim().slice(0, 256)
+      safe[key] = value.trim().slice(0, maxLength)
     }
   }
 

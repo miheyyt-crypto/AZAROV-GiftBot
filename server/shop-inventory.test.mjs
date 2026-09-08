@@ -134,7 +134,8 @@ test('admin reject → rejected + idempotent refund', () => {
       return true
     })
     const bought = purchaseProduct(803, 'stream-donate', 'req-donate-803', {
-      telegramUsername: '@user803',
+      donateNickname: 'Ник803',
+      donateText: 'Привет со стрима',
     })
     const orderId = bought.order.orderId
     const balanceAfterPurchase = 50_000 - 2499

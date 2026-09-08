@@ -23,6 +23,8 @@ export interface Order {
   telegramUsername?: string
   usdtAddress?: string
   kickUsername?: string
+  donateNickname?: string
+  donateText?: string
   createdAt: string
   updatedAt: string
 }

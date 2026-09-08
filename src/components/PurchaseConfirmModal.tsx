@@ -34,6 +34,10 @@ function validateField(field: ProductCheckoutField, value: string): string | nul
     return 'Заполни поле, чтобы оформить заказ.'
   }
 
+  if (field.maxLength && trimmed.length > field.maxLength) {
+    return `Максимум ${field.maxLength} символов.`
+  }
+
   if (field.type === 'telegram_username' || field.type === 'kick_username') {
     const username = normalizeTelegramUsername(trimmed)
     if (!/^@[A-Za-z0-9_]{4,32}$/.test(username)) {
@@ -49,24 +53,49 @@ function validateField(field: ProductCheckoutField, value: string): string | nul
     return null
   }
 
+  if (field.type === 'donate_nickname') {
+    if (trimmed.length > (field.maxLength ?? 20)) {
+      return 'Ник — максимум 20 символов.'
+    }
+    return null
+  }
+
+  if (field.type === 'donate_text') {
+    if (trimmed.length > (field.maxLength ?? 300)) {
+      return 'Текст доната — максимум 300 символов.'
+    }
+    return null
+  }
+
   return null
 }
 
-function buildFulfillment(
-  field: ProductCheckoutField | null | undefined,
+function fieldToFulfillment(
+  field: ProductCheckoutField,
   value: string,
 ): PurchaseFulfillmentData {
-  if (!field) {
-    return {}
-  }
-
   if (field.type === 'telegram_username') {
     return { telegramUsername: normalizeTelegramUsername(value) }
   }
   if (field.type === 'usdt_trc20') {
     return { usdtAddress: value.trim() }
   }
-  return { kickUsername: value.trim() }
+  if (field.type === 'kick_username') {
+    return { kickUsername: value.trim() }
+  }
+  if (field.type === 'donate_nickname') {
+    return { donateNickname: value.trim() }
+  }
+  return { donateText: value.trim() }
+}
+
+function buildFulfillment(
+  fields: ProductCheckoutField[],
+  values: Record<string, string>,
+): PurchaseFulfillmentData {
+  return fields.reduce<PurchaseFulfillmentData>((acc, field) => {
+    return { ...acc, ...fieldToFulfillment(field, values[field.type] ?? '') }
+  }, {})
 }
 
 export function PurchaseConfirmModal({
@@ -80,19 +109,27 @@ export function PurchaseConfirmModal({
   const [visible, setVisible] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [requestId] = useState(() => createPurchaseRequestId())
-  const field = product.checkoutField ?? null
 
-  const initialValue = useMemo(() => {
-    if (!field) {
-      return ''
+  const fields = useMemo<ProductCheckoutField[]>(() => {
+    if (product.checkoutFields?.length) {
+      return product.checkoutFields
     }
-    if (field.type === 'telegram_username' && user.username) {
-      return `@${user.username.replace(/^@/, '')}`
-    }
-    return ''
-  }, [field, user.username])
+    return product.checkoutField ? [product.checkoutField] : []
+  }, [product.checkoutField, product.checkoutFields])
 
-  const [fieldValue, setFieldValue] = useState(initialValue)
+  const initialValues = useMemo(() => {
+    const next: Record<string, string> = {}
+    for (const field of fields) {
+      if (field.type === 'telegram_username' && user.username) {
+        next[field.type] = `@${user.username.replace(/^@/, '')}`
+      } else {
+        next[field.type] = ''
+      }
+    }
+    return next
+  }, [fields, user.username])
+
+  const [fieldValues, setFieldValues] = useState(initialValues)
   const canAfford = balance >= product.price
 
   useEffect(() => {
@@ -105,6 +142,11 @@ export function PurchaseConfirmModal({
     window.setTimeout(onClose, 180)
   }
 
+  function updateField(type: string, value: string, maxLength?: number) {
+    const nextValue = typeof maxLength === 'number' ? value.slice(0, maxLength) : value
+    setFieldValues((prev) => ({ ...prev, [type]: nextValue }))
+  }
+
   async function handleBuy() {
     if (!canAfford) {
       const error = createAppError('INSUFFICIENT_BALANCE')
@@ -112,8 +154,8 @@ export function PurchaseConfirmModal({
       return
     }
 
-    if (field) {
-      const validationError = validateField(field, fieldValue)
+    for (const field of fields) {
+      const validationError = validateField(field, fieldValues[field.type] ?? '')
       if (validationError) {
         showNotification({
           type: 'warning',
@@ -130,7 +172,7 @@ export function PurchaseConfirmModal({
 
     setIsSubmitting(true)
     try {
-      const fulfillment = buildFulfillment(field, fieldValue)
+      const fulfillment = buildFulfillment(fields, fieldValues)
       const result = await purchaseProduct(product.id, requestId, fulfillment)
 
       if (result.success && result.order) {
@@ -247,27 +289,58 @@ export function PurchaseConfirmModal({
             <p className="text-[13px] leading-relaxed text-white/75">{product.infoText}</p>
           </div>
 
-          {field && (
-            <div className="mt-4">
-              <label
-                htmlFor={`checkout-field-${product.id}`}
-                className="text-sm font-medium text-white"
-              >
-                {field.label}
-              </label>
-              <input
-                id={`checkout-field-${product.id}`}
-                type="text"
-                value={fieldValue}
-                onChange={(event) => setFieldValue(event.target.value)}
-                placeholder={field.placeholder}
-                autoComplete="off"
-                spellCheck={false}
-                className="mt-2 w-full rounded-[16px] border border-white/10 bg-[#1a1724] px-4 py-3.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-neon-purple/50"
-              />
-              <p className="mt-2 text-[12px] leading-relaxed text-white/45">{field.hint}</p>
-            </div>
-          )}
+          {fields.map((field) => {
+            const value = fieldValues[field.type] ?? ''
+            const inputId = `checkout-field-${product.id}-${field.type}`
+            const isMultiline = field.type === 'donate_text'
+
+            return (
+              <div key={field.type} className="mt-4">
+                <div className="flex items-baseline justify-between gap-2">
+                  <label htmlFor={inputId} className="text-sm font-medium text-white">
+                    {field.label}
+                  </label>
+                  {field.maxLength ? (
+                    <span className="text-[11px] text-white/40">
+                      {value.length}/{field.maxLength}
+                    </span>
+                  ) : null}
+                </div>
+                {isMultiline ? (
+                  <textarea
+                    id={inputId}
+                    value={value}
+                    onChange={(event) =>
+                      updateField(field.type, event.target.value, field.maxLength)
+                    }
+                    placeholder={field.placeholder}
+                    maxLength={field.maxLength}
+                    rows={4}
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="mt-2 w-full resize-none rounded-[16px] border border-white/10 bg-[#1a1724] px-4 py-3.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-neon-purple/50"
+                  />
+                ) : (
+                  <input
+                    id={inputId}
+                    type="text"
+                    value={value}
+                    onChange={(event) =>
+                      updateField(field.type, event.target.value, field.maxLength)
+                    }
+                    placeholder={field.placeholder}
+                    maxLength={field.maxLength}
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="mt-2 w-full rounded-[16px] border border-white/10 bg-[#1a1724] px-4 py-3.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-neon-purple/50"
+                  />
+                )}
+                {field.hint ? (
+                  <p className="mt-2 text-[12px] leading-relaxed text-white/45">{field.hint}</p>
+                ) : null}
+              </div>
+            )
+          })}
         </div>
 
         <div className="px-5 pt-2">

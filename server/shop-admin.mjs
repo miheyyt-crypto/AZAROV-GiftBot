@@ -99,8 +99,20 @@ function formatMetadataLines(metadata) {
   if (meta.kickUsername) {
     lines.push(`Kick: <code>${escapeHtml(meta.kickUsername)}</code>`)
   }
+  if (meta.donateNickname) {
+    lines.push(`Ник: <code>${escapeHtml(meta.donateNickname)}</code>`)
+  }
+  if (meta.donateText) {
+    lines.push(`Текст доната: <code>${escapeHtml(meta.donateText)}</code>`)
+  }
   for (const [key, value] of Object.entries(meta)) {
-    if (key === 'telegramUsername' || key === 'usdtAddress' || key === 'kickUsername') {
+    if (
+      key === 'telegramUsername' ||
+      key === 'usdtAddress' ||
+      key === 'kickUsername' ||
+      key === 'donateNickname' ||
+      key === 'donateText'
+    ) {
       continue
     }
     if (value == null || value === '') {
