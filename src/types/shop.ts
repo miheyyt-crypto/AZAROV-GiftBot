@@ -20,6 +20,7 @@ export type ProductFulfillmentField =
   | 'kick_username'
   | 'donate_nickname'
   | 'donate_text'
+  | 'track_url'
 
 export interface ProductCheckoutField {
   type: ProductFulfillmentField
@@ -70,4 +71,5 @@ export interface PurchaseFulfillmentData {
   kickUsername?: string
   donateNickname?: string
   donateText?: string
+  trackUrl?: string
 }

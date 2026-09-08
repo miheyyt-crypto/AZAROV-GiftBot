@@ -42,6 +42,7 @@ export function mapShopOrderToOrder(order: ShopOrder): Order {
     kickUsername: order.metadata?.kickUsername,
     donateNickname: order.metadata?.donateNickname,
     donateText: order.metadata?.donateText,
+    trackUrl: order.metadata?.trackUrl,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt ?? order.completedAt ?? order.createdAt,
   }

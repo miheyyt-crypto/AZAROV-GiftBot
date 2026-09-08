@@ -105,13 +105,17 @@ function formatMetadataLines(metadata) {
   if (meta.donateText) {
     lines.push(`Текст доната: <code>${escapeHtml(meta.donateText)}</code>`)
   }
+  if (meta.trackUrl) {
+    lines.push(`Ссылка на трек: <code>${escapeHtml(meta.trackUrl)}</code>`)
+  }
   for (const [key, value] of Object.entries(meta)) {
     if (
       key === 'telegramUsername' ||
       key === 'usdtAddress' ||
       key === 'kickUsername' ||
       key === 'donateNickname' ||
-      key === 'donateText'
+      key === 'donateText' ||
+      key === 'trackUrl'
     ) {
       continue
     }

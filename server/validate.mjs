@@ -14,6 +14,7 @@ const METADATA_LIMITS = {
   kickUsername: 256,
   donateNickname: 20,
   donateText: 300,
+  trackUrl: 500,
 }
 
 const FORBIDDEN_CLIENT_KEYS = new Set([

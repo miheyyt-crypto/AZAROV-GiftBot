@@ -74,6 +74,9 @@ export async function purchaseProduct(
   if (fulfillment.donateText) {
     metadata.donateText = fulfillment.donateText
   }
+  if (fulfillment.trackUrl) {
+    metadata.trackUrl = fulfillment.trackUrl
+  }
 
   try {
     const result = await purchaseProductRequest(productId, requestId, metadata)

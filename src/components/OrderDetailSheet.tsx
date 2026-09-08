@@ -143,6 +143,12 @@ export function OrderDetailSheet({ order, onClose }: OrderDetailSheetProps) {
               <dd className="break-words text-right font-medium text-white">{order.donateText}</dd>
             </div>
           )}
+          {order.trackUrl && (
+            <div className="flex justify-between gap-3">
+              <dt className="shrink-0 text-muted">Ссылка на трек</dt>
+              <dd className="break-all text-right font-medium text-white">{order.trackUrl}</dd>
+            </div>
+          )}
         </dl>
 
         {order.comment && (

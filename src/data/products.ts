@@ -101,11 +101,14 @@ export const products: ShopProduct[] = [
     image: musicImage,
     imageClassName: 'object-contain scale-[1.15] translate-y-[5px]',
     description: 'Заказ трека на стрим.',
-    detailText: 'Напиши @username — администратор уточнит трек и поставит его на стрим.',
+    detailText:
+      'Здесь ты можешь добавить любую музыку на стрим, просто отправь ссылку на свой трек. (Принимаются ссылки с платформ YouTube, SoundCloud)',
     infoText: ADMIN_ORDERS_INFO,
     checkoutField: {
-      ...TELEGRAM_USERNAME_FIELD,
-      hint: 'Напиши @username — администратор напишет тебе, чтобы уточнить трек.',
+      type: 'track_url',
+      label: 'Твоя ссылка на трек',
+      placeholder: 'https://',
+      maxLength: 500,
     },
     available: true,
   },

@@ -25,6 +25,7 @@ export interface Order {
   kickUsername?: string
   donateNickname?: string
   donateText?: string
+  trackUrl?: string
   createdAt: string
   updatedAt: string
 }

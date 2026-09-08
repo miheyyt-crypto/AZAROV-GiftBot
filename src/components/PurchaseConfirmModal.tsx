@@ -67,6 +67,18 @@ function validateField(field: ProductCheckoutField, value: string): string | nul
     return null
   }
 
+  if (field.type === 'track_url') {
+    try {
+      const url = new URL(trimmed)
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        return 'Ссылка должна начинаться с https://'
+      }
+    } catch {
+      return 'Укажи корректную ссылку на трек (YouTube или SoundCloud).'
+    }
+    return null
+  }
+
   return null
 }
 
@@ -86,7 +98,10 @@ function fieldToFulfillment(
   if (field.type === 'donate_nickname') {
     return { donateNickname: value.trim() }
   }
-  return { donateText: value.trim() }
+  if (field.type === 'donate_text') {
+    return { donateText: value.trim() }
+  }
+  return { trackUrl: value.trim() }
 }
 
 function buildFulfillment(
