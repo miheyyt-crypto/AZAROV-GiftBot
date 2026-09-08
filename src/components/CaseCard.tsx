@@ -46,15 +46,20 @@ export function CaseCard({
           className={[
             'relative z-[1] size-full drop-shadow-[0_8px_18px_rgb(0_0_0/35%)]',
             isReferral
-              ? 'object-cover scale-[1.35]'
+              ? 'object-cover object-center scale-[1.12]'
               : 'object-contain scale-[1.08] p-1.5',
           ].join(' ')}
           draggable={false}
         />
+        {/* Soft haze so art fades into the card body instead of a hard cut */}
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[42%] bg-gradient-to-b from-transparent via-[#14101c]/55 to-[#14101c]"
+          aria-hidden
+        />
         {badge ? (
           <span
             className={[
-              'absolute left-1/2 top-2 z-[2] -translate-x-1/2 rounded-full border border-white/10 bg-black/55 px-2.5 py-0.5 text-[10px] font-semibold whitespace-nowrap backdrop-blur-sm',
+              'absolute left-1/2 top-2 z-[3] -translate-x-1/2 rounded-full border border-white/10 bg-black/55 px-2.5 py-0.5 text-[10px] font-semibold whitespace-nowrap backdrop-blur-sm',
               accent,
             ].join(' ')}
           >
@@ -63,7 +68,7 @@ export function CaseCard({
         ) : null}
       </button>
 
-      <div className="flex flex-1 flex-col px-3 pb-3 pt-1">
+      <div className="relative z-[1] -mt-5 flex flex-1 flex-col px-3 pb-3 pt-0">
         <h3 className="line-clamp-2 min-h-[2.5em] text-center text-[13px] font-semibold leading-snug text-white">
           {giftCase.name}
         </h3>
