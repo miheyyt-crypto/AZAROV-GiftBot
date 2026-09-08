@@ -1402,14 +1402,62 @@ app.post(
 app.post(
   '/api/cases/open',
   withEconomicUser(async (req, res, telegramUser) => {
-    const caseId = parseCaseId(req.body?.caseId)
-    const requestId = parseRequestId(req.body?.requestId)
-    bootstrapUser(telegramUser, '')
-    const result = openCase(telegramUser.id, caseId, requestId)
-    res.json({
-      ...result,
-      user: toPublicUser(getUser(telegramUser.id)),
-    })
+    // Temporary production diagnostics for case-open 500s (no secrets / initData).
+    let step = '1-start'
+    const userId = telegramUser.id
+    const caseOpenLog = (nextStep, extra = {}) => {
+      step = nextStep
+      console.info(`[case-open:${nextStep}]`, { userId, ...extra })
+    }
+
+    try {
+      caseOpenLog('1-start')
+      const caseId = parseCaseId(req.body?.caseId)
+      const requestId = parseRequestId(req.body?.requestId)
+      caseOpenLog('2-parsed', {
+        caseId,
+        requestIdLen: String(requestId || '').length,
+      })
+
+      bootstrapUser(telegramUser, '')
+      caseOpenLog('3-bootstrapped')
+
+      const result = openCase(telegramUser.id, caseId, requestId)
+      caseOpenLog('4-opened', {
+        success: Boolean(result?.success),
+        code: result?.code || null,
+        hasOpening: Boolean(result?.opening),
+        openingId: result?.opening?.openingId || null,
+        rewardId: result?.opening?.rewardId || null,
+      })
+
+      const publicUser = toPublicUser(getUser(telegramUser.id))
+      caseOpenLog('5-public-user', {
+        hasUser: Boolean(publicUser),
+        balanceType: typeof publicUser?.balance,
+      })
+
+      const payload = {
+        ...result,
+        user: publicUser,
+      }
+      caseOpenLog('6-response-created', {
+        keys: Object.keys(payload),
+      })
+
+      res.json(payload)
+      caseOpenLog('10-response-sent')
+    } catch (error) {
+      console.error('[case-open] FAILED', {
+        step,
+        userId,
+        name: error?.name,
+        message: error?.message,
+        code: error?.code,
+        stack: error?.stack,
+      })
+      throw error
+    }
   }),
 )
 

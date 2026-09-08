@@ -398,28 +398,80 @@ function openPurchasedCase(store, user, caseConfig, requestId) {
 }
 
 export function openCase(userId, caseId, requestId) {
-  return withStore((store) => {
-    migrateAllReferrals(store)
-    const user = store.users[String(userId)]
-    const caseConfig = findCase(caseId)
+  let step = 'openCase:start'
+  try {
+    return withStore((store) => {
+      step = 'openCase:migrate'
+      console.info('[case-open:openCase:migrate]', { userId })
+      migrateAllReferrals(store)
 
-    if (!user) {
-      return { success: false, message: 'Пользователь не найден.' }
-    }
+      step = 'openCase:user'
+      const user = store.users[String(userId)]
+      const caseConfig = findCase(caseId)
+      console.info('[case-open:openCase:user]', {
+        userId,
+        hasUser: Boolean(user),
+        caseId,
+        hasCase: Boolean(caseConfig),
+        caseOpeningsIsArray: Array.isArray(user?.caseOpenings),
+        earnedRewardsIsArray: Array.isArray(user?.earnedRewards),
+        invitedUsersIsArray: Array.isArray(user?.invitedUsers),
+        completedTasksIsArray: Array.isArray(user?.completedTasks),
+        balanceType: typeof user?.balance,
+      })
 
-    // Heal corrupt array fields before economy mutations (objects used to pass `|| []`).
-    user.caseOpenings = ensureArray(user.caseOpenings)
-    user.earnedRewards = ensureArray(user.earnedRewards)
-    user.invitedUsers = ensureArray(user.invitedUsers)
+      if (!user) {
+        return { success: false, message: 'Пользователь не найден.' }
+      }
 
-    if (!caseConfig) {
-      return { success: false, message: 'Кейс не найден.' }
-    }
+      step = 'openCase:normalize'
+      // Heal corrupt array fields before economy mutations (objects used to pass `|| []`).
+      user.caseOpenings = ensureArray(user.caseOpenings)
+      user.earnedRewards = ensureArray(user.earnedRewards)
+      user.invitedUsers = ensureArray(user.invitedUsers)
+      user.completedTasks = ensureArray(user.completedTasks)
+      user.startedPartnerTasks = ensureArray(user.startedPartnerTasks)
+      user.orderIds = ensureArray(user.orderIds)
 
-    if (caseConfig.type === 'referral') {
-      return openReferralCase(store, user, caseConfig, requestId)
-    }
+      if (!caseConfig) {
+        return { success: false, message: 'Кейс не найден.' }
+      }
 
-    return openPurchasedCase(store, user, caseConfig, requestId)
-  })
+      console.info('[case-open:openCase:pool]', {
+        userId,
+        caseId: caseConfig.id,
+        poolLen: Array.isArray(caseConfig.rewards) ? caseConfig.rewards.length : -1,
+        dropValid: isDropTableValid(caseConfig.rewards),
+        price: caseConfig.price,
+        type: caseConfig.type,
+      })
+
+      step = 'openCase:roll'
+      if (caseConfig.type === 'referral') {
+        const result = openReferralCase(store, user, caseConfig, requestId)
+        step = 'openCase:done'
+        return result
+      }
+
+      const result = openPurchasedCase(store, user, caseConfig, requestId)
+      step = 'openCase:done'
+      console.info('[case-open:openCase:done]', {
+        userId,
+        success: Boolean(result?.success),
+        code: result?.code || null,
+        hasOpening: Boolean(result?.opening),
+      })
+      return result
+    })
+  } catch (error) {
+    console.error('[case-open] FAILED openCase', {
+      step,
+      userId,
+      caseId,
+      name: error?.name,
+      message: error?.message,
+      stack: error?.stack,
+    })
+    throw error
+  }
 }

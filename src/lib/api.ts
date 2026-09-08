@@ -76,6 +76,12 @@ async function request(path: string, init: RequestInit = {}): Promise<ApiUserRes
 
   const payload = (await response.json().catch(() => null)) as ApiUserResponse | null
 
+  // Temporary diagnostics for case open — never log Authorization / initData.
+  if (path === '/api/cases/open') {
+    console.info('[case-open-client] status:', response.status)
+    console.info('[case-open-client] response:', payload)
+  }
+
   if (!payload) {
     throw new Error('bad_response')
   }
