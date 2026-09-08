@@ -33,7 +33,7 @@ export function CaseRewardCard({ reward }: CaseRewardCardProps) {
           alt=""
           className={[
             reward.currency === 'COINS'
-              ? 'h-[35%] w-[35%] object-contain drop-shadow-[0_6px_14px_rgb(0_0_0/35%)]'
+              ? 'h-[49%] w-[49%] object-contain drop-shadow-[0_6px_14px_rgb(0_0_0/35%)]'
               : 'size-full object-cover',
           ].join(' ')}
         />
