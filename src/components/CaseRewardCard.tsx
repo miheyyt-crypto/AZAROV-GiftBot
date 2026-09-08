@@ -27,8 +27,15 @@ export function CaseRewardCard({ reward }: CaseRewardCardProps) {
         rarityStyles[reward.rarity],
       ].join(' ')}
     >
-      <div className="aspect-[4/3] overflow-hidden bg-bg-surface">
-        <img src={reward.image} alt="" className="size-full object-cover" />
+      <div className="flex aspect-[4/3] items-center justify-center overflow-hidden bg-bg-surface/80 p-3">
+        <img
+          src={reward.image}
+          alt=""
+          className={[
+            'max-h-full max-w-full',
+            reward.currency === 'COINS' ? 'object-contain drop-shadow-[0_6px_14px_rgb(0_0_0/35%)]' : 'size-full object-cover',
+          ].join(' ')}
+        />
       </div>
       <div className="space-y-1 p-3">
         <h4 className="text-sm font-semibold leading-snug break-words text-white">{reward.name}</h4>

@@ -1,8 +1,9 @@
 import { Settings, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 import { CaseRewardCard } from '@/components/CaseRewardCard'
 import { useNotifications } from '@/components/NotificationProvider'
+import coinsImage from '@/assets/cases/reward-coins.png'
 import { isDropTableValid } from '@/data/cases'
 import { formatBalance } from '@/lib/balance'
 import { openCase } from '@/lib/cases'
@@ -64,7 +65,7 @@ export function CaseModal({
     window.setTimeout(onClose, 180)
   }
 
-  function buttonLabel(): string {
+  function buttonLabel(): ReactNode {
     if (!dropValid) {
       return 'Открытие временно недоступно'
     }
@@ -81,7 +82,18 @@ export function CaseModal({
       return 'Не хватает монет'
     }
 
-    return `Открыть за ${formatBalance(price)} 🪙`
+    return (
+      <span className="inline-flex items-center justify-center gap-2">
+        <span>Открыть за {formatBalance(price)}</span>
+        <img
+          src={coinsImage}
+          alt=""
+          className="size-5 object-contain"
+          draggable={false}
+          aria-hidden
+        />
+      </span>
+    )
   }
 
   async function handleOpen() {

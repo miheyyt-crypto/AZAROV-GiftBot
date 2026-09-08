@@ -1,4 +1,4 @@
-import coinsImage from '@/assets/cases/reward-coins.svg'
+import coinsImage from '@/assets/cases/reward-coins.png'
 import rubImage from '@/assets/cases/reward-rub.svg'
 import mediumImage from '@/assets/cases/medium.jpg'
 import poorImage from '@/assets/cases/poor.jpg'

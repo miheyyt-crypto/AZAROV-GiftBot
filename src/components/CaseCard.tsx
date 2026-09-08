@@ -1,6 +1,6 @@
 import { Lock } from 'lucide-react'
 
-import { ShopCoinIcon } from '@/components/ShopOfferCard'
+import coinsImage from '@/assets/cases/reward-coins.png'
 import { formatBalance } from '@/lib/balance'
 import { getReferralCaseRemainingLabel } from '@/lib/referral'
 import { getCaseCardTheme } from '@/lib/shop-card-theme'
@@ -106,7 +106,13 @@ export function CaseCard({
                 accent,
               ].join(' ')}
             >
-              <ShopCoinIcon />
+              <img
+                src={coinsImage}
+                alt=""
+                className="size-[1.15rem] shrink-0 object-contain"
+                draggable={false}
+                aria-hidden
+              />
               {formatBalance(giftCase.price ?? 0)}
             </button>
           )}
