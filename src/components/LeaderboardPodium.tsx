@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { CoinIcon } from '@/components/CoinIcon'
 import { HomeSectionTitle } from '@/components/HomeSectionTitle'
 import { fetchLeaderboard, getPlayerInitial } from '@/lib/home'
 import { HOME_FEED_POLL_MS } from '@/lib/constants'
@@ -74,7 +75,7 @@ function PodiumPlayer({ player }: { player: LeaderboardPlayer }) {
           {player.displayName}
         </p>
         <p className={['mt-1 flex items-center gap-1 text-sm font-bold', styles.balance].join(' ')}>
-          <span aria-hidden>🪙</span>
+          <CoinIcon className="size-3.5" />
           {formatBalance(player.balance)}
         </p>
       </div>

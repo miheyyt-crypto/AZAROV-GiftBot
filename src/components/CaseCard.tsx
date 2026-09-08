@@ -1,6 +1,6 @@
 import { Lock } from 'lucide-react'
 
-import coinsImage from '@/assets/cases/reward-coins.png'
+import { CoinIcon } from '@/components/CoinIcon'
 import { formatBalance } from '@/lib/balance'
 import { getReferralCaseRemainingLabel } from '@/lib/referral'
 import { getCaseCardTheme } from '@/lib/shop-card-theme'
@@ -106,13 +106,7 @@ export function CaseCard({
                 accent,
               ].join(' ')}
             >
-              <img
-                src={coinsImage}
-                alt=""
-                className="size-[1.15rem] shrink-0 object-contain"
-                draggable={false}
-                aria-hidden
-              />
+              <CoinIcon className="size-[1.15rem]" />
               {formatBalance(giftCase.price ?? 0)}
             </button>
           )}

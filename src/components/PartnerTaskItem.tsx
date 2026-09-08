@@ -1,6 +1,7 @@
 import { Check, Lock } from 'lucide-react'
 import { useRef, useState, type ChangeEvent } from 'react'
 
+import { CoinIcon } from '@/components/CoinIcon'
 import { formatBalance } from '@/lib/balance'
 import type { PartnerSubmission, PartnerTaskConfig, PartnerTaskStatus } from '@/types/partner'
 
@@ -149,7 +150,7 @@ export function PartnerTaskItem({
                 isLocked ? 'text-white/40' : styles.reward,
               ].join(' ')}
             >
-              <span aria-hidden>🪙</span>
+              <CoinIcon className="size-3.5" />
               {formatBalance(task.reward)}
             </p>
 

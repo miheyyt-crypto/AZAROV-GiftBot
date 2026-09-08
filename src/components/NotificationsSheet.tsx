@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { ProfileSheet } from '@/components/ProfileSheet'
+import { CoinIcon } from '@/components/CoinIcon'
 import { formatAbsoluteDateTime, formatRelativeTime } from '@/lib/format'
 import {
   fetchNotifications,
@@ -94,8 +95,9 @@ function NotificationDetail({
           </p>
         ) : null}
         {reward != null ? (
-          <p className="mt-3 text-sm font-medium text-gold">
-            Награда: +{reward.toLocaleString('ru-RU')} монет
+          <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-gold">
+            Награда: +{reward.toLocaleString('ru-RU')}
+            <CoinIcon className="size-3.5" />
           </p>
         ) : null}
         {reason ? (

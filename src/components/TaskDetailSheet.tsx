@@ -1,6 +1,7 @@
 import { Check, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { CoinIcon } from '@/components/CoinIcon'
 import { useNotifications } from '@/components/NotificationProvider'
 import { formatBalance } from '@/lib/balance'
 import { KICK_REQUIRED_CHANNEL_URL, TELEGRAM_CHANNEL_URL } from '@/lib/constants'
@@ -228,9 +229,7 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
             )}
 
             <p className="flex items-center gap-1.5 text-[26px] font-bold leading-none text-[#f0c45a]">
-              <span aria-hidden className="text-[22px]">
-                🪙
-              </span>
+              <CoinIcon className="size-6" />
               {formatBalance(task.reward)}
             </p>
           </div>

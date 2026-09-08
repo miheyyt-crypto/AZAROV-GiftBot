@@ -2,8 +2,8 @@ import { Settings, X } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 
 import { CaseRewardCard } from '@/components/CaseRewardCard'
+import { CoinIcon } from '@/components/CoinIcon'
 import { useNotifications } from '@/components/NotificationProvider'
-import coinsImage from '@/assets/cases/reward-coins.png'
 import { isDropTableValid } from '@/data/cases'
 import { formatBalance } from '@/lib/balance'
 import { openCase } from '@/lib/cases'
@@ -85,13 +85,7 @@ export function CaseModal({
     return (
       <span className="inline-flex items-center justify-center gap-2">
         <span>Открыть за {formatBalance(price)}</span>
-        <img
-          src={coinsImage}
-          alt=""
-          className="size-5 object-contain"
-          draggable={false}
-          aria-hidden
-        />
+        <CoinIcon className="size-5" />
       </span>
     )
   }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { CoinIcon } from '@/components/CoinIcon'
 import { ProfileSheet } from '@/components/ProfileSheet'
 import { formatBalance } from '@/lib/balance'
 import {
@@ -74,12 +75,13 @@ export function CoinHistorySheet({ onClose }: CoinHistorySheetProps) {
                   </div>
                   <p
                     className={[
-                      'shrink-0 text-sm font-semibold',
+                      'inline-flex shrink-0 items-center gap-1 text-sm font-semibold',
                       isIncome ? 'text-gold' : 'text-red-400',
                     ].join(' ')}
                   >
                     {isIncome ? '+' : '−'}
                     {formatBalance(Math.abs(item.amount))}
+                    <CoinIcon className="size-3.5" />
                   </p>
                 </div>
               </article>

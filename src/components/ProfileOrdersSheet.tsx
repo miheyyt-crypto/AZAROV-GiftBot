@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { CoinIcon } from '@/components/CoinIcon'
 import { ProfileSheet } from '@/components/ProfileSheet'
 import { formatBalance } from '@/lib/balance'
 import { formatOrderDate, ORDER_STATUS_LABELS } from '@/lib/shop'
@@ -35,7 +36,10 @@ export function ProfileOrdersSheet({ onClose }: ProfileOrdersSheetProps) {
             ← Назад к списку
           </button>
           <h3 className="text-base font-semibold text-white">{selected.productName}</h3>
-          <p className="mt-3 text-sm text-gold">🪙 {formatBalance(selected.price)}</p>
+          <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-gold">
+            <CoinIcon className="size-3.5" />
+            {formatBalance(selected.price)}
+          </p>
           <dl className="mt-4 space-y-2 text-sm">
             <div className="flex justify-between gap-3 text-muted">
               <dt>Номер заказа</dt>
@@ -68,7 +72,10 @@ export function ProfileOrdersSheet({ onClose }: ProfileOrdersSheetProps) {
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold text-white">{order.productName}</p>
-                <p className="mt-1 text-sm text-gold">🪙 {formatBalance(order.price)}</p>
+                <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-gold">
+                  <CoinIcon className="size-3.5" />
+                  {formatBalance(order.price)}
+                </p>
                 <p className="mt-2 text-xs text-muted">{ORDER_STATUS_LABELS[order.status]}</p>
                 <p className="mt-1 text-xs text-muted">{formatOrderDate(order.createdAt)}</p>
               </div>

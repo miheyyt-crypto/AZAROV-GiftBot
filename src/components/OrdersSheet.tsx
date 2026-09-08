@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { CoinIcon } from '@/components/CoinIcon'
 import { formatBalance } from '@/lib/balance'
 import {
   formatOrderDate,
@@ -67,7 +68,10 @@ export function OrdersSheet({ onClose }: OrdersSheetProps) {
           {selected ? (
             <article className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
               <h3 className="text-base font-semibold text-white">{selected.productName}</h3>
-              <p className="mt-3 text-sm text-gold">🪙 {formatBalance(selected.price)}</p>
+              <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-gold">
+            <CoinIcon className="size-3.5" />
+            {formatBalance(selected.price)}
+          </p>
               <dl className="mt-4 space-y-2 text-sm">
                 <div className="flex justify-between gap-3 text-muted">
                   <dt>Номер заказа</dt>
@@ -101,7 +105,10 @@ export function OrdersSheet({ onClose }: OrdersSheetProps) {
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-white">{order.productName}</p>
-                    <p className="mt-1 text-sm text-gold">🪙 {formatBalance(order.price)}</p>
+                    <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-gold">
+                      <CoinIcon className="size-3.5" />
+                      {formatBalance(order.price)}
+                    </p>
                     <p className="mt-2 text-xs text-muted">{ORDER_STATUS_LABELS[order.status]}</p>
                     <p className="mt-1 text-xs text-muted">{formatOrderDate(order.createdAt)}</p>
                   </div>

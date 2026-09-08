@@ -1,3 +1,5 @@
+import { CoinIcon } from '@/components/CoinIcon'
+
 interface RewardBadgeProps {
   reward: number
   suffix?: string
@@ -10,6 +12,12 @@ const sizeClasses = {
   sm: 'px-2 py-0.5 text-xs',
   md: 'px-2.5 py-1 text-sm',
   lg: 'px-3 py-1.5 text-base',
+} as const
+
+const iconSizeClasses = {
+  sm: 'size-3',
+  md: 'size-3.5',
+  lg: 'size-4',
 } as const
 
 export function RewardBadge({
@@ -39,7 +47,7 @@ export function RewardBadge({
           sizeClasses[size],
         ].join(' ')}
       >
-        <span aria-hidden>🪙</span>
+        <CoinIcon className={iconSizeClasses[size]} />
         {formatted}
         {suffix}
       </span>

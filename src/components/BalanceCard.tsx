@@ -1,3 +1,4 @@
+import { CoinIcon } from '@/components/CoinIcon'
 import { useBalance } from '@/hooks/useBalance'
 
 interface CoinBalanceProps {
@@ -17,7 +18,7 @@ export function CoinBalance({ className = '' }: CoinBalanceProps) {
       ].join(' ')}
       aria-label={`Баланс: ${formatted}`}
     >
-      <span aria-hidden>🪙</span>
+      <CoinIcon className="size-4" />
       <span>{formatted}</span>
     </div>
   )

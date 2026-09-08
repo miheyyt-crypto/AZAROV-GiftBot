@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { CoinIcon } from '@/components/CoinIcon'
 import { ProfileSheet } from '@/components/ProfileSheet'
 import { formatBalance } from '@/lib/balance'
 import { fetchInventory, formatTransactionDate } from '@/lib/profile'
@@ -75,10 +76,15 @@ export function InventorySheet({ onClose }: InventorySheetProps) {
                     {rarityLabels[item.rarity] || item.rarity}
                   </p>
                 </div>
-                <p className="shrink-0 text-sm font-semibold text-gold">
-                  {item.currency === 'RUB'
-                    ? `${formatBalance(item.amount)} ₽`
-                    : `🪙 ${formatBalance(item.amount)}`}
+                <p className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-gold">
+                  {item.currency === 'RUB' ? (
+                    <>{formatBalance(item.amount)} ₽</>
+                  ) : (
+                    <>
+                      <CoinIcon className="size-3.5" />
+                      {formatBalance(item.amount)}
+                    </>
+                  )}
                 </p>
               </div>
               <p className="mt-2 text-xs text-muted">

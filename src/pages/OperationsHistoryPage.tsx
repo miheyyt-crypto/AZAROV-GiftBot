@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import { CoinIcon } from '@/components/CoinIcon'
 import { PageHeader } from '@/components/PageHeader'
 import { formatBalance } from '@/lib/balance'
 import { getUserFacingError } from '@/lib/errors'
@@ -120,18 +121,23 @@ export function OperationsHistoryPage() {
                     className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/5 text-lg"
                     aria-hidden
                   >
-                    {defaultIcon(operation)}
+                    {defaultIcon(operation) === '🪙' ? (
+                      <CoinIcon className="size-5" />
+                    ) : (
+                      defaultIcon(operation)
+                    )}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
                       <p
                         className={[
-                          'text-sm font-semibold',
+                          'inline-flex items-center gap-1.5 text-sm font-semibold',
                           income ? 'text-gold' : 'text-pink',
                         ].join(' ')}
                       >
                         {income ? '+' : '−'}
-                        {formatBalance(Math.abs(signed))} монет
+                        {formatBalance(Math.abs(signed))}
+                        <CoinIcon className="size-3.5" />
                       </p>
                       <span className="shrink-0 text-xs text-muted">
                         {formatRelativeDay(operation.createdAt)}

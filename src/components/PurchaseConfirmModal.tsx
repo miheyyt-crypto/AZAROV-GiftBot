@@ -1,6 +1,7 @@
 import { Info, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
+import { CoinIcon } from '@/components/CoinIcon'
 import { useNotifications } from '@/components/NotificationProvider'
 import { useUserProfile } from '@/hooks/useUserProfile'
 import { formatBalance } from '@/lib/balance'
@@ -287,9 +288,7 @@ export function PurchaseConfirmModal({
           </div>
 
           <p className="mt-4 flex items-center gap-2 text-[28px] font-bold leading-none text-[#f0c45a]">
-            <span aria-hidden className="text-[24px]">
-              🪙
-            </span>
+            <CoinIcon className="size-7" />
             {formatBalance(product.price)}
           </p>
 

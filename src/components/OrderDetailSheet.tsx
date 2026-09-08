@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
+import { CoinIcon } from '@/components/CoinIcon'
 import { formatBalance } from '@/lib/balance'
 import { formatAbsoluteDateTime } from '@/lib/format'
 import {
@@ -97,8 +98,9 @@ export function OrderDetailSheet({ order, onClose }: OrderDetailSheetProps) {
           </div>
           <div className="flex justify-between gap-3">
             <dt className="text-muted">Стоимость</dt>
-            <dd className="font-semibold text-gold">
-              {formatBalance(order.price)} 🪙
+            <dd className="inline-flex items-center gap-1.5 font-semibold text-gold">
+              {formatBalance(order.price)}
+              <CoinIcon className="size-4" />
             </dd>
           </div>
           <div className="flex justify-between gap-3">

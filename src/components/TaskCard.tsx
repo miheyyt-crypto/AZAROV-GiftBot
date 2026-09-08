@@ -1,5 +1,6 @@
 import { Check } from 'lucide-react'
 
+import { CoinIcon } from '@/components/CoinIcon'
 import { formatBalance } from '@/lib/balance'
 import type { Task, TaskCategory } from '@/types'
 
@@ -81,7 +82,7 @@ export function TaskCard({ task, onOpen }: TaskCardProps) {
               </p>
             </div>
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-gold/35 bg-black/30 px-2.5 py-1 text-xs font-bold text-white">
-              <span aria-hidden>🪙</span>
+              <CoinIcon className="size-3.5" />
               {formatBalance(task.reward)}
             </span>
           </div>

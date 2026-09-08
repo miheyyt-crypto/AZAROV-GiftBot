@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { CoinIcon } from '@/components/CoinIcon'
 import type { ShopCardTheme } from '@/lib/shop-card-theme'
 
 interface ShopOfferCardProps {
@@ -76,13 +77,6 @@ export function ShopPriceButton({
   )
 }
 
-export function ShopCoinIcon() {
-  return (
-    <span
-      aria-hidden
-      className="inline-flex size-[1.15rem] shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-[#ffe566] to-[#f5b800] text-[10px] font-black text-[#7a4a00] shadow-[0_0_8px_rgb(251_191_36/45%)]"
-    >
-      $
-    </span>
-  )
+export function ShopCoinIcon({ className = 'size-[1.15rem]' }: { className?: string }) {
+  return <CoinIcon className={className} />
 }

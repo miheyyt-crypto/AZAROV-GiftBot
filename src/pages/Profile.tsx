@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { CoinIcon } from '@/components/CoinIcon'
 import { AchievementsSheet } from '@/components/AchievementsSheet'
 import { useAuth } from '@/components/AuthGate'
 import { CoinBalance } from '@/components/BalanceCard'
@@ -129,7 +130,7 @@ export function Profile() {
           Баланс
         </p>
         <p className="mt-3 flex items-center justify-center gap-2 text-[42px] font-bold leading-none text-[#f0c45a]">
-          <span aria-hidden className="text-[34px]">🪙</span>
+          <CoinIcon className="size-9" />
           {formatted}
         </p>
 

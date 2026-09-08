@@ -1,6 +1,7 @@
 import { Copy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { CoinIcon } from '@/components/CoinIcon'
 import { useNotifications } from '@/components/NotificationProvider'
 import { ReferralProgress } from '@/components/ReferralProgress'
 import { applyAccountSnapshot } from '@/lib/account'
@@ -128,9 +129,7 @@ export function ReferralInviteCard({ account }: ReferralInviteCardProps) {
           </div>
           <div className="text-center">
             <p className="flex items-center justify-center gap-1 text-[28px] font-bold leading-none text-white">
-              <span aria-hidden className="text-lg">
-                🪙
-              </span>
+              <CoinIcon className="size-6" />
               {formatBalance(account.referralEarnings)}
             </p>
             <p className="mt-2 text-xs text-[#a1a1aa]">Заработано</p>

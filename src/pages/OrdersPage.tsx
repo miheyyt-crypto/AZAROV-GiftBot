@@ -11,6 +11,7 @@ import { getUserFacingError } from '@/lib/errors'
 import { formatOrderListDate } from '@/lib/format'
 import { ROUTES } from '@/lib/constants'
 import { getOrders } from '@/services/api/orders'
+import { CoinIcon } from '@/components/CoinIcon'
 import type { AppError, LoadState } from '@/types/errors'
 import {
   ORDER_STATUS_EMOJI,
@@ -110,8 +111,9 @@ export function OrdersPage() {
               </div>
               <div className="min-w-0 flex-1">
                 <h3 className="text-sm font-semibold text-white">{order.productName}</h3>
-                <p className="mt-1 text-sm font-semibold text-gold">
-                  {formatBalance(order.price)} 🪙
+                <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-gold">
+                  {formatBalance(order.price)}
+                  <CoinIcon className="size-3.5" />
                 </p>
                 <p className="mt-1 text-xs text-muted">Заказ #{order.id}</p>
                 <p className="mt-0.5 text-xs text-muted">{formatOrderListDate(order.createdAt)}</p>

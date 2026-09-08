@@ -1,6 +1,7 @@
 import { Clock, Coins, MessageCircle, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { CoinIcon } from '@/components/CoinIcon'
 import { ProfileSheet } from '@/components/ProfileSheet'
 import { formatBalance } from '@/lib/balance'
 import {
@@ -51,7 +52,7 @@ function AchievementCard({
         </span>
         <p className="min-w-0 flex-1 truncate text-sm font-medium text-white">{item.title}</p>
         <div className="flex shrink-0 items-center gap-1 text-sm font-semibold text-gold">
-          <span aria-hidden>🪙</span>
+          <CoinIcon className="size-3.5" />
           {formatBalance(item.reward)}
         </div>
       </div>
@@ -75,7 +76,15 @@ function AchievementCard({
           disabled={claiming}
           onClick={onClaim}
         >
-          {claiming ? 'Начисляем…' : `🎁 Забрать ${formatBalance(item.reward)} 🪙`}
+          {claiming ? (
+            'Начисляем…'
+          ) : (
+            <span className="inline-flex items-center justify-center gap-1.5">
+              <span aria-hidden>🎁</span>
+              Забрать {formatBalance(item.reward)}
+              <CoinIcon className="size-4" />
+            </span>
+          )}
         </button>
       ) : null}
 
