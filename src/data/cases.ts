@@ -1,6 +1,6 @@
 import coinsImage from '@/assets/cases/reward-coins.svg'
 import rubImage from '@/assets/cases/reward-rub.svg'
-import mediumImage from '@/assets/cases/medium.svg'
+import mediumImage from '@/assets/cases/medium.jpg'
 import poorImage from '@/assets/cases/poor.jpg'
 import referralImage from '@/assets/cases/referral.png'
 import richImage from '@/assets/cases/rich.svg'

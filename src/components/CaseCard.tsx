@@ -25,7 +25,7 @@ export function CaseCard({
   const badge = isReferral ? giftCase.subtitle : giftCase.maxPrize
   const accent = theme.accentText || 'text-white'
   // Full-bleed cinematic art (PNG/JPG) — same crop/scale as referral
-  const isCinematicArt = isReferral || giftCase.id === 'poor'
+  const isCinematicArt = isReferral || giftCase.id === 'poor' || giftCase.id === 'medium'
 
   return (
     <article
