@@ -44,23 +44,6 @@ export async function openCase(
   const request = (async () => {
     try {
       const result = await openCaseRequest(caseId, requestId)
-      console.info('[case-open-client] mapped:', {
-        success: result.success,
-        code: result.code,
-        message: result.message,
-        hasOpening: Boolean(result.opening),
-        openingKeys: result.opening ? Object.keys(result.opening) : [],
-        hasUser: Boolean(result.user),
-        prize: result.opening?.prize
-          ? {
-              id: result.opening.prize.id,
-              name: result.opening.prize.name,
-              amount: result.opening.prize.amount,
-              currency: result.opening.prize.currency,
-              rarity: result.opening.prize.rarity,
-            }
-          : null,
-      })
       applyRemoteUser(result.user)
       return {
         success: Boolean(result.success),
@@ -68,11 +51,7 @@ export async function openCase(
         code: result.code,
         opening: result.opening,
       }
-    } catch (error) {
-      console.info('[case-open-client] fetch/parse failed:', {
-        name: error instanceof Error ? error.name : typeof error,
-        message: error instanceof Error ? error.message : 'unknown',
-      })
+    } catch {
       return {
         success: false,
         message: 'Не удалось открыть кейс. Попробуй ещё раз.',
