@@ -26,6 +26,7 @@ import {
   getKickFollowAdminStatus,
   handleKickFollowWebhook,
 } from './kick-follow.mjs'
+import { checkKickNickname } from './kick-nickname.mjs'
 import { getKickStreakForUser } from './kick-streak.mjs'
 import { resetAllKickBindingsOnStore } from './kick-reset.mjs'
 import { startPartnerTask, verifyPartnerTask } from './partner-tasks.mjs'
@@ -701,6 +702,19 @@ app.post(
     const requestId = parseRequestId(req.body?.requestId)
     bootstrapUser(telegramUser, '')
     const result = await checkKickFollow(telegramUser.id, requestId)
+    res.json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/tasks/kick-nickname/check',
+  withUser(async (req, res, telegramUser) => {
+    const requestId = parseRequestId(req.body?.requestId)
+    bootstrapUser(telegramUser, '')
+    const result = await checkKickNickname(telegramUser.id, requestId)
     res.json({
       ...result,
       user: toPublicUser(getUser(telegramUser.id)),

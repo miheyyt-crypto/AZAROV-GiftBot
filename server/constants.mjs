@@ -14,6 +14,10 @@ export const KICK_CONNECT_TASK_ID = 'kick-connect'
 export const KICK_CONNECT_TASK_REWARD = 400
 export const KICK_FOLLOW_TASK_ID = 'kick-follow'
 export const KICK_FOLLOW_TASK_REWARD = 500
+export const KICK_NICKNAME_TASK_ID = 'kick-nickname'
+export const KICK_NICKNAME_TASK_REWARD = 400
+/** Substring required in Kick username or display name (override with KICK_NICKNAME_TAG). */
+export const KICK_NICKNAME_TAG_DEFAULT = 'AZAROV'
 /** Default Kick channel slug for the follow task (override with KICK_REQUIRED_CHANNEL). */
 export const KICK_REQUIRED_CHANNEL_DEFAULT = 'azarov7777'
 /**
@@ -51,6 +55,11 @@ export function getKickRequiredChannel() {
 
 export function getKickRequiredChannelUrl() {
   return `https://kick.com/${getKickRequiredChannel()}`
+}
+
+export function getKickNicknameTag() {
+  const raw = String(process.env.KICK_NICKNAME_TAG || KICK_NICKNAME_TAG_DEFAULT).trim()
+  return raw || KICK_NICKNAME_TAG_DEFAULT
 }
 
 /**

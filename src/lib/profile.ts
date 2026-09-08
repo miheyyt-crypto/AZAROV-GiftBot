@@ -1,9 +1,7 @@
-import { applyAccountSnapshot, getCurrentAccount } from '@/lib/account'
+import { applyAccountSnapshot } from '@/lib/account'
 import { hydrateBalanceFromAccount } from '@/lib/balance'
 import { mapRemoteAccount } from '@/lib/session'
 import { getTelegramInitData } from '@/lib/telegram'
-import { getUserStats } from '@/lib/user'
-import { getAchievements } from '@/data/achievements'
 import type {
   AchievementProgress,
   CaseOpeningItem,
@@ -98,44 +96,13 @@ export async function fetchInventory(): Promise<{
   }
 }
 
-export function getLocalAchievementsProgress(): AchievementProgress[] {
-  const account = getCurrentAccount()
-  const stats = getUserStats()
-
-  const progressMap: Record<string, number> = {
-    'stream-hours': stats.streamHours,
-    'chat-messages': stats.chatMessages,
-    friends: account.invitedCount,
-    'coins-earned': account.referralEarnings,
-  }
-
-  return getAchievements().map((item) => {
-    const raw = progressMap[item.id] ?? 0
-    const current = Math.min(raw, item.target)
-    const completed = raw >= item.target
-
-    return {
-      ...item,
-      current,
-      completed,
-      claimed: false,
-      status: completed ? 'claimable' : 'in_progress',
-    }
-  })
-}
-
 export async function fetchAchievements(): Promise<AchievementProgress[]> {
-  try {
-    const result = await getAchievementsRequest()
-    applyRemoteUser(result.user)
-    if (result.success && result.achievements?.length) {
-      return result.achievements
-    }
-  } catch {
-    // API unavailable — use local definitions below.
+  const result = await getAchievementsRequest()
+  applyRemoteUser(result.user)
+  if (result.success && Array.isArray(result.achievements)) {
+    return result.achievements
   }
-
-  return getLocalAchievementsProgress()
+  throw new Error(result.message || 'Не удалось загрузить достижения.')
 }
 
 export async function claimAchievementReward(

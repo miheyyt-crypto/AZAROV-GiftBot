@@ -93,14 +93,23 @@ function AchievementCard({
 export function AchievementsSheet({ onClose }: AchievementsSheetProps) {
   const [achievements, setAchievements] = useState<AchievementProgress[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [claimingId, setClaimingId] = useState<string | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    void fetchAchievements().then((list) => {
-      setAchievements(list)
-      setIsLoading(false)
-    })
+    void fetchAchievements()
+      .then((list) => {
+        setAchievements(list)
+        setLoadError(null)
+      })
+      .catch(() => {
+        setAchievements([])
+        setLoadError('Не удалось загрузить достижения. Проверь соединение и попробуй снова.')
+      })
+      .finally(() => {
+        setIsLoading(false)
+      })
   }, [])
 
   async function handleClaim(achievementId: string) {
@@ -145,6 +154,8 @@ export function AchievementsSheet({ onClose }: AchievementsSheetProps) {
     <ProfileSheet title="Достижения" onClose={onClose}>
       {isLoading ? (
         <p className="py-10 text-center text-sm text-muted">Загружаем достижения...</p>
+      ) : loadError ? (
+        <p className="py-10 text-center text-sm text-pink">{loadError}</p>
       ) : achievements.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted">Достижения пока недоступны</p>
       ) : (

@@ -3,7 +3,7 @@ import type { AchievementDefinition } from '@/types/profile'
 export const achievements: AchievementDefinition[] = [
   {
     id: 'stream-hours',
-    title: '100 часов просмотра',
+    title: '100 часов активности на стриме',
     reward: 5000,
     target: 100,
     icon: 'clock',

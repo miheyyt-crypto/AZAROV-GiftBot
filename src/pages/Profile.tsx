@@ -118,7 +118,7 @@ export function Profile() {
           <StatCard
             theme="pink"
             value={stats.watchLabel}
-            label={'на стримах'}
+            label={'активности\nна стриме'}
           />
           <StatCard
             theme="green"

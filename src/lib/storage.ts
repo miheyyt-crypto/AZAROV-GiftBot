@@ -17,8 +17,9 @@ function isStoreData(value: unknown): value is AppStoreData {
 }
 
 /**
- * Temporary persistence for the frontend prototype.
- * Replace this module with a backend API later — UI should not read localStorage directly.
+ * Client-side cache of the last account snapshot from the API.
+ * Backend remains the source of truth for balance, tasks, orders, and rewards.
+ * Do not invent or mutate critical economy state from localStorage alone.
  */
 export function loadStore(): AppStoreData {
   if (typeof window === 'undefined') {

@@ -1,6 +1,9 @@
 /**
- * Kick channel stats: chat message counts + watch-time heartbeats.
- * Does not own streak logic — call from kick-streak after live/link gates.
+ * Kick channel stats: chat message counts + live presence estimated from chat heartbeats.
+ *
+ * Watch seconds are NOT pure “viewer hours”. They accumulate only while the user
+ * chats on the live channel within KICK_WATCH_ACTIVITY_WINDOW — i.e. stream chat activity.
+ * Achievement/UI copy must describe activity, not passive viewing.
  */
 
 const DEFAULT_ACTIVITY_WINDOW_MINUTES = 10

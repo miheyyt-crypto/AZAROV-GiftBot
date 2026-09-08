@@ -13,7 +13,7 @@
     { "id": "medium-rub-1000", "name": "1000 Рублей", "amount": 1000, "currency": "RUB", "rarity": "epic", "chance": 10 },
     { "id": "medium-coins-20000", "name": "20 000 Монет", "amount": 20000, "currency": "COINS", "rarity": "epic", "chance": 11 },
     { "id": "medium-coins-11111", "name": "11111 Монет", "amount": 11111, "currency": "COINS", "rarity": "rare", "chance": 28 },
-    { "id": "medium-coins-8888", "name": "8888 Монет", "amount": 8888, "currency": "COINS", "rarity": "common", "chance": 48 }
+    { "id": "medium-coins-8888", "name": "8888 Монет", "amount": 8888, "currency": "COINS", "rarity": "common", "chance": 47 }
   ],
   "rich": [
     { "id": "rich-rub-30000", "name": "30 000 РУБЛЕЙ!", "amount": 30000, "currency": "RUB", "rarity": "legendary", "chance": 1 },

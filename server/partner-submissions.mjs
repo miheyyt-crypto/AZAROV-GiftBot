@@ -85,6 +85,14 @@ export function createPartnerSubmissionOnStore(store, userId, payload, file) {
     return { success: false, message: 'Задание партнёра не найдено.' }
   }
 
+  if (found.partner.hidden) {
+    return {
+      success: false,
+      code: 'PARTNER_UNAVAILABLE',
+      message: 'Этот партнёр сейчас недоступен.',
+    }
+  }
+
   const accountCheck = validatePartnerAccountId(found.partner, partnerAccountIdRaw)
   if (!accountCheck.ok) {
     return { success: false, message: accountCheck.message }

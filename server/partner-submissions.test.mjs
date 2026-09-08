@@ -27,7 +27,7 @@ function makeStore(...users) {
 }
 
 test('partner account id accepts digits only', () => {
-  const partner = findPartner('stake')
+  const partner = findPartner('dragonmoney')
   assert.equal(validatePartnerAccountId(partner, '12345').ok, true)
   assert.equal(validatePartnerAccountId(partner, 'abc').ok, false)
   assert.equal(validatePartnerAccountId(partner, '<script>').ok, false)
@@ -39,6 +39,23 @@ test('detectImageType recognizes png magic bytes', () => {
   assert.equal(type?.mime, 'image/png')
 })
 
+test('hidden partner submissions are rejected', () => {
+  const store = makeStore({ id: 500, first_name: 'H', username: 'hidden' })
+  const created = createPartnerSubmissionOnStore(
+    store,
+    500,
+    {
+      taskId: 'stake-task-1',
+      partnerAccountId: '998877',
+      requestId: 'req-hidden-partner-01',
+    },
+    { buffer: pngBuffer(), mimetype: 'image/png' },
+  )
+  assert.equal(created.success, false)
+  assert.equal(created.code, 'PARTNER_UNAVAILABLE')
+  assert.equal(store.users['500'].balance, 0)
+})
+
 test('submission does not grant coins until approve', () => {
   const store = makeStore({ id: 501, first_name: 'P', username: 'puser' })
 
@@ -46,7 +63,7 @@ test('submission does not grant coins until approve', () => {
     store,
     501,
     {
-      taskId: 'stake-task-1',
+      taskId: 'dragonmoney-task-1',
       partnerAccountId: '998877',
       requestId: 'req-partner-1aaaaaaaa',
     },
@@ -56,7 +73,7 @@ test('submission does not grant coins until approve', () => {
   assert.equal(created.success, true)
   assert.equal(created.submission.status, 'pending')
   assert.equal(store.users['501'].balance, 0)
-  assert.equal(store.users['501'].completedTasks.includes('stake-task-1'), false)
+  assert.equal(store.users['501'].completedTasks.includes('dragonmoney-task-1'), false)
 
   const approved = approvePartnerSubmissionOnStore(
     store,
@@ -67,20 +84,20 @@ test('submission does not grant coins until approve', () => {
   assert.equal(approved.success, true)
   assert.equal(approved.submission.status, 'approved')
   assert.equal(store.users['501'].balance, 1000)
-  assert.equal(store.users['501'].completedTasks.includes('stake-task-1'), true)
+  assert.equal(store.users['501'].completedTasks.includes('dragonmoney-task-1'), true)
 
   const rewardTx = Object.values(store.coinTransactions).find(
     (item) => item.type === 'partner_reward' && item.userId === 501,
   )
   assert.ok(rewardTx)
   assert.equal(rewardTx.amount, 1000)
-  assert.match(String(rewardTx.description || ''), /Stake/)
+  assert.match(String(rewardTx.description || ''), /Welvura/)
 
   const second = createPartnerSubmissionOnStore(
     store,
     501,
     {
-      taskId: 'stake-task-1',
+      taskId: 'dragonmoney-task-1',
       partnerAccountId: '998877',
       requestId: 'req-partner-2bbbbbbbb',
     },
@@ -159,7 +176,7 @@ test('same partner account cannot bind to another telegram user', () => {
     store,
     10,
     {
-      taskId: 'stake-task-1',
+      taskId: 'dragonmoney-task-1',
       partnerAccountId: '555',
       requestId: 'req-bind-1ffffffffff',
     },
@@ -175,7 +192,7 @@ test('same partner account cannot bind to another telegram user', () => {
     store,
     20,
     {
-      taskId: 'stake-task-1',
+      taskId: 'dragonmoney-task-1',
       partnerAccountId: '555',
       requestId: 'req-bind-2gggggggggg',
     },

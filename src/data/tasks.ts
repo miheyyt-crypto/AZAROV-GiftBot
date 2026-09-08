@@ -9,8 +9,9 @@ import type { Task } from '@/types'
 export const tasks: Task[] = [
   {
     id: 'kick-nickname',
-    title: 'Добавь приписку к нику на KICK',
-    description: 'Добавь специальную приписку к своему нику на Kick.',
+    title: 'Добавь приписку AZAROV к нику на Kick',
+    description:
+      'Добавь «AZAROV» в ник или отображаемое имя на Kick (можно в любом месте), сохрани и нажми «Выполнить».',
     category: 'kick',
     reward: 400,
     type: 'kick_nickname',

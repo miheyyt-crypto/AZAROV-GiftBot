@@ -78,7 +78,7 @@ function writeKickTokenBundle(store, kickUserId, tokenBundle) {
   account.tokenUpdatedAt = new Date().toISOString()
 }
 
-async function getFreshKickUserAccessToken(kickUserId, options = {}) {
+export async function getFreshKickUserAccessToken(kickUserId, options = {}) {
   const snapshot = withStoreRead((store) => readKickTokenBundle(store, kickUserId))
   if (!snapshot?.accessToken) {
     const error = new Error('kick_token_missing')

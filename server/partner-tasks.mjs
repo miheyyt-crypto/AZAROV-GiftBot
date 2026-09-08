@@ -22,6 +22,14 @@ export function startPartnerTask(userId, taskId) {
       return { success: false, message: 'Задание партнёра не найдено.' }
     }
 
+    if (found.partner.hidden) {
+      return {
+        success: false,
+        code: 'PARTNER_UNAVAILABLE',
+        message: 'Этот партнёр сейчас недоступен.',
+      }
+    }
+
     if ((user.completedTasks || []).includes(taskId)) {
       return { success: false, message: 'Задание уже выполнено.' }
     }

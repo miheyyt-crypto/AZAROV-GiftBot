@@ -1,5 +1,5 @@
 import { applyAccountSnapshot, getCurrentAccount } from '@/lib/account'
-import { claimInviteFriendsTask, checkKickFollow, checkTelegramSubscribe } from '@/lib/api'
+import { claimInviteFriendsTask, checkKickFollow, checkKickNickname, checkTelegramSubscribe } from '@/lib/api'
 import { hydrateBalanceFromAccount } from '@/lib/balance'
 import {
   REFERRAL_INVITE_TASK_ID,
@@ -226,6 +226,48 @@ export async function handleTaskAction(
     }
   }
 
+  if (taskId === 'kick-nickname') {
+    try {
+      await refreshKickAccountState()
+
+      if (!isKickLinked()) {
+        return {
+          success: false,
+          code: 'KICK_NOT_CONNECTED',
+          message: 'Сначала привяжи Kick в профиле, затем добавь приписку к нику.',
+        }
+      }
+
+      const result = await checkKickNickname(createPurchaseRequestId())
+      applyRemoteUser(result.user)
+
+      if (result.alreadyCompleted || (result.success && result.completed)) {
+        return {
+          success: true,
+          alreadyCompleted: Boolean(result.alreadyCompleted),
+          code: result.code,
+          message:
+            result.message ||
+            (result.alreadyCompleted
+              ? 'Задание уже выполнено.'
+              : 'Приписка подтверждена. Награда начислена.'),
+        }
+      }
+
+      return {
+        success: false,
+        code: result.code,
+        message: result.message || 'Приписка AZAROV в нике Kick не найдена.',
+      }
+    } catch {
+      return {
+        success: false,
+        code: 'NETWORK_ERROR',
+        message: 'Не удалось проверить ник Kick. Попробуй ещё раз позже.',
+      }
+    }
+  }
+
   if (taskId === REFERRAL_INVITE_TASK_ID) {
     try {
       const result = await claimInviteFriendsTask(createPurchaseRequestId())
@@ -244,7 +286,8 @@ export async function handleTaskAction(
 
   return {
     success: false,
-    message: `Действие для задания «${taskId}» будет доступно после подключения backend.`,
+    code: 'UNKNOWN_TASK',
+    message: 'Неизвестное задание.',
   }
 }
 

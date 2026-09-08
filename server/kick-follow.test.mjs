@@ -11,7 +11,6 @@ import {
   recordKickFollowOnStore,
 } from './kick-follow.mjs'
 import { linkKickAccountOnStore } from './kick-oauth.mjs'
-import { createEmptyStore } from './store.mjs'
 import { createUser } from './users.mjs'
 
 function withTempStore(run) {

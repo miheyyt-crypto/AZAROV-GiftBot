@@ -104,6 +104,13 @@ export function checkKickFollow(requestId: string): Promise<ApiUserResponse> {
   })
 }
 
+export function checkKickNickname(requestId: string): Promise<ApiUserResponse> {
+  return request('/api/tasks/kick-nickname/check', {
+    method: 'POST',
+    body: JSON.stringify({ requestId }),
+  })
+}
+
 export function claimInviteFriendsTask(requestId: string): Promise<ApiUserResponse> {
   return request('/api/tasks/invite-friends/claim', {
     method: 'POST',

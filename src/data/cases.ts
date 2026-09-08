@@ -35,13 +35,6 @@ export function isDropTableValid(rewards: Array<{ chance: number }>): boolean {
   return getRewardChanceTotal(rewards) === 100
 }
 
-/**
- * Medium case drop currently sums to 101%:
- * 2 + 2 + 10 + 11 + 28 + 48 = 101
- *
- * Do not change silently. After confirmation, edit one chance in
- * `src/data/case-drops.json` — most likely `medium-coins-8888.chance`.
- */
 export const cases: GiftCase[] = [
   {
     id: 'poor',
