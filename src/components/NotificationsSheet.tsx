@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { ProfileSheet } from '@/components/ProfileSheet'
 import { formatAbsoluteDateTime, formatRelativeTime } from '@/lib/format'
@@ -12,6 +12,8 @@ import type { UserNotification } from '@/types/user-notification'
 interface NotificationsSheetProps {
   onClose: () => void
   onUnreadChange?: (count: number) => void
+  /** When set, open this notification detail after list load (marks read via existing flow). */
+  focusNotificationId?: string | null
 }
 
 function typeAccent(type: string): { emoji: string; unreadBorder: string } {
@@ -117,13 +119,18 @@ function NotificationDetail({
   )
 }
 
-export function NotificationsSheet({ onClose, onUnreadChange }: NotificationsSheetProps) {
+export function NotificationsSheet({
+  onClose,
+  onUnreadChange,
+  focusNotificationId = null,
+}: NotificationsSheetProps) {
   const [items, setItems] = useState<UserNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [markingAll, setMarkingAll] = useState(false)
   const [selected, setSelected] = useState<UserNotification | null>(null)
+  const focusHandledRef = useRef(false)
 
   const load = useCallback(async () => {
     setIsLoading(true)
@@ -145,29 +152,44 @@ export function NotificationsSheet({ onClose, onUnreadChange }: NotificationsShe
     void load()
   }, [load])
 
-  async function handleOpen(item: UserNotification) {
-    setSelected(item)
-    if (item.read) {
+  const handleOpen = useCallback(
+    async (item: UserNotification) => {
+      setSelected(item)
+      if (item.read) {
+        return
+      }
+      try {
+        const result = await markNotificationAsRead(item.id)
+        setItems((prev) =>
+          prev.map((row) =>
+            row.id === item.id
+              ? { ...row, read: true, ...(result.notification || {}) }
+              : row,
+          ),
+        )
+        setUnreadCount(result.unreadCount)
+        onUnreadChange?.(result.unreadCount)
+        if (result.notification) {
+          setSelected(result.notification)
+        }
+      } catch {
+        // Keep UI open; list stays unread until retry.
+      }
+    },
+    [onUnreadChange],
+  )
+
+  useEffect(() => {
+    if (isLoading || loadError || focusHandledRef.current || !focusNotificationId) {
       return
     }
-    try {
-      const result = await markNotificationAsRead(item.id)
-      setItems((prev) =>
-        prev.map((row) =>
-          row.id === item.id
-            ? { ...row, read: true, ...(result.notification || {}) }
-            : row,
-        ),
-      )
-      setUnreadCount(result.unreadCount)
-      onUnreadChange?.(result.unreadCount)
-      if (result.notification) {
-        setSelected(result.notification)
-      }
-    } catch {
-      // Keep UI open; list stays unread until retry.
+    const target = items.find((row) => row.id === focusNotificationId)
+    if (!target) {
+      return
     }
-  }
+    focusHandledRef.current = true
+    void handleOpen(target)
+  }, [isLoading, loadError, focusNotificationId, items, handleOpen])
 
   async function handleReadAll() {
     if (markingAll || unreadCount === 0) {

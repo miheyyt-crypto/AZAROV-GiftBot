@@ -20,6 +20,7 @@ import { useUserProfile } from '@/hooks/useUserProfile'
 import { isMiniAppAuthAvailable } from '@/lib/auth'
 import { ROUTES } from '@/lib/constants'
 import { fetchUnreadNotificationCount } from '@/lib/notifications'
+import { subscribeNotificationsUpdated } from '@/lib/notification-events'
 import type { ProfileMenuId } from '@/types/profile'
 
 export function Profile() {
@@ -56,8 +57,14 @@ export function Profile() {
           setUnreadNotifications(0)
         }
       })
+    const unsubscribe = subscribeNotificationsUpdated((detail) => {
+      if (!cancelled && typeof detail?.unreadCount === 'number') {
+        setUnreadNotifications(detail.unreadCount)
+      }
+    })
     return () => {
       cancelled = true
+      unsubscribe()
     }
   }, [])
 

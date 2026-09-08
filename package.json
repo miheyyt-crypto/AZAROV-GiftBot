@@ -14,7 +14,7 @@
     "start:api": "node server/index.mjs",
     "start:bot": "node server/bot.mjs",
     "start:production": "node server/production.mjs",
-    "test": "node --test server/*.test.mjs",
+    "test": "node --experimental-strip-types --test server/*.test.mjs",
     "reset:kick": "node server/reset-kick.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",

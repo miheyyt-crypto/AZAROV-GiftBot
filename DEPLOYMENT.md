@@ -350,6 +350,13 @@ Retention: up to **150** notifications per user (oldest **read** pruned first).
 
 Profile UI: **Уведомления** menu with unread badge.
 
+### Top toasts (Mini App)
+
+Frontend-only layer (`ServerNotificationToasts`): polls `GET /api/notifications`
+every ~12s while the tab is visible. First poll **seeds** known IDs (no toasts for
+history). Later new toastable IDs show a top toast (~5s, queue max 5). Toast does
+**not** mark `read`; click opens the existing Notifications sheet/detail.
+
 ---
 
 ## 11. What not to commit
