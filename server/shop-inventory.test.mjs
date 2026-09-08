@@ -205,7 +205,7 @@ test('reject then approve — reject wins, approve fails', () => {
     const orderId = bought.order.orderId
 
     withStore((store) => {
-      const r = rejectShopOrderOnStore(store, orderId, 'admin', 'no', 'rej')
+      const r = rejectShopOrderOnStore(store, orderId, 'admin', 'нет', 'rej')
       const a = approveShopOrderOnStore(store, orderId, 'admin', 'ap')
       assert.equal(r.success, true)
       assert.equal(a.success, false)

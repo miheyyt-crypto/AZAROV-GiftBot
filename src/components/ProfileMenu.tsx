@@ -1,5 +1,6 @@
 import {
   Award,
+  Bell,
   ChevronRight,
   History,
   LogOut,
@@ -13,6 +14,7 @@ import type { ProfileMenuId } from '@/types/profile'
 interface ProfileMenuProps {
   onSelect: (id: ProfileMenuId) => void
   showLogout?: boolean
+  unreadNotifications?: number
 }
 
 const items: Array<{
@@ -21,6 +23,12 @@ const items: Array<{
   icon: typeof History
   iconClass: string
 }> = [
+  {
+    id: 'notifications',
+    label: 'Уведомления',
+    icon: Bell,
+    iconClass: 'bg-amber-500/20 text-amber-300',
+  },
   {
     id: 'coin-history',
     label: 'История монет',
@@ -53,7 +61,11 @@ const items: Array<{
   },
 ]
 
-export function ProfileMenu({ onSelect, showLogout = false }: ProfileMenuProps) {
+export function ProfileMenu({
+  onSelect,
+  showLogout = false,
+  unreadNotifications = 0,
+}: ProfileMenuProps) {
   const menuItems: Array<{
     id: ProfileMenuId
     label: string
@@ -75,6 +87,7 @@ export function ProfileMenu({ onSelect, showLogout = false }: ProfileMenuProps) 
     <nav className="overflow-visible rounded-[22px] border border-white/10 bg-white/[0.03] backdrop-blur-md">
       {menuItems.map((item, index) => {
         const Icon = item.icon
+        const showBadge = item.id === 'notifications' && unreadNotifications > 0
 
         return (
           <button
@@ -96,7 +109,14 @@ export function ProfileMenu({ onSelect, showLogout = false }: ProfileMenuProps) 
             >
               <Icon size={20} aria-hidden />
             </span>
-            <span className="flex-1 text-base font-medium text-white">{item.label}</span>
+            <span className="flex flex-1 items-center gap-2 text-base font-medium text-white">
+              {item.label}
+              {showBadge ? (
+                <span className="rounded-full bg-gold px-2 py-0.5 text-xs font-bold text-black">
+                  {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                </span>
+              ) : null}
+            </span>
             <ChevronRight size={18} className="shrink-0 text-muted" aria-hidden />
           </button>
         )

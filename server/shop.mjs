@@ -6,6 +6,11 @@ import { findProduct } from './products.mjs'
 import { withStore, withStoreRead } from './store.mjs'
 import { sanitizePurchaseMetadata } from './validate.mjs'
 import { addCoins, spendCoins, TX_TYPE, utcNow } from './wallet.mjs'
+import {
+  notifyOrderApprovedOnStore,
+  notifyOrderRejectedOnStore,
+  validateRejectionReason,
+} from './notifications.mjs'
 
 const ORDER_STATUSES = new Set([
   'pending',
@@ -341,6 +346,7 @@ export function approveShopOrderOnStore(store, orderId, reviewedBy, requestId = 
         createdAt: order.reviewedAt || utcNow(),
       }
     }
+    notifyOrderApprovedOnStore(store, order)
     return {
       success: true,
       message: 'Заказ уже одобрен.',
@@ -390,6 +396,8 @@ export function approveShopOrderOnStore(store, orderId, reviewedBy, requestId = 
     store.events[reqKey] = store.events[approveKey]
   }
 
+  notifyOrderApprovedOnStore(store, order)
+
   return {
     success: true,
     message: isInventoryProduct(order.productId)
@@ -420,6 +428,7 @@ export function rejectShopOrderOnStore(store, orderId, reviewedBy, rejectionReas
   const status = normalizeOrderStatus(order.status)
 
   if (status === 'rejected' && (store.events[rejectKey]?.done || order.refundedAt)) {
+    notifyOrderRejectedOnStore(store, order)
     return {
       success: true,
       message: 'Заказ уже отклонён.',
@@ -440,6 +449,15 @@ export function rejectShopOrderOnStore(store, orderId, reviewedBy, rejectionReas
     return { success: false, message: 'Этот заказ нельзя отклонить.' }
   }
 
+  const reasonCheck = validateRejectionReason(rejectionReason)
+  if (!reasonCheck.ok) {
+    return {
+      success: false,
+      code: reasonCheck.code,
+      message: reasonCheck.message,
+    }
+  }
+
   const user = store.users[String(order.userId)]
   if (!user) {
     return { success: false, message: 'Пользователь не найден.' }
@@ -451,13 +469,12 @@ export function rejectShopOrderOnStore(store, orderId, reviewedBy, rejectionReas
   }
 
   const now = utcNow()
-  const reason = String(rejectionReason || '').trim().slice(0, 500) || 'Заказ отклонён администратором.'
 
   order.status = 'rejected'
   order.updatedAt = now
   order.reviewedBy = String(reviewedBy || 'admin')
   order.reviewedAt = now
-  order.rejectionReason = reason
+  order.rejectionReason = reasonCheck.value
   order.refundedAt = order.refundedAt || now
 
   const reqKey = requestId ? `shop:reject:${order.orderId}:${requestId}` : null
@@ -472,6 +489,8 @@ export function rejectShopOrderOnStore(store, orderId, reviewedBy, rejectionReas
   if (reqKey) {
     store.events[reqKey] = store.events[rejectKey]
   }
+
+  notifyOrderRejectedOnStore(store, order)
 
   return {
     success: true,

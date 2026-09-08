@@ -88,7 +88,7 @@ export function isPersistentStoreDir(dir = getDataDir()) {
 
 export function createEmptyStore() {
   return {
-    version: 6,
+    version: 7,
     users: {},
     referralIndex: {},
     referrals: {},
@@ -108,6 +108,7 @@ export function createEmptyStore() {
     kickWebhookEvents: {},
     kickLivestreamState: null,
     kickWatchStats: {},
+    notifications: {},
   }
 }
 
@@ -133,6 +134,7 @@ function migrateStore(store) {
     store.kickLivestreamState = null
   }
   store.kickWatchStats = store.kickWatchStats || {}
+  store.notifications = store.notifications || {}
 
   // One-shot upgrade: pending streak-freeze orders → inventory (strategy B).
   if (Number(store.version) < 5) {
@@ -144,6 +146,12 @@ function migrateStore(store) {
   // Additive v6: kick watch stats map (no data rewrite required).
   if (Number(store.version) < 6) {
     store.version = 6
+  }
+
+  // Additive v7: in-app notifications map.
+  if (Number(store.version) < 7) {
+    store.notifications = store.notifications || {}
+    store.version = 7
   }
 
   return store

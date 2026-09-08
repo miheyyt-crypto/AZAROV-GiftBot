@@ -424,6 +424,16 @@ export async function handlePartnerRejectReasonMessage(ctx) {
     return true
   }
 
+  if (text.length < 3) {
+    await ctx.reply('Укажите причину отклонения (минимум 3 символа) или напишите «отмена».')
+    return true
+  }
+
+  if (text.length > 500) {
+    await ctx.reply('Причина слишком длинная (максимум 500 символов). Сократи текст.')
+    return true
+  }
+
   clearPendingRejectReason(adminId)
   let result
   try {

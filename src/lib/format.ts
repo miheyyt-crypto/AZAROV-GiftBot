@@ -57,3 +57,36 @@ export function formatOrderListDate(value: string): string {
 
   return `${day}, ${time}`
 }
+
+/** Relative time for notification lists (same ru-RU style as other profile dates). */
+export function formatRelativeTime(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  const diffMs = Date.now() - date.getTime()
+  if (diffMs < 0) {
+    return formatAbsoluteDateTime(value)
+  }
+
+  const minutes = Math.floor(diffMs / 60_000)
+  if (minutes < 1) {
+    return 'только что'
+  }
+  if (minutes < 60) {
+    return `${minutes} мин. назад`
+  }
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) {
+    return hours === 1 ? '1 час назад' : `${hours} ч. назад`
+  }
+
+  const days = Math.floor(hours / 24)
+  if (days < 7) {
+    return days === 1 ? 'вчера' : `${days} дн. назад`
+  }
+
+  return formatAbsoluteDateTime(value)
+}

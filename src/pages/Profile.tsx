@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { AchievementsSheet } from '@/components/AchievementsSheet'
@@ -7,6 +7,7 @@ import { CoinBalance } from '@/components/BalanceCard'
 import { CoinHistorySheet } from '@/components/CoinHistorySheet'
 import { InventorySheet } from '@/components/InventorySheet'
 import { KickConnectCard } from '@/components/KickConnectCard'
+import { NotificationsSheet } from '@/components/NotificationsSheet'
 import { PartnerTaskModal } from '@/components/PartnerTaskModal'
 import { ProfileMenu } from '@/components/ProfileMenu'
 import { ProfileWelvuraBanner } from '@/components/ProfileWelvuraBanner'
@@ -18,6 +19,7 @@ import { useBalance } from '@/hooks/useBalance'
 import { useUserProfile } from '@/hooks/useUserProfile'
 import { isMiniAppAuthAvailable } from '@/lib/auth'
 import { ROUTES } from '@/lib/constants'
+import { fetchUnreadNotificationCount } from '@/lib/notifications'
 import type { ProfileMenuId } from '@/types/profile'
 
 export function Profile() {
@@ -36,9 +38,28 @@ export function Profile() {
   const [activeSheet, setActiveSheet] = useState<ProfileMenuId | null>(null)
   const [showWelvuraModal, setShowWelvuraModal] = useState(false)
   const [logoutBusy, setLogoutBusy] = useState(false)
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
 
   const welvuraPartner = getPartnerById('dragonmoney')
   const showLogout = isWebSession || (!isMiniAppAuthAvailable() && !isDemo)
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchUnreadNotificationCount()
+      .then((count) => {
+        if (!cancelled) {
+          setUnreadNotifications(count)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUnreadNotifications(0)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   async function handleMenuSelect(id: ProfileMenuId) {
     if (id === 'operations') {
@@ -136,8 +157,18 @@ export function Profile() {
         <ProfileWelvuraBanner onClick={() => setShowWelvuraModal(true)} />
       </div>
 
-      <ProfileMenu onSelect={handleMenuSelect} showLogout={showLogout} />
+      <ProfileMenu
+        onSelect={handleMenuSelect}
+        showLogout={showLogout}
+        unreadNotifications={unreadNotifications}
+      />
 
+      {activeSheet === 'notifications' && (
+        <NotificationsSheet
+          onClose={() => setActiveSheet(null)}
+          onUnreadChange={setUnreadNotifications}
+        />
+      )}
       {activeSheet === 'coin-history' && (
         <CoinHistorySheet onClose={() => setActiveSheet(null)} />
       )}

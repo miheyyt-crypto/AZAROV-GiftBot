@@ -12,6 +12,11 @@ import {
   saveSubmissionScreenshot,
 } from './uploads.mjs'
 import { addCoins, hasEvent, TX_TYPE } from './wallet.mjs'
+import {
+  notifyPartnerSubmissionApprovedOnStore,
+  notifyPartnerSubmissionRejectedOnStore,
+  validateRejectionReason,
+} from './notifications.mjs'
 
 function accountBindKey(partnerId, partnerAccountId) {
   return `${partnerId}:${partnerAccountId}`
@@ -254,6 +259,9 @@ export function approvePartnerSubmissionOnStore(store, submissionId, reviewedBy,
     : `partner:approve:${submissionId}`
 
   if (store.events[approveKey]?.done || submission.status === 'approved') {
+    notifyPartnerSubmissionApprovedOnStore(store, submission, {
+      reward: submission.reward || 0,
+    })
     return {
       success: true,
       message: 'Заявка уже подтверждена.',
@@ -293,6 +301,7 @@ export function approvePartnerSubmissionOnStore(store, submissionId, reviewedBy,
     submission.reviewedBy = String(reviewedBy || 'admin')
     submission.rejectionReason =
       'Этот ID уже привязан к другому пользователю. Отправь заявку с другим ID.'
+    notifyPartnerSubmissionRejectedOnStore(store, submission)
     return {
       success: false,
       code: 'ACCOUNT_TAKEN',
@@ -311,6 +320,9 @@ export function approvePartnerSubmissionOnStore(store, submissionId, reviewedBy,
       done: true,
       createdAt: submission.reviewedAt,
     }
+    notifyPartnerSubmissionApprovedOnStore(store, submission, {
+      reward: submission.reward || 0,
+    })
     return {
       success: true,
       message: 'Награда уже была начислена ранее.',
@@ -334,6 +346,9 @@ export function approvePartnerSubmissionOnStore(store, submissionId, reviewedBy,
       done: true,
       createdAt: submission.reviewedAt,
     }
+    notifyPartnerSubmissionApprovedOnStore(store, submission, {
+      reward: submission.reward || reward,
+    })
     return {
       success: true,
       message: 'Награда уже была начислена ранее.',
@@ -369,6 +384,8 @@ export function approvePartnerSubmissionOnStore(store, submissionId, reviewedBy,
     createdAt: submission.reviewedAt,
   }
 
+  notifyPartnerSubmissionApprovedOnStore(store, submission, { reward })
+
   return {
     success: true,
     message: `Заявка подтверждена. Начислено ${reward} монет.`,
@@ -396,6 +413,7 @@ export function rejectPartnerSubmissionOnStore(
     : `partner:reject:${submissionId}`
 
   if (store.events[rejectKey]?.done || submission.status === 'rejected') {
+    notifyPartnerSubmissionRejectedOnStore(store, submission)
     return {
       success: true,
       message: 'Заявка уже отклонена.',
@@ -407,20 +425,27 @@ export function rejectPartnerSubmissionOnStore(
     return { success: false, message: 'Эту заявку нельзя отклонить.' }
   }
 
-  const reason = String(rejectionReason || '')
-    .trim()
-    .slice(0, 500)
+  const reasonCheck = validateRejectionReason(rejectionReason)
+  if (!reasonCheck.ok) {
+    return {
+      success: false,
+      code: reasonCheck.code,
+      message: reasonCheck.message,
+    }
+  }
 
   submission.status = 'rejected'
   submission.reviewedAt = new Date().toISOString()
   submission.reviewedBy = String(reviewedBy || 'admin')
-  submission.rejectionReason = reason || 'Заявка отклонена.'
+  submission.rejectionReason = reasonCheck.value
 
   store.events[rejectKey] = {
     eventId: rejectKey,
     done: true,
     createdAt: submission.reviewedAt,
   }
+
+  notifyPartnerSubmissionRejectedOnStore(store, submission)
 
   return {
     success: true,

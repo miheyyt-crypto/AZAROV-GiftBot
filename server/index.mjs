@@ -61,7 +61,12 @@ import {
   purchaseProduct,
   rejectShopOrder,
 } from './shop.mjs'
-import { openCase } from './cases.mjs'
+import {
+  getUnreadNotificationsCount,
+  listNotificationsForUser,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from './notifications.mjs'
 import { getLeaderboard, getRecentCaseDrops } from './home.mjs'
 import {
   getAchievementsProgress,
@@ -1337,6 +1342,57 @@ app.get(
     bootstrapUser(telegramUser, '')
     const result = getPendingOrders(telegramUser.id)
     res.json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.get(
+  '/api/notifications',
+  withUser(async (req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const limitRaw = Number(req.query?.limit)
+    const limit = Number.isFinite(limitRaw) ? limitRaw : 50
+    const result = listNotificationsForUser(telegramUser.id, { limit })
+    res.json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.get(
+  '/api/notifications/unread-count',
+  withUser(async (_req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const result = getUnreadNotificationsCount(telegramUser.id)
+    res.json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/notifications/read-all',
+  withUser(async (_req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const result = markAllNotificationsRead(telegramUser.id)
+    res.json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/notifications/:notificationId/read',
+  withUser(async (req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const notificationId = String(req.params.notificationId || '').trim()
+    const result = markNotificationRead(telegramUser.id, notificationId)
+    res.status(result.success ? 200 : result.code === 'NOT_FOUND' ? 404 : 400).json({
       ...result,
       user: toPublicUser(getUser(telegramUser.id)),
     })

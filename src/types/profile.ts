@@ -57,6 +57,7 @@ export interface AchievementProgress extends AchievementDefinition {
 }
 
 export type ProfileMenuId =
+  | 'notifications'
   | 'coin-history'
   | 'operations'
   | 'inventory'

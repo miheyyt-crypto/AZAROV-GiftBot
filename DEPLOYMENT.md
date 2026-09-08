@@ -312,6 +312,46 @@ Users who linked Kick **before** token persistence was added must reconnect Kick
 
 ---
 
+## 10b. In-app notifications (Notification Center)
+
+Stored in the same JSON store (`store.notifications`, schema v7), under `withStore` /
+file lock. **Not** a separate DB. Single-replica constraint still applies.
+
+### Types
+
+| Type | When created |
+|------|----------------|
+| `PARTNER_SUBMISSION_APPROVED` | Admin approves partner submission (after ledger reward) |
+| `PARTNER_SUBMISSION_REJECTED` | Admin rejects partner submission (requires `rejectionReason`) |
+| `ORDER_APPROVED` | Admin completes shop order |
+| `ORDER_REJECTED` | Admin rejects shop order (requires reason; refund already applied) |
+| `SYSTEM` | Reserved for server-side system messages |
+
+There is **no** public `POST /api/notifications/create`. Clients cannot invent approvals
+or rewards via notifications. Reward always comes from ledger first; notification only reports it.
+
+Idempotency: `events[`notification:${eventKey}`]` (e.g.
+`partner_submission:${submissionId}:approved`). Replays do not duplicate.
+
+Rejection reason: trim, 3–500 chars; validated on bot + HTTP admin + store mutation.
+Saved on `submission.rejectionReason` / `order.rejectionReason` and copied into
+notification `metadata.rejectionReason`.
+
+### User API (Telegram auth / web session only; userId from auth)
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET` | `/api/notifications?limit=` | Own list + `unreadCount` (default limit 50, max 100) |
+| `GET` | `/api/notifications/unread-count` | Badge |
+| `POST` | `/api/notifications/read-all` | Mark all own as read |
+| `POST` | `/api/notifications/:id/read` | Own only; foreign id → 404 |
+
+Retention: up to **150** notifications per user (oldest **read** pruned first).
+
+Profile UI: **Уведомления** menu with unread badge.
+
+---
+
 ## 11. What not to commit
 
 - `.env` and any real tokens/keys
