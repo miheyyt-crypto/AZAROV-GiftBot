@@ -17,7 +17,7 @@ export function CasesPage() {
 
   return (
     <>
-      <div className="grid grid-cols-2 items-stretch gap-4">
+      <div className="grid grid-cols-2 items-stretch gap-3.5">
         {giftCases.map((giftCase) => (
           <CaseCard
             key={giftCase.id}

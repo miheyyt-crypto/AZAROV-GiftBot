@@ -5,6 +5,8 @@ export interface ShopCardTheme {
   glow: string
   radial: string
   button: string
+  /** Colored label/price text on dark buttons (case cards). */
+  accentText?: string
 }
 
 export const productCardTheme: Record<ProductCategory, ShopCardTheme> = {
@@ -38,41 +40,41 @@ export const productCardTheme: Record<ProductCategory, ShopCardTheme> = {
   },
 }
 
-/** Premium case-card palette: border / glow / badge / price share one accent. */
-export interface CaseCardTheme {
-  /** Space-separated RGB channels, e.g. `52 211 153` — used in CSS `rgb(… / α)`. */
-  accentRgb: string
-  accentText: string
-  radial: string
-}
-
-export const caseCardTheme: Record<string, CaseCardTheme> = {
+export const caseCardTheme: Record<string, ShopCardTheme> = {
   poor: {
-    accentRgb: '52 211 153',
-    accentText: 'text-emerald-400',
+    border: 'border-emerald-400/70',
+    glow: 'shadow-[0_0_22px_rgb(52_211_153/28%)]',
     radial:
-      'bg-[radial-gradient(ellipse_at_50%_40%,rgb(52_211_153/34%)_0%,rgb(52_211_153/10%)_45%,transparent_72%)]',
+      'bg-[radial-gradient(ellipse_at_50%_42%,rgb(52_211_153/30%)_0%,rgb(52_211_153/8%)_42%,transparent_70%)]',
+    button: 'bg-emerald-500',
+    accentText: 'text-emerald-400',
   },
   medium: {
-    accentRgb: '56 189 248',
-    accentText: 'text-sky-400',
+    border: 'border-sky-400/70',
+    glow: 'shadow-[0_0_22px_rgb(56_189_248/28%)]',
     radial:
-      'bg-[radial-gradient(ellipse_at_50%_40%,rgb(56_189_248/34%)_0%,rgb(56_189_248/10%)_45%,transparent_72%)]',
+      'bg-[radial-gradient(ellipse_at_50%_42%,rgb(56_189_248/30%)_0%,rgb(56_189_248/8%)_42%,transparent_70%)]',
+    button: 'bg-sky-500',
+    accentText: 'text-sky-400',
   },
   rich: {
-    accentRgb: '244 63 94',
-    accentText: 'text-rose-400',
+    border: 'border-fuchsia-400/70',
+    glow: 'shadow-[0_0_22px_rgb(232_121_249/28%)]',
     radial:
-      'bg-[radial-gradient(ellipse_at_50%_40%,rgb(244_63_94/34%)_0%,rgb(244_63_94/10%)_45%,transparent_72%)]',
+      'bg-[radial-gradient(ellipse_at_50%_42%,rgb(232_121_249/30%)_0%,rgb(232_121_249/8%)_42%,transparent_70%)]',
+    button: 'bg-fuchsia-500',
+    accentText: 'text-fuchsia-400',
   },
   referral: {
-    accentRgb: '181 107 255',
-    accentText: 'text-[#d2a8ff]',
+    border: 'border-[#b56bff]/75',
+    glow: 'shadow-[0_0_22px_rgb(181_107_255/30%)]',
     radial:
-      'bg-[radial-gradient(ellipse_at_50%_40%,rgb(181_107_255/36%)_0%,rgb(181_107_255/12%)_45%,transparent_72%)]',
+      'bg-[radial-gradient(ellipse_at_50%_42%,rgb(181_107_255/34%)_0%,rgb(181_107_255/10%)_42%,transparent_70%)]',
+    button: 'bg-[#9b4dff]',
+    accentText: 'text-[#d2a8ff]',
   },
 }
 
-export function getCaseCardTheme(caseId: string): CaseCardTheme {
+export function getCaseCardTheme(caseId: string): ShopCardTheme {
   return caseCardTheme[caseId] ?? caseCardTheme.referral
 }
