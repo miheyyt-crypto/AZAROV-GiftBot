@@ -1,24 +1,38 @@
 import { Settings, X } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
+import { CaseOpeningReel } from '@/components/CaseOpeningReel'
 import { CaseRewardCard } from '@/components/CaseRewardCard'
 import { CoinIcon } from '@/components/CoinIcon'
 import { useNotifications } from '@/components/NotificationProvider'
 import { isDropTableValid } from '@/data/cases'
 import { formatBalance } from '@/lib/balance'
+import {
+  CASE_OPENING_DURATION_MS,
+  buildCaseOpeningReel,
+  resolveWinnerReward,
+  type CaseReelItem,
+} from '@/lib/case-opening-reel'
 import { openCase } from '@/lib/cases'
 import { createAppError } from '@/lib/errors'
 import { createPurchaseRequestId } from '@/lib/shop'
 import { RARITY_LABELS } from '@/types/case'
 import type { CaseOpening, GiftCase } from '@/types/case'
 
-const OPEN_ANIMATION_MS = 1200
+type CaseModalPhase = 'preview' | 'requesting' | 'animating' | 'result'
 
 interface CaseModalProps {
   giftCase: GiftCase
   balance: number
   availableReferralCases: number
   onClose: () => void
+}
+
+function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false
+  }
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
 export function CaseModal({
@@ -29,10 +43,15 @@ export function CaseModal({
 }: CaseModalProps) {
   const { showNotification } = useNotifications()
   const [visible, setVisible] = useState(false)
-  const [phase, setPhase] = useState<'preview' | 'opening' | 'result'>('preview')
+  const [phase, setPhase] = useState<CaseModalPhase>('preview')
   const [error, setError] = useState<string | null>(null)
   const [opening, setOpening] = useState<CaseOpening | null>(null)
   const [requestId, setRequestId] = useState(() => createPurchaseRequestId())
+  const [reelItems, setReelItems] = useState<CaseReelItem[]>([])
+  const [winnerIndex, setWinnerIndex] = useState(0)
+  const [reducedMotion, setReducedMotion] = useState(false)
+  const openingInFlightRef = useRef(false)
+  const prizeNameRef = useRef('')
 
   const price = giftCase.price ?? 0
   const isReferral = giftCase.type === 'referral'
@@ -40,15 +59,18 @@ export function CaseModal({
   const missing = Math.max(0, price - balance)
   const dropValid = isDropTableValid(giftCase.rewards)
   const canOpenReferral = isReferral && availableReferralCases > 0
+  const busy = phase === 'requesting' || phase === 'animating'
   const canSubmit =
     dropValid &&
     phase === 'preview' &&
+    !openingInFlightRef.current &&
     (isReferral ? canOpenReferral : canAfford)
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setVisible(true))
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    setReducedMotion(prefersReducedMotion())
 
     return () => {
       window.cancelAnimationFrame(frame)
@@ -57,7 +79,7 @@ export function CaseModal({
   }, [])
 
   function close() {
-    if (phase === 'opening') {
+    if (busy) {
       return
     }
 
@@ -70,8 +92,12 @@ export function CaseModal({
       return 'Открытие временно недоступно'
     }
 
-    if (phase === 'opening') {
+    if (phase === 'requesting') {
       return 'Открываем...'
+    }
+
+    if (phase === 'animating') {
+      return 'Крутим...'
     }
 
     if (isReferral) {
@@ -90,9 +116,21 @@ export function CaseModal({
     )
   }
 
+  const handleReelComplete = useCallback(() => {
+    setPhase('result')
+    openingInFlightRef.current = false
+    if (prizeNameRef.current) {
+      showNotification({
+        type: 'reward',
+        title: 'Кейс открыт!',
+        message: prizeNameRef.current,
+      })
+    }
+  }, [showNotification])
+
   async function handleOpen() {
-    if (!canSubmit) {
-      if (!canAfford && !isReferral) {
+    if (!canSubmit || openingInFlightRef.current) {
+      if (!canAfford && !isReferral && phase === 'preview') {
         const insufficient = createAppError('INSUFFICIENT_BALANCE')
         showNotification({
           type: 'warning',
@@ -103,24 +141,16 @@ export function CaseModal({
       return
     }
 
+    openingInFlightRef.current = true
     setError(null)
-    setPhase('opening')
-    const startedAt = Date.now()
+    setPhase('requesting')
+    setReelItems([])
+    setOpening(null)
+
     const result = await openCase(giftCase.id, requestId)
-    const wait = Math.max(0, OPEN_ANIMATION_MS - (Date.now() - startedAt))
 
-    window.setTimeout(() => {
-      if (result.success && result.opening) {
-        setOpening(result.opening)
-        setPhase('result')
-        showNotification({
-          type: 'reward',
-          title: 'Кейс открыт!',
-          message: result.opening.prize.name,
-        })
-        return
-      }
-
+    if (!result.success || !result.opening) {
+      openingInFlightRef.current = false
       setPhase('preview')
       setRequestId(createPurchaseRequestId())
       const message = result.message ?? 'Попробуй ещё раз.'
@@ -130,8 +160,28 @@ export function CaseModal({
         title: 'Не удалось открыть кейс',
         message,
       })
-    }, wait)
+      return
+    }
+
+    const winnerReward = resolveWinnerReward(giftCase.rewards, result.opening)
+    const reel = buildCaseOpeningReel({
+      pool: giftCase.rewards,
+      winner: winnerReward,
+    })
+
+    prizeNameRef.current = result.opening.prize.name
+    setOpening(result.opening)
+    setReelItems(reel.items)
+    setWinnerIndex(reel.winnerIndex)
+    setPhase('animating')
   }
+
+  const reelKey = useMemo(() => {
+    if (!opening) {
+      return 'idle'
+    }
+    return `${opening.openingId}:${winnerIndex}`
+  }, [opening, winnerIndex])
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center">
@@ -143,6 +193,7 @@ export function CaseModal({
         ].join(' ')}
         aria-label="Закрыть"
         onClick={close}
+        disabled={busy}
       />
 
       <section
@@ -165,7 +216,7 @@ export function CaseModal({
           <button
             type="button"
             onClick={close}
-            disabled={phase === 'opening'}
+            disabled={busy}
             className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white disabled:opacity-50"
             aria-label="Закрыть"
           >
@@ -181,10 +232,41 @@ export function CaseModal({
               </p>
               <h3 className="mt-3 text-xl font-bold text-white">Поздравляем!</h3>
               <p className="mt-2 text-sm text-muted">Ты получил</p>
+              {(() => {
+                const reward = resolveWinnerReward(giftCase.rewards, opening)
+                return (
+                  <div className="mx-auto mt-4 flex size-28 items-center justify-center overflow-hidden rounded-[22px] border border-white/10 bg-bg-surface p-3">
+                    <img
+                      src={reward.image}
+                      alt=""
+                      className={[
+                        'object-contain',
+                        reward.currency === 'COINS' ? 'h-[55%] w-[55%]' : 'size-full',
+                      ].join(' ')}
+                    />
+                  </div>
+                )
+              })()}
               <p className="mt-3 text-2xl font-bold text-gold">{opening.prize.name}</p>
               <p className="mt-2 text-sm font-medium text-neon-purple">
                 {RARITY_LABELS[opening.prize.rarity]}
               </p>
+            </div>
+          ) : phase === 'animating' && reelItems.length > 0 ? (
+            <div className="py-4">
+              <CaseOpeningReel
+                key={reelKey}
+                items={reelItems}
+                winnerIndex={winnerIndex}
+                durationMs={CASE_OPENING_DURATION_MS}
+                reducedMotion={reducedMotion}
+                onComplete={handleReelComplete}
+              />
+            </div>
+          ) : phase === 'requesting' ? (
+            <div className="flex flex-col items-center justify-center py-16" role="status">
+              <div className="size-10 animate-spin rounded-full border-2 border-neon-purple/30 border-t-neon-purple" />
+              <p className="mt-4 text-sm text-muted">Определяем награду...</p>
             </div>
           ) : (
             <>
@@ -217,7 +299,7 @@ export function CaseModal({
             </p>
           )}
 
-          {!canAfford && !isReferral && phase !== 'result' && (
+          {!canAfford && !isReferral && phase === 'preview' && (
             <p className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-muted">
               Нужно ещё {formatBalance(missing)} монет
             </p>
@@ -239,8 +321,8 @@ export function CaseModal({
           ) : (
             <button
               type="button"
-              onClick={handleOpen}
-              disabled={!canSubmit}
+              onClick={() => void handleOpen()}
+              disabled={!canSubmit || busy}
               className="w-full rounded-2xl bg-gradient-to-r from-purple to-neon-purple px-4 py-3.5 text-sm font-semibold text-white disabled:opacity-60"
             >
               {buttonLabel()}

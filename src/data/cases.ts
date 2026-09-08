@@ -7,7 +7,7 @@ import richImage from '@/assets/cases/rich.jpg'
 import dropTables from '@/data/case-drops.json'
 import type { CaseReward, CaseRewardCurrency, GiftCase } from '@/types/case'
 
-function rewardImage(currency: CaseRewardCurrency): string {
+export function rewardImageForCurrency(currency: CaseRewardCurrency): string {
   return currency === 'RUB' ? rubImage : coinsImage
 }
 
@@ -23,7 +23,7 @@ function attachRewardImages(
 ): CaseReward[] {
   return rewards.map((reward) => ({
     ...reward,
-    image: rewardImage(reward.currency),
+    image: rewardImageForCurrency(reward.currency),
   }))
 }
 
