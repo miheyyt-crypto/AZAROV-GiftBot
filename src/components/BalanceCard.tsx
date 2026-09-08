@@ -10,16 +10,11 @@ export function CoinBalance({ className = '' }: CoinBalanceProps) {
 
   return (
     <div
-      className={[
-        'inline-flex items-center gap-1.5 rounded-full border border-gold/55',
-        'bg-black/35 px-3 py-1.5 text-sm font-semibold text-white',
-        'shadow-[var(--glow-gold)] backdrop-blur-sm',
-        className,
-      ].join(' ')}
+      className={['ui-balance-pill text-sm font-semibold text-white', className].join(' ')}
       aria-label={`Баланс: ${formatted}`}
     >
       <CoinIcon className="size-4" />
-      <span>{formatted}</span>
+      <span className="tabular-nums tracking-tight">{formatted}</span>
     </div>
   )
 }

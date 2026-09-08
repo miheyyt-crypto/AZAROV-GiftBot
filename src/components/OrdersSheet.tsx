@@ -39,13 +39,13 @@ export function OrdersSheet({ onClose }: OrdersSheetProps) {
     <div className="fixed inset-0 z-[80] flex items-end justify-center">
       <button
         type="button"
-        className={['press-none absolute inset-0 bg-black/70 transition-opacity duration-200', visible ? 'opacity-100' : 'opacity-0'].join(' ')}
+        className={['press-none ui-overlay absolute inset-0 transition-opacity duration-200', visible ? 'opacity-100' : 'opacity-0'].join(' ')}
         aria-label="Закрыть"
         onClick={close}
       />
       <section
         className={[
-          'relative z-10 flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-t-[32px] border border-white/10 bg-bg-dark transition-all duration-200',
+          'relative z-10 flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden ui-sheet transition-all duration-200',
           visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0',
         ].join(' ')}
         style={{ paddingBottom: 'calc(1rem + var(--safe-area-bottom))' }}

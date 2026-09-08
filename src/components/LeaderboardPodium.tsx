@@ -9,7 +9,7 @@ import type { LeaderboardPlayer } from '@/types/home'
 
 const rankStyles = {
   1: {
-    ring: 'border-[#f5c842] shadow-[0_0_20px_rgb(245_200_66/35%)]',
+    ring: 'border-[#f5c842]/70 shadow-[0_8px_20px_rgb(0_0_0/25%)]',
     badge: 'bg-[#f5c842] text-[#1a1200]',
     balance: 'text-[#f5c842]',
     pedestal: 'h-[72px] bg-[#f5c842]/10 text-[#f5c842]/25',
@@ -17,7 +17,7 @@ const rankStyles = {
     avatar: 'size-[68px] text-xl',
   },
   2: {
-    ring: 'border-[#b8c0cc] shadow-[0_0_16px_rgb(184_192_204/20%)]',
+    ring: 'border-[#b8c0cc]/60 shadow-[0_8px_18px_rgb(0_0_0/22%)]',
     badge: 'bg-[#b8c0cc] text-[#141820]',
     balance: 'text-white',
     pedestal: 'h-[52px] bg-white/[0.06] text-white/20',
@@ -25,7 +25,7 @@ const rankStyles = {
     avatar: 'size-[56px] text-lg',
   },
   3: {
-    ring: 'border-[#d4845a] shadow-[0_0_16px_rgb(212_132_90/20%)]',
+    ring: 'border-[#d4845a]/60 shadow-[0_8px_18px_rgb(0_0_0/22%)]',
     badge: 'bg-[#d4845a] text-[#1a1008]',
     balance: 'text-[#e8a06a]',
     pedestal: 'h-[52px] bg-[#d4845a]/10 text-[#d4845a]/25',

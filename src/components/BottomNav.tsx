@@ -13,9 +13,9 @@ export function BottomNav() {
       <ul
         className={[
           'pointer-events-auto relative mx-auto flex h-[4.25rem] max-w-lg items-end overflow-visible',
-          'rounded-full border border-white/12 bg-[#121018]/78 px-1.5 pb-2 pt-1.5',
-          'shadow-[0_8px_32px_rgb(0_0_0/45%),inset_0_1px_0_rgb(255_255_255/8%)]',
-          'backdrop-blur-2xl',
+          'rounded-full border border-white/[0.08] bg-[#11101a]/82 px-1.5 pb-2 pt-1.5',
+          'shadow-[0_10px_32px_rgb(0_0_0/40%),inset_0_1px_0_rgb(255_255_255/6%)]',
+          'backdrop-blur-xl',
         ].join(' ')}
       >
         {navigationItems.map(({ path, label, icon: Icon }) => {
@@ -26,42 +26,54 @@ export function BottomNav() {
               <NavLink
                 to={path}
                 end={path === '/'}
-                className="relative flex w-full flex-col items-center justify-end gap-0.5"
+                className="relative flex min-h-11 w-full flex-col items-center justify-end gap-0.5"
               >
                 {({ isActive }) =>
                   isCenter ? (
                     <>
                       <span
                         className={[
-                          'absolute bottom-[1.35rem] flex size-[3.65rem] items-center justify-center',
-                          'rounded-full bg-gradient-to-b from-[#b56bff] to-[#8b3dff]',
-                          'shadow-[0_0_28px_rgb(168_85_247/70%),0_4px_14px_rgb(124_58_237/55%)]',
-                          'ring-1 ring-white/20',
-                          isActive ? 'scale-105' : '',
+                          'absolute bottom-[1.35rem] flex size-14 items-center justify-center',
+                          'rounded-full bg-gradient-to-b from-neon-purple to-purple',
+                          'shadow-[var(--glow-cta)] ring-1 ring-white/15',
+                          isActive ? 'ring-2 ring-white/25' : '',
                         ].join(' ')}
                       >
-                        <Icon size={26} strokeWidth={2.25} className="text-white" aria-hidden />
+                        <Icon size={24} strokeWidth={2.2} className="text-white" aria-hidden />
                       </span>
-                      <span className="text-[11px] font-semibold text-white">{label}</span>
+                      <span
+                        className={[
+                          'text-[11px] font-medium',
+                          isActive ? 'text-white' : 'text-text-secondary',
+                        ].join(' ')}
+                      >
+                        {label}
+                      </span>
                     </>
                   ) : (
                     <>
                       <span
                         className={[
                           'flex size-9 items-center justify-center transition-colors duration-200',
-                          isActive ? 'text-white' : 'text-white/70',
+                          isActive ? 'text-white' : 'text-muted',
                         ].join(' ')}
                       >
-                        <Icon size={22} strokeWidth={isActive ? 2.35 : 2} aria-hidden />
+                        <Icon size={22} strokeWidth={isActive ? 2.25 : 1.9} aria-hidden />
                       </span>
                       <span
                         className={[
                           'text-[11px] font-medium transition-colors duration-200',
-                          isActive ? 'text-white' : 'text-white/70',
+                          isActive ? 'text-white' : 'text-muted',
                         ].join(' ')}
                       >
                         {label}
                       </span>
+                      {isActive ? (
+                        <span
+                          className="absolute -top-0.5 h-0.5 w-4 rounded-full bg-neon-purple/80"
+                          aria-hidden
+                        />
+                      ) : null}
                     </>
                   )
                 }

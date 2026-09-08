@@ -18,12 +18,8 @@ export function ShopCategoryFilter({ active, onChange }: ShopCategoryFilterProps
               key={category.id}
               type="button"
               onClick={() => onChange(category.id)}
-              className={[
-                'shrink-0 rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap transition-all duration-200',
-                isActive
-                  ? 'bg-[#9b4dff] text-white shadow-[0_0_16px_rgb(155_77_255/45%)]'
-                  : 'bg-white/[0.06] text-white/80',
-              ].join(' ')}
+              className={['ui-pill min-h-11', isActive ? 'ui-pill-active' : ''].join(' ')}
+              aria-pressed={isActive}
             >
               {category.label}
             </button>

@@ -201,7 +201,7 @@ export function CaseModal({
       <button
         type="button"
         className={[
-          'press-none absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-200',
+          'press-none ui-overlay absolute inset-0 transition-opacity duration-200',
           visible ? 'opacity-100' : 'opacity-0',
         ].join(' ')}
         aria-label="Закрыть"
@@ -211,7 +211,7 @@ export function CaseModal({
 
       <section
         className={[
-          'relative z-10 flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-[32px] border border-white/10 bg-bg-dark shadow-[0_-12px_48px_rgb(0_0_0/45%)] transition-all duration-200',
+          'ui-sheet relative z-10 flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden transition-all duration-200',
           visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0',
         ].join(' ')}
         role="dialog"
@@ -219,18 +219,18 @@ export function CaseModal({
         aria-labelledby="case-modal-title"
       >
         <div className="flex justify-center pt-3">
-          <span className="h-1.5 w-12 rounded-full bg-white/20" />
+          <span className="ui-sheet-handle" />
         </div>
 
         <header className="flex items-center justify-between gap-3 px-5 pt-3 pb-2">
-          <h2 id="case-modal-title" className="text-xl font-bold text-white">
+          <h2 id="case-modal-title" className="text-xl font-bold tracking-tight text-white">
             {giftCase.name}
           </h2>
           <button
             type="button"
             onClick={close}
             disabled={busy}
-            className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white disabled:opacity-50"
+            className="ui-icon-btn disabled:opacity-50"
             aria-label="Закрыть"
           >
             <X size={18} />
@@ -320,14 +320,14 @@ export function CaseModal({
         </div>
 
         <div
-          className="border-t border-white/10 bg-bg-dark px-5 pt-3"
+          className="border-t border-white/[0.08] bg-bg-elevated px-5 pt-3"
           style={{ paddingBottom: 'calc(1rem + var(--safe-area-bottom))' }}
         >
           {phase === 'result' ? (
             <button
               type="button"
               onClick={close}
-              className="w-full rounded-2xl bg-gradient-to-r from-purple to-neon-purple px-4 py-3.5 text-sm font-semibold text-white"
+              className="ui-btn-primary w-full py-3.5"
             >
               Отлично
             </button>
@@ -336,7 +336,7 @@ export function CaseModal({
               type="button"
               onClick={() => void handleOpen()}
               disabled={!canSubmit || busy}
-              className="w-full rounded-2xl bg-gradient-to-r from-purple to-neon-purple px-4 py-3.5 text-sm font-semibold text-white disabled:opacity-60"
+              className="ui-btn-primary w-full py-3.5 disabled:opacity-60"
             >
               {buttonLabel()}
             </button>

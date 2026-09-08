@@ -12,7 +12,7 @@ export function HomeUserHeader() {
       <div className="flex min-w-0 items-center gap-3">
         <UserAvatar user={user} size="sm" />
         <div className="min-w-0">
-          <p className="truncate text-base font-semibold text-white">
+          <p className="truncate text-[15px] font-semibold tracking-tight text-white">
             {displayName}
           </p>
           <p className="truncate text-xs text-muted">

@@ -16,7 +16,7 @@ export function XPProgress({ level, xp, nextLevelXp, currentLevelXp = 0 }: XPPro
     <div className="space-y-2.5">
       <div className="flex items-center justify-between text-sm">
         <span className="font-medium text-white">Уровень {level}</span>
-        <span className="text-[#c4b5fd]">
+        <span className="text-text-secondary">
           {formattedXp} / {formattedNext} XP
         </span>
       </div>

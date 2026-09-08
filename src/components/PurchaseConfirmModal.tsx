@@ -244,7 +244,7 @@ export function PurchaseConfirmModal({
 
       <section
         className={[
-          'relative z-10 flex max-h-[94vh] w-full max-w-lg flex-col overflow-hidden rounded-t-[28px] border border-white/10 bg-[#121018] shadow-[0_-16px_48px_rgb(0_0_0/55%)] transition-all duration-200',
+          'relative z-10 flex max-h-[94vh] w-full max-w-lg flex-col overflow-hidden ui-sheet transition-all duration-200',
           visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0',
         ].join(' ')}
         style={{ paddingBottom: 'calc(1rem + var(--safe-area-bottom))' }}

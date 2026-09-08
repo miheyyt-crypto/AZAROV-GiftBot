@@ -6,7 +6,7 @@ interface SlideIndicatorProps {
 export function SlideIndicator({ count, activeIndex }: SlideIndicatorProps) {
   return (
     <div
-      className="flex items-center justify-center gap-2"
+      className="flex items-center justify-center gap-1.5"
       role="tablist"
       aria-label="Индикатор слайдов"
     >
@@ -21,9 +21,7 @@ export function SlideIndicator({ count, activeIndex }: SlideIndicatorProps) {
             aria-label={`Слайд ${index + 1}`}
             className={[
               'rounded-full transition-all duration-300',
-              isActive
-                ? 'h-2 w-6 bg-neon-purple shadow-[var(--glow-purple)]'
-                : 'size-2 bg-white/25',
+              isActive ? 'h-1 w-5 bg-white/85' : 'h-1 w-1.5 bg-white/25',
             ].join(' ')}
           />
         )

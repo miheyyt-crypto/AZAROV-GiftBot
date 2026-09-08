@@ -48,10 +48,7 @@ export function Tasks() {
   const activePartner = activePartnerId ? getPartnerById(activePartnerId) : null
 
   return (
-    <div
-      className="min-h-full overflow-x-hidden bg-bg-dark px-4 pb-6"
-      style={{ paddingTop: 'calc(1rem + var(--safe-area-top))' }}
-    >
+    <div className="ui-page">
       {/* Header */}
       <header className="mb-5 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight text-white">
@@ -71,7 +68,7 @@ export function Tasks() {
       {/* Partners section header */}
       {showPartners && (
         <div className="mb-3 flex items-center justify-between gap-2">
-          <span className="rounded-md bg-gold/15 px-2 py-1 text-[10px] font-bold tracking-wider text-gold uppercase">
+          <span className="rounded-full border border-gold/25 bg-gold/10 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-gold">
             Партнёры
           </span>
           <span className="text-xs text-muted">самые крупные награды</span>

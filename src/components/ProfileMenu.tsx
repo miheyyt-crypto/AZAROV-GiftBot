@@ -84,7 +84,7 @@ export function ProfileMenu({
     : items
 
   return (
-    <nav className="overflow-visible rounded-[22px] border border-white/10 bg-white/[0.03] backdrop-blur-md">
+    <nav className="ui-card overflow-hidden">
       {menuItems.map((item, index) => {
         const Icon = item.icon
         const showBadge = item.id === 'notifications' && unreadNotifications > 0
@@ -95,10 +95,8 @@ export function ProfileMenu({
             type="button"
             onClick={() => onSelect(item.id)}
             className={[
-              'flex w-full items-center gap-4 px-4 py-4 text-left active:bg-white/[0.04]',
-              index > 0 ? 'border-t border-white/5' : '',
-              index === 0 ? 'rounded-t-[21px]' : '',
-              index === menuItems.length - 1 ? 'rounded-b-[21px]' : '',
+              'flex min-h-14 w-full items-center gap-4 px-4 py-3.5 text-left active:bg-white/[0.04]',
+              index > 0 ? 'border-t border-white/[0.06]' : '',
             ].join(' ')}
           >
             <span
@@ -109,7 +107,7 @@ export function ProfileMenu({
             >
               <Icon size={20} aria-hidden />
             </span>
-            <span className="flex flex-1 items-center gap-2 text-base font-medium text-white">
+            <span className="flex flex-1 items-center gap-2 text-[15px] font-medium text-white">
               {item.label}
               {showBadge ? (
                 <span className="rounded-full bg-gold px-2 py-0.5 text-xs font-bold text-black">

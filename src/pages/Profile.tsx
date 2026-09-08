@@ -94,10 +94,7 @@ export function Profile() {
   }
 
   return (
-    <div
-      className="min-h-full overflow-x-hidden bg-bg-dark px-4 pb-6"
-      style={{ paddingTop: 'calc(1rem + var(--safe-area-top))' }}
-    >
+    <div className="ui-page">
       <header className="mb-5 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight text-white">Профиль</h1>
         <CoinBalance className="shrink-0" />
@@ -106,35 +103,26 @@ export function Profile() {
       <section className="mb-5 flex items-center gap-3">
         <UserAvatar user={user} size="sm" />
         <div className="min-w-0">
-          <h2 className="truncate text-lg font-semibold text-white">{displayName}</h2>
-          <p className="truncate text-sm text-muted">{displayUsername}</p>
+          <h2 className="truncate text-[17px] font-semibold tracking-tight text-white">
+            {displayName}
+          </h2>
+          <p className="truncate text-sm text-text-secondary">{displayUsername}</p>
           {isDemo && (
-            <p className="mt-1 text-[10px] text-neon-purple">Demo mode</p>
+            <p className="mt-1 text-[10px] font-medium text-neon-purple">Demo mode</p>
           )}
         </div>
       </section>
 
-      <section
-        className="mb-5 overflow-hidden rounded-[28px] border border-[#e8b84a]/45 p-5"
-        style={{
-          backgroundImage: [
-            'radial-gradient(ellipse 95% 80% at 8% 0%, rgb(232 184 74 / 22%), transparent 55%)',
-            'radial-gradient(ellipse 95% 80% at 92% 0%, rgb(232 184 74 / 18%), transparent 55%)',
-            'radial-gradient(ellipse 70% 55% at 50% 18%, rgb(40 32 22 / 55%), transparent 70%)',
-            'linear-gradient(180deg, #1a1620 0%, #12101a 100%)',
-          ].join(', '),
-          boxShadow: '0 0 0 1px rgb(232 184 74 / 8%), 0 8px 28px rgb(0 0 0 / 35%)',
-        }}
-      >
-        <p className="text-center text-[11px] font-medium uppercase tracking-[0.22em] text-[#9aa3b5]">
+      <section className="ui-card-hero mb-5 border-gold/30 p-5">
+        <p className="text-center text-[11px] font-medium uppercase tracking-[0.2em] text-muted">
           Баланс
         </p>
-        <p className="mt-3 flex items-center justify-center gap-2 text-[42px] font-bold leading-none text-[#f0c45a]">
+        <p className="mt-3 flex items-center justify-center gap-2 text-[40px] font-bold leading-none tracking-tight text-gold">
           <CoinIcon className="size-9" />
-          {formatted}
+          <span className="tabular-nums">{formatted}</span>
         </p>
 
-        <div className="mt-6 border-t border-white/8 pt-4">
+        <div className="mt-6 border-t border-white/[0.08] pt-4">
           <XPProgress
             level={profile.level}
             xp={profile.xp}

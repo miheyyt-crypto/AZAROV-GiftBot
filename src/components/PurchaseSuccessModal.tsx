@@ -24,13 +24,13 @@ export function PurchaseSuccessModal({
     <div className="fixed inset-0 z-[80] flex items-end justify-center">
       <button
         type="button"
-        className={['press-none absolute inset-0 bg-black/70 transition-opacity duration-200', visible ? 'opacity-100' : 'opacity-0'].join(' ')}
+        className={['press-none ui-overlay absolute inset-0 transition-opacity duration-200', visible ? 'opacity-100' : 'opacity-0'].join(' ')}
         aria-label="Закрыть"
         onClick={onClose}
       />
       <section
         className={[
-          'relative z-10 w-full max-w-lg rounded-t-[32px] border border-white/10 bg-bg-dark p-5 transition-all duration-200',
+          'relative z-10 w-full max-w-lg ui-sheet p-5 transition-all duration-200',
           visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0',
         ].join(' ')}
         style={{ paddingBottom: 'calc(1.25rem + var(--safe-area-bottom))' }}

@@ -176,7 +176,7 @@ export function PartnerTaskModal({ partner, onClose }: PartnerTaskModalProps) {
       <button
         type="button"
         className={[
-          'press-none absolute inset-0 bg-black/70 transition-opacity duration-200',
+          'press-none ui-overlay absolute inset-0 transition-opacity duration-200',
           visible ? 'opacity-100' : 'opacity-0',
         ].join(' ')}
         aria-label="Закрыть"
@@ -185,7 +185,7 @@ export function PartnerTaskModal({ partner, onClose }: PartnerTaskModalProps) {
 
       <section
         className={[
-          'relative z-10 flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-[28px] border border-white/10 bg-[#0c0c0e] shadow-[0_-12px_48px_rgb(0_0_0/45%)] transition-all duration-200',
+          'relative z-10 flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden ui-sheet transition-all duration-200',
           visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0',
         ].join(' ')}
         style={{ paddingBottom: 'calc(1rem + var(--safe-area-bottom))' }}

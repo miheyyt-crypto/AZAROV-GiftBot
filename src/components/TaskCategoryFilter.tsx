@@ -39,12 +39,8 @@ function CategoryPill({
       type="button"
       onClick={() => onChange(id)}
       className={[
-        'shrink-0 rounded-full px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-all duration-200',
-        isActive
-          ? isPartner
-            ? 'bg-gold text-[#1a1200] shadow-[var(--glow-gold)]'
-            : 'bg-neon-purple text-white shadow-[var(--glow-purple)]'
-          : 'border border-white/10 bg-white/[0.04] text-white/85',
+        'ui-pill min-h-11',
+        isActive ? (isPartner ? 'ui-pill-gold-active' : 'ui-pill-active') : '',
       ].join(' ')}
       aria-pressed={isActive}
     >

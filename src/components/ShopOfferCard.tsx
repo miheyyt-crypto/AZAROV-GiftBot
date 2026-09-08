@@ -27,7 +27,7 @@ export function ShopOfferCard({
       type="button"
       onClick={onClick}
       className={[
-        'flex h-full w-full flex-col overflow-hidden rounded-[22px] border bg-[#14101c]/90 text-left',
+        'flex h-full w-full flex-col overflow-hidden rounded-[20px] border bg-bg-surface/95 text-left',
         theme.border,
         theme.glow,
       ].join(' ')}
@@ -48,7 +48,7 @@ export function ShopOfferCard({
       </div>
 
       <div className="flex flex-1 flex-col px-3 pb-3 pt-1">
-        <h3 className="line-clamp-3 min-h-[3.25em] text-center text-[13px] font-semibold leading-snug text-white">
+        <h3 className="line-clamp-3 min-h-[3.25em] text-center text-sm font-semibold leading-snug tracking-tight text-white">
           {title}
         </h3>
         <div className="mt-auto pt-2.5">{footer}</div>
@@ -67,8 +67,8 @@ export function ShopPriceButton({
   return (
     <span
       className={[
-        'inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2.5',
-        'text-sm font-bold text-white',
+        'inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2.5',
+        'text-sm font-semibold text-white',
         buttonClass,
       ].join(' ')}
     >

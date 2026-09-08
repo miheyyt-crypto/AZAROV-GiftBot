@@ -61,16 +61,16 @@ export function StreamStreakCard() {
   }
 
   return (
-    <article className="relative flex items-center gap-4 overflow-hidden rounded-[20px] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-md">
+    <article className="ui-card relative flex items-center gap-4 overflow-hidden p-4">
       <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-gold/25 bg-gold/10 text-2xl text-gold">
         {!connected && !loading ? <Lock size={22} aria-hidden /> : <span aria-hidden>🔥</span>}
       </div>
 
       <div className="relative z-10 min-w-0 flex-1">
-        <h2 className="text-base font-semibold text-white">{title}</h2>
-        <p className="mt-1 text-xs leading-relaxed text-muted">{subtitle}</p>
+        <h2 className="text-[15px] font-semibold tracking-tight text-white">{title}</h2>
+        <p className="mt-1 text-[13px] leading-relaxed text-text-secondary">{subtitle}</p>
         {connected && !loading && streak ? (
-          <p className="mt-1.5 text-xs text-white/70">🧊 Заморозок: {freezeAvailable}</p>
+          <p className="mt-1.5 text-xs text-muted">🧊 Заморозок: {freezeAvailable}</p>
         ) : null}
       </div>
     </article>

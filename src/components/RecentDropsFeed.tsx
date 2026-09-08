@@ -26,7 +26,7 @@ function DropCard({ drop }: { drop: RecentCaseDrop }) {
   return (
     <article
       className={[
-        'w-[168px] shrink-0 snap-start rounded-[20px] border bg-white/[0.03] p-3 backdrop-blur-sm',
+        'ui-card w-[168px] shrink-0 snap-start p-3',
         rarityBorder[drop.rarity],
       ].join(' ')}
     >

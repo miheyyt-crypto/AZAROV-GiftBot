@@ -19,7 +19,7 @@ export function PageHeader({ title, showBack = true, backTo }: PageHeaderProps) 
           <button
             type="button"
             onClick={() => (backTo ? navigate(backTo) : navigate(-1))}
-            className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white"
+            className="ui-icon-btn"
             aria-label="Назад"
           >
             <ChevronLeft size={18} />

@@ -11,10 +11,7 @@ export function Home() {
   const banners = useMemo(() => getHomeBanners(), [])
 
   return (
-    <div
-      className="min-h-full overflow-x-hidden bg-bg-dark px-4 pb-6"
-      style={{ paddingTop: 'calc(1rem + var(--safe-area-top))' }}
-    >
+    <div className="ui-page">
       <HomeUserHeader />
 
       <HomeBannerSlider banners={banners} />

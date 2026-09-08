@@ -12,21 +12,19 @@ interface StatCardProps {
 const themes: Record<
   StatTheme,
   {
-    card: string
+    accent: string
     iconWrap: string
     Icon: LucideIcon
   }
 > = {
   pink: {
-    card: 'border-[#ff6b8a]/35 bg-[radial-gradient(ellipse_at_center,rgb(255_80_120/12%),rgb(18_16_24/90%)_70%)] shadow-[0_0_18px_rgb(255_80_120/14%)]',
-    iconWrap:
-      'bg-gradient-to-br from-[#ff7a9a] to-[#ff4d78] shadow-[0_0_16px_rgb(255_77_120/45%)]',
+    accent: 'border-pink/25',
+    iconWrap: 'bg-gradient-to-br from-[#ff7a9a] to-[#ff4d78]',
     Icon: Clock,
   },
   green: {
-    card: 'border-[#53cc18]/35 bg-[radial-gradient(ellipse_at_center,rgb(83_204_24/12%),rgb(18_16_24/90%)_70%)] shadow-[0_0_18px_rgb(83_204_24/14%)]',
-    iconWrap:
-      'bg-gradient-to-br from-[#7ae045] to-[#53cc18] shadow-[0_0_16px_rgb(83_204_24/45%)]',
+    accent: 'border-kick/25',
+    iconWrap: 'bg-gradient-to-br from-kick-light to-kick',
     Icon: MessageCircle,
   },
 }
@@ -38,8 +36,8 @@ export function StatCard({ value, label, theme, icon }: StatCardProps) {
   return (
     <div
       className={[
-        'flex flex-1 flex-col items-center rounded-[20px] border px-3 py-4 text-center',
-        styles.card,
+        'ui-card flex flex-1 flex-col items-center px-3 py-4 text-center',
+        styles.accent,
       ].join(' ')}
     >
       <div
@@ -49,12 +47,10 @@ export function StatCard({ value, label, theme, icon }: StatCardProps) {
         ].join(' ')}
         aria-hidden
       >
-        <Icon size={22} strokeWidth={2.6} className="text-[#101116]" />
+        <Icon size={22} strokeWidth={2.4} className="text-[#101116]" />
       </div>
-      <p className="text-[22px] font-bold leading-tight text-white">{value}</p>
-      <p className="mt-1 whitespace-pre-line text-[11px] leading-snug text-muted">
-        {label}
-      </p>
+      <p className="text-[22px] font-bold leading-tight tracking-tight text-white">{value}</p>
+      <p className="mt-1 whitespace-pre-line text-[11px] leading-snug text-muted">{label}</p>
     </div>
   )
 }

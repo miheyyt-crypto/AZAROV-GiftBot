@@ -83,7 +83,7 @@ export function KickConnectCard() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3 rounded-[20px] border border-kick/35 bg-gradient-to-r from-kick-dark via-[#102010] to-bg-elevated/80 p-3.5 shadow-[0_0_24px_rgb(83_204_24/14%)] backdrop-blur-md">
+      <div className="ui-card flex items-center gap-3 p-3.5">
         <div
           className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-kick p-2"
           aria-hidden
@@ -100,8 +100,8 @@ export function KickConnectCard() {
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="text-base font-bold text-white">Kick</p>
-          <p className="truncate text-sm text-muted">
+          <p className="text-[15px] font-semibold tracking-tight text-white">Kick</p>
+          <p className="truncate text-[13px] text-text-secondary">
             {connection.connected && connection.username
               ? `@${connection.username}`
               : 'Без него закрыта часть функций'}
@@ -115,23 +115,22 @@ export function KickConnectCard() {
               void handleConnect()
             }}
             disabled={isLoading}
-            className="shrink-0 rounded-xl bg-kick px-4 py-2 text-sm font-semibold text-black transition hover:bg-kick-light disabled:opacity-60"
+            className="min-h-10 shrink-0 rounded-xl bg-kick px-4 py-2 text-sm font-semibold text-black disabled:opacity-60"
           >
             {isLoading ? '...' : 'Привязать'}
           </button>
         )}
 
         {connection.connected && (
-          <span className="shrink-0 rounded-xl border border-kick/40 bg-kick/10 px-3 py-1.5 text-xs font-medium text-kick-light">
-            Подключено ✓
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-kick/30 bg-kick/10 px-3 py-1.5 text-xs font-medium text-kick-light">
+            <span className="size-1.5 rounded-full bg-kick" aria-hidden />
+            Подключено
           </span>
         )}
       </div>
 
       {message && (
-        <p className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-muted">
-          {message}
-        </p>
+        <p className="ui-card px-4 py-3 text-sm text-muted">{message}</p>
       )}
     </div>
   )

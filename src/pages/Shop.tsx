@@ -29,10 +29,7 @@ export function Shop() {
   )
 
   return (
-    <div
-      className="min-h-full overflow-x-hidden bg-bg-dark px-4 pb-6"
-      style={{ paddingTop: 'calc(1rem + var(--safe-area-top))' }}
-    >
+    <div className="ui-page">
       <header className="mb-5 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight text-white">
           {section === 'cases' ? 'Кейсы' : 'Магазин'}
@@ -51,12 +48,9 @@ export function Shop() {
           <button
             type="button"
             onClick={() => navigate(ROUTES.orders)}
-            className="mb-4 flex w-full items-center justify-between rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3.5 text-left"
+            className="ui-card mb-4 flex min-h-12 w-full items-center justify-between px-4 py-3.5 text-left"
           >
             <span className="flex items-center gap-2 text-sm font-semibold text-white">
-              <span className="text-gold" aria-hidden>
-                🛒
-              </span>
               Мои заказы
             </span>
             <ChevronRight size={18} className="text-muted" />

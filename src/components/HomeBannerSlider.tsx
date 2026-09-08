@@ -217,14 +217,14 @@ export function HomeBannerSlider({ banners }: HomeBannerSliderProps) {
   return (
     <section className="mb-4 w-full overflow-x-hidden">
       <div
-        className="relative w-full touch-pan-y overflow-hidden rounded-[22px] select-none shadow-[0_0_28px_rgb(168_85_247/18%)]"
+        className="relative w-full touch-pan-y overflow-hidden rounded-[24px] border border-white/[0.08] select-none shadow-[0_12px_32px_rgb(0_0_0/28%)]"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={finishPointer}
         onPointerCancel={finishPointer}
       >
         <div
-          className={['flex', isDragging || !enableTransition ? 'transition-none' : 'transition-transform duration-500 ease-out'].join(
+          className={['flex', isDragging || !enableTransition ? 'transition-none' : 'transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]'].join(
             ' ',
           )}
           style={{
@@ -237,7 +237,7 @@ export function HomeBannerSlider({ banners }: HomeBannerSliderProps) {
               key={`${banner.id}-${index}`}
               type="button"
               onClick={(event) => onBannerClick(event, banner.targetTab)}
-              className="aspect-[2.1/1] w-full shrink-0 overflow-hidden rounded-[22px] border border-neon-purple/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-neon-purple"
+              className="aspect-[2.1/1] w-full shrink-0 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-neon-purple"
               aria-label={`Перейти на вкладку ${banner.targetTab}`}
             >
               <img

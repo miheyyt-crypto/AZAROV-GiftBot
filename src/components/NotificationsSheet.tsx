@@ -64,12 +64,12 @@ function NotificationDetail({
     <div className="fixed inset-0 z-[110] flex items-end justify-center">
       <button
         type="button"
-        className="absolute inset-0 bg-black/70"
+        className="press-none ui-overlay absolute inset-0"
         aria-label="Закрыть"
         onClick={onClose}
       />
       <section
-        className="relative z-10 w-full max-w-lg rounded-t-[28px] border border-white/10 bg-[#1a1a1f] px-5 pb-6 pt-5"
+        className="relative z-10 w-full max-w-lg ui-sheet px-5 pb-6 pt-5"
         style={{ paddingBottom: 'calc(1.25rem + var(--safe-area-bottom))' }}
       >
         <h3 className="text-lg font-bold text-white">

@@ -9,14 +9,14 @@ interface ShopSectionTabsProps {
 
 export function ShopSectionTabs({ active, onChange }: ShopSectionTabsProps) {
   return (
-    <div className="grid grid-cols-2 gap-1 rounded-[18px] border border-white/10 bg-white/[0.04] p-1">
+    <div className="grid grid-cols-2 gap-1 rounded-[18px] border border-white/[0.08] bg-white/[0.035] p-1">
       <button
         type="button"
         onClick={() => onChange('shop')}
         className={[
-          'flex items-center justify-center gap-2 rounded-[14px] px-3 py-2.5 text-sm font-semibold transition-all duration-200',
+          'flex min-h-11 items-center justify-center gap-2 rounded-[14px] px-3 py-2.5 text-sm font-semibold transition-all duration-200',
           active === 'shop'
-            ? 'bg-neon-purple text-white shadow-[var(--glow-purple)]'
+            ? 'bg-bg-surface-elevated text-white shadow-[inset_0_0_0_1px_rgb(168_85_247/25%),var(--glow-purple)]'
             : 'text-muted',
         ].join(' ')}
       >
@@ -27,9 +27,9 @@ export function ShopSectionTabs({ active, onChange }: ShopSectionTabsProps) {
         type="button"
         onClick={() => onChange('cases')}
         className={[
-          'flex items-center justify-center gap-2 rounded-[14px] px-3 py-2.5 text-sm font-semibold transition-all duration-200',
+          'flex min-h-11 items-center justify-center gap-2 rounded-[14px] px-3 py-2.5 text-sm font-semibold transition-all duration-200',
           active === 'cases'
-            ? 'bg-neon-purple text-white shadow-[var(--glow-purple)]'
+            ? 'bg-bg-surface-elevated text-white shadow-[inset_0_0_0_1px_rgb(168_85_247/25%),var(--glow-purple)]'
             : 'text-muted',
         ].join(' ')}
       >

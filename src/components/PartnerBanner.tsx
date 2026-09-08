@@ -25,7 +25,7 @@ const themeStyles: Record<
 > = {
   dragonmoney: {
     container:
-      'border-[#c47a3a]/40 bg-gradient-to-r from-[#6b3a16] via-[#3a2012] to-[#151018] shadow-[0_0_32px_rgb(196_122_58/22%)]',
+      'border-[#c47a3a]/30 bg-gradient-to-r from-[#6b3a16] via-[#3a2012] to-[#151018] shadow-[0_8px_24px_rgb(0_0_0/25%)]',
     accent: 'text-white',
     dots: 'bg-[#e8a85a]',
     imageMode: 'character',
@@ -34,7 +34,7 @@ const themeStyles: Record<
   },
   stake: {
     container:
-      'border-[#1ec7fc]/35 bg-gradient-to-r from-[#083a55] via-[#0a2038] to-[#0b0e18] shadow-[0_0_32px_rgb(30_199_252/18%)]',
+      'border-[#1ec7fc]/28 bg-gradient-to-r from-[#083a55] via-[#0a2038] to-[#0b0e18] shadow-[0_8px_24px_rgb(0_0_0/25%)]',
     accent: 'text-white',
     dots: 'bg-[#1ec7fc]',
     imageMode: 'character',

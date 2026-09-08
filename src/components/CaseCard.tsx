@@ -30,7 +30,7 @@ export function CaseCard({
   return (
     <article
       className={[
-        'flex h-full w-full flex-col overflow-hidden rounded-[22px] border bg-[#14101c]/90',
+        'flex h-full w-full flex-col overflow-hidden rounded-[20px] border bg-bg-surface/95',
         theme.border,
         theme.glow,
       ].join(' ')}
@@ -55,13 +55,13 @@ export function CaseCard({
         />
         {/* Soft haze so art fades into the card body instead of a hard cut */}
         <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[42%] bg-gradient-to-b from-transparent via-[#14101c]/55 to-[#14101c]"
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[42%] bg-gradient-to-b from-transparent via-bg-surface/55 to-bg-surface"
           aria-hidden
         />
         {badge ? (
           <span
             className={[
-              'absolute left-1/2 top-2 z-[3] -translate-x-1/2 rounded-full border border-white/10 bg-black/55 px-2.5 py-0.5 text-[10px] font-semibold whitespace-nowrap backdrop-blur-sm',
+              'absolute left-1/2 top-2 z-[3] -translate-x-1/2 rounded-full border border-white/[0.08] bg-black/50 px-2.5 py-0.5 text-[10px] font-semibold whitespace-nowrap backdrop-blur-sm',
               accent,
             ].join(' ')}
           >
@@ -71,7 +71,7 @@ export function CaseCard({
       </button>
 
       <div className="relative z-[1] -mt-5 flex flex-1 flex-col px-3 pb-3 pt-0">
-        <h3 className="line-clamp-2 min-h-[2.5em] text-center text-[13px] font-semibold leading-snug text-white">
+        <h3 className="line-clamp-2 min-h-[2.5em] text-center text-sm font-semibold leading-snug tracking-tight text-white">
           {giftCase.name}
         </h3>
 
@@ -82,7 +82,7 @@ export function CaseCard({
                 type="button"
                 onClick={() => onOpen(giftCase)}
                 className={[
-                  'inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm font-bold',
+                  'inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.05] px-3 py-2.5 text-sm font-semibold',
                   accent,
                 ].join(' ')}
               >
@@ -90,7 +90,7 @@ export function CaseCard({
                 {availableReferralCases > 1 ? ` · ${availableReferralCases}` : ''}
               </button>
             ) : (
-              <div className="flex min-h-[42px] flex-col items-center justify-center gap-1 rounded-xl border border-white/10 bg-white/[0.06] px-2 py-2 text-center">
+              <div className="flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl border border-white/[0.08] bg-white/[0.04] px-2 py-2 text-center">
                 <Lock size={14} className="text-muted" aria-hidden />
                 <span className="text-[11px] leading-snug font-medium text-muted">
                   {getReferralCaseRemainingLabel(remainingInvites)}
@@ -102,7 +102,7 @@ export function CaseCard({
               type="button"
               onClick={() => onOpen(giftCase)}
               className={[
-                'inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm font-bold',
+                'inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.05] px-3 py-2.5 text-sm font-semibold',
                 accent,
               ].join(' ')}
             >
@@ -114,7 +114,7 @@ export function CaseCard({
           <button
             type="button"
             onClick={() => onOpen(giftCase)}
-            className="inline-flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm font-semibold text-white"
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 text-sm font-medium text-white"
           >
             Что внутри
           </button>
