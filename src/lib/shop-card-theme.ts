@@ -5,6 +5,8 @@ export interface ShopCardTheme {
   glow: string
   radial: string
   button: string
+  /** Colored label/price text on dark buttons (case cards). */
+  accentText?: string
 }
 
 export const productCardTheme: Record<ProductCategory, ShopCardTheme> = {
@@ -45,6 +47,7 @@ export const caseCardTheme: Record<string, ShopCardTheme> = {
     radial:
       'bg-[radial-gradient(ellipse_at_50%_42%,rgb(52_211_153/30%)_0%,rgb(52_211_153/8%)_42%,transparent_70%)]',
     button: 'bg-emerald-500',
+    accentText: 'text-emerald-400',
   },
   medium: {
     border: 'border-sky-400/70',
@@ -52,6 +55,7 @@ export const caseCardTheme: Record<string, ShopCardTheme> = {
     radial:
       'bg-[radial-gradient(ellipse_at_50%_42%,rgb(56_189_248/30%)_0%,rgb(56_189_248/8%)_42%,transparent_70%)]',
     button: 'bg-sky-500',
+    accentText: 'text-sky-400',
   },
   rich: {
     border: 'border-fuchsia-400/70',
@@ -59,6 +63,7 @@ export const caseCardTheme: Record<string, ShopCardTheme> = {
     radial:
       'bg-[radial-gradient(ellipse_at_50%_42%,rgb(232_121_249/30%)_0%,rgb(232_121_249/8%)_42%,transparent_70%)]',
     button: 'bg-fuchsia-500',
+    accentText: 'text-fuchsia-400',
   },
   referral: {
     border: 'border-[#b56bff]/75',
@@ -66,6 +71,7 @@ export const caseCardTheme: Record<string, ShopCardTheme> = {
     radial:
       'bg-[radial-gradient(ellipse_at_50%_42%,rgb(181_107_255/34%)_0%,rgb(181_107_255/10%)_42%,transparent_70%)]',
     button: 'bg-[#9b4dff]',
+    accentText: 'text-[#d2a8ff]',
   },
 }
 
