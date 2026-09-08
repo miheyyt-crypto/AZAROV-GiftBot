@@ -3,7 +3,7 @@ import rubImage from '@/assets/cases/reward-rub.svg'
 import mediumImage from '@/assets/cases/medium.jpg'
 import poorImage from '@/assets/cases/poor.jpg'
 import referralImage from '@/assets/cases/referral.png'
-import richImage from '@/assets/cases/rich.svg'
+import richImage from '@/assets/cases/rich.jpg'
 import dropTables from '@/data/case-drops.json'
 import type { CaseReward, CaseRewardCurrency, GiftCase } from '@/types/case'
 
