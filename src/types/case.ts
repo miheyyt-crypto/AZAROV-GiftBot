@@ -24,6 +24,8 @@ export interface GiftCase {
   price?: number
   type: CaseType
   borderClass: string
+  /** Display-only UI flag for the pink NEW pill on the card. */
+  isNew?: boolean
   rewards: CaseReward[]
 }
 

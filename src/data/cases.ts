@@ -73,7 +73,7 @@ export const cases: GiftCase[] = [
     maxPrize: 'до 30 000 ₽',
     price: 64999,
     type: 'purchase',
-    borderClass: 'border-fuchsia-400/70 shadow-[0_0_22px_rgb(232_121_249/28%)]',
+    borderClass: 'border-rose-400/70 shadow-[0_0_22px_rgb(244_63_94/28%)]',
     rewards: attachRewardImages(dropTables.rich as CaseReward[]),
   },
   {

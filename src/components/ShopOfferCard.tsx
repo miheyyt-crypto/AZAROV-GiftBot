@@ -76,11 +76,16 @@ export function ShopPriceButton({
   )
 }
 
-export function ShopCoinIcon() {
+export function ShopCoinIcon({ className }: { className?: string }) {
   return (
     <span
       aria-hidden
-      className="inline-flex size-[1.15rem] shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-[#ffe566] to-[#f5b800] text-[10px] font-black text-[#7a4a00] shadow-[0_0_8px_rgb(251_191_36/45%)]"
+      className={[
+        'inline-flex size-[1.15rem] shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-[#ffe566] to-[#f5b800] text-[10px] font-black text-[#7a4a00] shadow-[0_0_8px_rgb(251_191_36/45%)]',
+        className,
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
       $
     </span>
