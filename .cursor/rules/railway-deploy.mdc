@@ -1,0 +1,13 @@
+---
+description: Auto commit and push finished work to main for Railway
+alwaysApply: true
+---
+
+# Railway deploy
+
+When a batch of work is finished (UI polish, features, fixes ready to ship):
+
+1. Commit relevant changes on `main` (never ask whether to commit/push for Railway).
+2. Push to `origin/main` immediately so Railway redeploys.
+3. Do not ask “залить на Railway?” — just do it after the work is done.
+4. Still never commit secrets (`.env`, credentials). Skip those and warn once if needed.
