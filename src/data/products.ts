@@ -166,8 +166,8 @@ export const products: ShopProduct[] = [
     checkoutField: {
       type: 'kick_username',
       label: 'Ник на Kick',
-      placeholder: '@username в Telegram',
-      hint: 'Напиши @username — администратор напишет тебе, чтобы всё выдать.',
+      placeholder: '@username на Kick',
+      hint: 'Напиши свой ник на Kick (обязательно быть подписанным на канал)',
     },
     available: true,
   },
