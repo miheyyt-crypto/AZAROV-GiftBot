@@ -158,7 +158,7 @@ export function getInventory(userId) {
       }
     }
 
-    const openings = (user.caseOpenings || [])
+    const openings = (Array.isArray(user.caseOpenings) ? user.caseOpenings : [])
       .slice()
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 

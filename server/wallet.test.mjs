@@ -76,3 +76,15 @@ test('purchase is atomic and cancel refunds once', () => {
   assert.equal(user.balance, 5000)
   assert.equal(sumUserLedger(store, user.telegramId), 5000)
 })
+
+test('addCoins tolerates corrupt earnedRewards object', () => {
+  const store = createEmptyStore()
+  const user = makeUser(store, 77)
+  user.earnedRewards = { legacy: true }
+
+  const result = addCoins(store, user, 25, TX_TYPE.CASE_REWARD, 'tx:case:corrupt-er')
+  assert.equal(result.granted, true)
+  assert.equal(user.balance, 25)
+  assert.ok(Array.isArray(user.earnedRewards))
+  assert.ok(user.earnedRewards.includes('tx:case:corrupt-er'))
+})

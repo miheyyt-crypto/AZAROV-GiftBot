@@ -38,7 +38,8 @@ export function getRecentCaseDrops(limit = 12) {
     const entries = []
 
     for (const user of Object.values(store.users || {})) {
-      for (const opening of user.caseOpenings || []) {
+      const openings = Array.isArray(user.caseOpenings) ? user.caseOpenings : []
+      for (const opening of openings) {
         if (!opening?.openingId || seen.has(opening.openingId)) {
           continue
         }

@@ -147,33 +147,46 @@ export function CaseModal({
     setReelItems([])
     setOpening(null)
 
-    const result = await openCase(giftCase.id, requestId)
+    try {
+      const result = await openCase(giftCase.id, requestId)
 
-    if (!result.success || !result.opening) {
+      if (!result.success || !result.opening) {
+        openingInFlightRef.current = false
+        setPhase('preview')
+        setRequestId(createPurchaseRequestId())
+        const message = result.message ?? 'Попробуй ещё раз.'
+        setError(message)
+        showNotification({
+          type: 'error',
+          title: 'Не удалось открыть кейс',
+          message,
+        })
+        return
+      }
+
+      const winnerReward = resolveWinnerReward(giftCase.rewards, result.opening)
+      const reel = buildCaseOpeningReel({
+        pool: giftCase.rewards,
+        winner: winnerReward,
+      })
+
+      prizeNameRef.current = result.opening.prize.name
+      setOpening(result.opening)
+      setReelItems(reel.items)
+      setWinnerIndex(reel.winnerIndex)
+      setPhase('animating')
+    } catch {
       openingInFlightRef.current = false
       setPhase('preview')
       setRequestId(createPurchaseRequestId())
-      const message = result.message ?? 'Попробуй ещё раз.'
+      const message = 'Не удалось открыть кейс. Попробуй ещё раз.'
       setError(message)
       showNotification({
         type: 'error',
         title: 'Не удалось открыть кейс',
         message,
       })
-      return
     }
-
-    const winnerReward = resolveWinnerReward(giftCase.rewards, result.opening)
-    const reel = buildCaseOpeningReel({
-      pool: giftCase.rewards,
-      winner: winnerReward,
-    })
-
-    prizeNameRef.current = result.opening.prize.name
-    setOpening(result.opening)
-    setReelItems(reel.items)
-    setWinnerIndex(reel.winnerIndex)
-    setPhase('animating')
   }
 
   const reelKey = useMemo(() => {

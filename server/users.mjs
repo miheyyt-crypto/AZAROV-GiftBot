@@ -6,6 +6,11 @@ import { loadStore } from './store.mjs'
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
+/** Coerce legacy / corrupt store values to a real array (objects are truthy and used to slip past `|| []`). */
+export function ensureArray(value) {
+  return Array.isArray(value) ? value : []
+}
+
 export function getBotUsername() {
   const fromEnv = String(process.env.BOT_USERNAME || '')
     .trim()
@@ -177,8 +182,9 @@ export function referralPairKey(referrerUserId, referredUserId) {
 
 export function hydrateUserReferrals(store, user) {
   store.referrals = store.referrals || {}
+  user.invitedUsers = ensureArray(user.invitedUsers)
 
-  for (const item of user.invitedUsers || []) {
+  for (const item of user.invitedUsers) {
     const inviteeId = Number(item.telegramId)
     if (!Number.isInteger(inviteeId) || inviteeId <= 0) {
       continue
@@ -240,11 +246,11 @@ export function ensureUser(store, telegramUser) {
   if (typeof telegramUser.is_premium === 'boolean') {
     existing.isPremium = telegramUser.is_premium
   }
-  existing.invitedUsers = existing.invitedUsers || []
-  existing.orderIds = existing.orderIds || []
-  existing.startedPartnerTasks = existing.startedPartnerTasks || []
-  existing.completedTasks = existing.completedTasks || []
-  existing.earnedRewards = existing.earnedRewards || []
+  existing.invitedUsers = ensureArray(existing.invitedUsers)
+  existing.orderIds = ensureArray(existing.orderIds)
+  existing.startedPartnerTasks = ensureArray(existing.startedPartnerTasks)
+  existing.completedTasks = ensureArray(existing.completedTasks)
+  existing.earnedRewards = ensureArray(existing.earnedRewards)
   existing.referralEarnings = existing.referralEarnings || 0
   existing.kickVerified = Boolean(existing.kickVerified)
   existing.kickUserId = existing.kickUserId || null
@@ -255,7 +261,7 @@ export function ensureUser(store, telegramUser) {
   existing.inviterRewardGranted = Boolean(existing.inviterRewardGranted)
   existing.invitedRewardGranted = Boolean(existing.invitedRewardGranted)
   existing.openedReferralCases = existing.openedReferralCases || 0
-  existing.caseOpenings = existing.caseOpenings || []
+  existing.caseOpenings = ensureArray(existing.caseOpenings)
   existing.referredByUserId = existing.referredByUserId || null
   existing.referralStatus = existing.referralStatus || null
   existing.referralCreatedAt = existing.referralCreatedAt || null

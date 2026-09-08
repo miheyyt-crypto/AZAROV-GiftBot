@@ -165,7 +165,8 @@ export function applyBalanceChange(store, user, amount, type, eventId, meta = {}
   }
 
   if (delta > 0) {
-    user.earnedRewards = [...new Set([...(user.earnedRewards || []), eventId])]
+    const prior = Array.isArray(user.earnedRewards) ? user.earnedRewards : []
+    user.earnedRewards = [...new Set([...prior, eventId])]
   }
 
   return {

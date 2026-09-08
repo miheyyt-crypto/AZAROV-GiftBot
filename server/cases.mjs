@@ -3,7 +3,7 @@ import crypto from 'node:crypto'
 import dropTables from '../src/data/case-drops.json' with { type: 'json' }
 
 import { getReferralCaseStats, migrateAllReferrals } from './referrals.mjs'
-import { countActiveReferrals } from './users.mjs'
+import { countActiveReferrals, ensureArray } from './users.mjs'
 import { addCoins, hasEvent, spendCoins, TX_TYPE, utcNow } from './wallet.mjs'
 import { withStore } from './store.mjs'
 
@@ -141,7 +141,8 @@ function saveOpeningRecord(store, user, opening) {
     pricePaid: opening.pricePaid,
     createdAt: opening.createdAt,
   }
-  user.caseOpenings = [...(user.caseOpenings || []), opening]
+  const openings = ensureArray(user.caseOpenings)
+  user.caseOpenings = [...openings, opening]
 }
 
 function grantReward(store, user, reward, openingId) {
@@ -190,7 +191,7 @@ function createOpening(store, user, caseConfig, openingId, pricePaid) {
 
 function existingOpening(store, user, openingId) {
   return (
-    (user.caseOpenings || []).find((item) => item.openingId === openingId) ||
+    ensureArray(user.caseOpenings).find((item) => item.openingId === openingId) ||
     store.caseOpenings?.[openingId] ||
     null
   )
@@ -405,6 +406,11 @@ export function openCase(userId, caseId, requestId) {
     if (!user) {
       return { success: false, message: 'Пользователь не найден.' }
     }
+
+    // Heal corrupt array fields before economy mutations (objects used to pass `|| []`).
+    user.caseOpenings = ensureArray(user.caseOpenings)
+    user.earnedRewards = ensureArray(user.earnedRewards)
+    user.invitedUsers = ensureArray(user.invitedUsers)
 
     if (!caseConfig) {
       return { success: false, message: 'Кейс не найден.' }
