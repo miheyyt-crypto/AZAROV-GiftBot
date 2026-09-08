@@ -561,6 +561,25 @@ export function verifyKickWebhookSignature({ messageId, timestamp, rawBody, sign
   }
 }
 
+/** Default ±5 minutes — matches common Kick webhook client practice (RFC3339 header). */
+export const KICK_WEBHOOK_TIMESTAMP_TOLERANCE_MS = 5 * 60 * 1000
+
+/**
+ * Kick-Event-Message-Timestamp is RFC3339. Reject stale/future events outside tolerance
+ * to stop replay after message-id dedup records expire.
+ */
+export function isKickWebhookTimestampFresh(
+  timestamp,
+  { nowMs = Date.now(), toleranceMs = KICK_WEBHOOK_TIMESTAMP_TOLERANCE_MS } = {},
+) {
+  const ts = Date.parse(String(timestamp || '').trim())
+  if (!Number.isFinite(ts)) {
+    return false
+  }
+  const skew = Math.abs(Number(nowMs) - ts)
+  return skew <= Math.max(0, Number(toleranceMs) || 0)
+}
+
 export async function bootstrapKickFollowInfrastructure(options = {}) {
   if (!isKickOAuthConfigured()) {
     logKickApi('bootstrap_skipped', { reason: 'kick_not_configured' })

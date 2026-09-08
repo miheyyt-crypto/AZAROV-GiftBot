@@ -7,11 +7,12 @@ import {
 import {
   bootstrapKickFollowInfrastructure,
   checkKickUserFollowsChannel,
+  getKickWebhookPublicKey,
+  isKickWebhookTimestampFresh,
   listKickEventSubscriptions,
   refreshKickUserAccessToken,
   resolveKickChannelBySlug,
   verifyKickWebhookSignature,
-  getKickWebhookPublicKey,
 } from './kick-api.mjs'
 import { getKickConnectionForUser, isKickOAuthConfigured } from './kick-oauth.mjs'
 import { processChatMessageSent, processLivestreamStatusUpdated } from './kick-streak.mjs'
@@ -451,7 +452,7 @@ export async function handleKickFollowWebhook(req, options = {}) {
 
   let publicKeyPem
   try {
-    publicKeyPem = await getKickWebhookPublicKey(options)
+    publicKeyPem = options.publicKeyPem || (await getKickWebhookPublicKey(options))
   } catch {
     logKickFollow('webhook_public_key_failed', {})
     return { ok: false, status: 503, message: 'public_key_unavailable' }
@@ -468,6 +469,19 @@ export async function handleKickFollowWebhook(req, options = {}) {
   if (!valid) {
     logKickFollow('webhook_invalid_signature', { eventType: eventType || null })
     return { ok: false, status: 401, message: 'invalid_signature' }
+  }
+
+  if (
+    !isKickWebhookTimestampFresh(timestamp, {
+      nowMs: options.nowMs,
+      toleranceMs: options.timestampToleranceMs,
+    })
+  ) {
+    logKickFollow('webhook_stale_timestamp', {
+      eventType: eventType || null,
+      timestamp: timestamp.slice(0, 40),
+    })
+    return { ok: false, status: 401, message: 'stale_timestamp' }
   }
 
   let payload

@@ -355,6 +355,8 @@ export function saveUser(store, user) {
 
 /**
  * Cross-process + in-process exclusive lock around load→mutate→save.
+ * Protects concurrent requests on ONE Node process / ONE Railway replica only.
+ * Does NOT provide distributed locking across multiple replicas — keep numReplicas=1.
  * Use readOnly for GET paths so we do not rewrite the whole ledger on every read.
  */
 export function withStore(updater, { readOnly = false } = {}) {

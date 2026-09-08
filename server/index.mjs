@@ -78,6 +78,10 @@ import {
   withStore,
 } from './store.mjs'
 import {
+  assertSingleReplicaDeployment,
+  getDeploymentReplicaDiagnostics,
+} from './deploy-safety.mjs'
+import {
   assertNoClientFinancialOverrides,
   parseAchievementId,
   parseCaseId,
@@ -137,10 +141,13 @@ function assertProductionEnv() {
 
 assertProductionEnv()
 assertPersistentStoreOrExit()
+assertSingleReplicaDeployment({ isProduction: IS_PRODUCTION })
 
 const adminAuthLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 })
 const partnerUploadLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 10 })
 const webLoginLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 30 })
+/** Per authenticated user — spam/DoS only; does not replace ledger idempotency. */
+const economicMutationLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 45 })
 
 const partnerUpload = multer({
   storage: multer.memoryStorage(),
@@ -363,6 +370,26 @@ function withUser(handler) {
   })
 }
 
+/**
+ * Authenticated user + soft per-user rate limit for economy-changing mutations.
+ * Idempotency / ledger remain the source of truth for duplicate rewards.
+ */
+function withEconomicUser(handler) {
+  return withUser(async (req, res, telegramUser) => {
+    const limit = economicMutationLimiter.check(`econ:${telegramUser.id}`)
+    if (!limit.allowed) {
+      res.setHeader('Retry-After', String(Math.ceil(limit.retryAfterMs / 1000) || 1))
+      res.status(429).json({
+        success: false,
+        code: 'RATE_LIMITED',
+        message: 'Слишком много запросов. Подожди немного и попробуй снова.',
+      })
+      return
+    }
+    await handler(req, res, telegramUser)
+  })
+}
+
 function requireAdmin(req, res) {
   const configured = String(process.env.ADMIN_API_KEY || '').trim()
   if (!configured) {
@@ -407,6 +434,7 @@ function withAdmin(handler) {
 
 app.get('/api/health', (_req, res) => {
   const store = getStoreDiagnostics()
+  const deploy = getDeploymentReplicaDiagnostics()
   res.json({
     ok: true,
     store: {
@@ -415,7 +443,14 @@ app.get('/api/health', (_req, res) => {
       exists: store.exists,
       backupExists: store.backupExists,
       usersCount: store.usersCount,
+      multiReplicaSafe: false,
+      singleReplicaRequired: deploy.singleReplicaRequired,
       ...(store.error ? { error: store.error } : {}),
+    },
+    deploy: {
+      multiReplicaSafe: false,
+      singleReplicaRequired: deploy.singleReplicaRequired,
+      railwayReplicaId: deploy.railwayReplicaId,
     },
   })
 })
@@ -685,7 +720,7 @@ app.get(
 
 app.post(
   '/api/tasks/telegram-subscribe/check',
-  withUser(async (req, res, telegramUser) => {
+  withEconomicUser(async (req, res, telegramUser) => {
     const requestId = parseRequestId(req.body?.requestId)
     bootstrapUser(telegramUser, '')
     const result = await checkTelegramSubscribe(telegramUser.id, requestId)
@@ -698,7 +733,7 @@ app.post(
 
 app.post(
   '/api/tasks/kick-follow/check',
-  withUser(async (req, res, telegramUser) => {
+  withEconomicUser(async (req, res, telegramUser) => {
     const requestId = parseRequestId(req.body?.requestId)
     bootstrapUser(telegramUser, '')
     const result = await checkKickFollow(telegramUser.id, requestId)
@@ -711,7 +746,7 @@ app.post(
 
 app.post(
   '/api/tasks/kick-nickname/check',
-  withUser(async (req, res, telegramUser) => {
+  withEconomicUser(async (req, res, telegramUser) => {
     const requestId = parseRequestId(req.body?.requestId)
     bootstrapUser(telegramUser, '')
     const result = await checkKickNickname(telegramUser.id, requestId)
@@ -741,7 +776,7 @@ app.post(
 
 app.post(
   '/api/tasks/invite-friends/claim',
-  withUser(async (req, res, telegramUser) => {
+  withEconomicUser(async (req, res, telegramUser) => {
     const requestId = parseRequestId(req.body?.requestId)
     bootstrapUser(telegramUser, '')
     const result = claimInviteFriendsTask(telegramUser.id, requestId)
@@ -754,7 +789,7 @@ app.post(
 
 app.post(
   '/api/referrals/activate',
-  withUser(async (_req, res, telegramUser) => {
+  withEconomicUser(async (_req, res, telegramUser) => {
     bootstrapUser(telegramUser, '')
     const result = activateReferral(telegramUser.id)
     res.json({
@@ -766,7 +801,7 @@ app.post(
 
 app.post(
   '/api/partners/tasks/start',
-  withUser(async (req, res, telegramUser) => {
+  withEconomicUser(async (req, res, telegramUser) => {
     const taskId = parsePartnerTaskId(req.body?.taskId)
     bootstrapUser(telegramUser, '')
     const result = startPartnerTask(telegramUser.id, taskId)
@@ -832,6 +867,17 @@ app.post(
       res.status(429).json({
         success: false,
         message: 'Слишком много загрузок. Подожди немного.',
+      })
+      return
+    }
+
+    const econLimit = economicMutationLimiter.check(`econ:${telegramUser.id}`)
+    if (!econLimit.allowed) {
+      res.setHeader('Retry-After', String(Math.ceil(econLimit.retryAfterMs / 1000) || 1))
+      res.status(429).json({
+        success: false,
+        code: 'RATE_LIMITED',
+        message: 'Слишком много запросов. Подожди немного и попробуй снова.',
       })
       return
     }
@@ -1166,7 +1212,7 @@ app.post(
 
 app.post(
   '/api/shop/purchase',
-  withUser(async (req, res, telegramUser) => {
+  withEconomicUser(async (req, res, telegramUser) => {
     const productId = parseProductId(req.body?.productId)
     const requestId = parseRequestId(req.body?.requestId)
     const metadata = sanitizePurchaseMetadata(req.body?.metadata)
@@ -1299,7 +1345,7 @@ app.get(
 
 app.post(
   '/api/cases/open',
-  withUser(async (req, res, telegramUser) => {
+  withEconomicUser(async (req, res, telegramUser) => {
     const caseId = parseCaseId(req.body?.caseId)
     const requestId = parseRequestId(req.body?.requestId)
     bootstrapUser(telegramUser, '')

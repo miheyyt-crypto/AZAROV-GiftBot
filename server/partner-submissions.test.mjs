@@ -56,6 +56,48 @@ test('hidden partner submissions are rejected', () => {
   assert.equal(store.users['500'].balance, 0)
 })
 
+test('hidden partner cannot be started, verified for reward, or listed publicly', async () => {
+  const { mkdtempSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const path = await import('node:path')
+  const { startPartnerTask, verifyPartnerTask } = await import('./partner-tasks.mjs')
+  const { listPartnersPublic } = await import('./partners.mjs')
+  const { createUser } = await import('./users.mjs')
+  const { withStore } = await import('./store.mjs')
+
+  const dir = mkdtempSync(path.join(tmpdir(), 'azarov-partner-hidden-'))
+  const previous = process.env.AZAROV_STORE_DIR
+  process.env.AZAROV_STORE_DIR = dir
+  try {
+    withStore((store) => {
+      createUser(store, { id: 510, first_name: 'S', username: 'stake' })
+      return true
+    })
+
+    const started = startPartnerTask(510, 'stake-task-1')
+    assert.equal(started.success, false)
+    assert.equal(started.code, 'PARTNER_UNAVAILABLE')
+
+    const verified = verifyPartnerTask()
+    assert.equal(verified.success, false)
+    assert.equal(verified.code, 'MANUAL_REVIEW_REQUIRED')
+
+    const publicIds = listPartnersPublic().map((p) => p.id)
+    assert.equal(publicIds.includes('stake'), false)
+    assert.ok(publicIds.includes('dragonmoney'))
+
+    withStore((store) => {
+      assert.equal(store.users['510'].balance, 0)
+      assert.equal((store.users['510'].completedTasks || []).includes('stake-task-1'), false)
+      return true
+    })
+  } finally {
+    if (previous === undefined) delete process.env.AZAROV_STORE_DIR
+    else process.env.AZAROV_STORE_DIR = previous
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('submission does not grant coins until approve', () => {
   const store = makeStore({ id: 501, first_name: 'P', username: 'puser' })
 

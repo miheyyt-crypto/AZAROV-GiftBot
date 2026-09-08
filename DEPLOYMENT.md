@@ -185,8 +185,12 @@ Local API-only (no bot): `npm run server` or `npm run start:api`.
 3. Variables:
    - `AZAROV_STORE_DIR=/data`
    - `AZAROV_UPLOADS_DIR=/data/uploads`
-4. Keep **one replica** only.
-5. Redeploy, then open `GET /api/health` and confirm `store.persistent: true`.
+4. Keep **one replica** only (`railway.toml` sets `numReplicas = 1`).
+   - The JSON ledger + file lock are **not** multi-replica safe.
+   - A Railway Volume also blocks horizontal scaling — do not raise replica count.
+   - File lock protects concurrent requests **inside one process only**.
+   - Do **not** set `AZAROV_ALLOW_MULTI_REPLICA=1` except for emergency diagnostics.
+5. Redeploy, then open `GET /api/health` and confirm `store.persistent: true` and `store.singleReplicaRequired: true`.
 
 Expected layout:
 

@@ -1,4 +1,12 @@
 # Pin Railway start so Nixpacks cannot fall back to API-only `server/index.mjs`.
 # Single process: Express API + Telegraf long polling (see server/production.mjs).
+#
+# CRITICAL: JSON store + file lock are NOT multi-replica safe.
+# numReplicas MUST stay 1 until the ledger moves to a transactional database.
+# A Volume also prevents Railway horizontal scale — keep both constraints.
 [deploy]
 startCommand = "npm run start:production"
+numReplicas = 1
+healthcheckPath = "/api/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
