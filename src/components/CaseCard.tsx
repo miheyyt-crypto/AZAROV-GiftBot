@@ -24,6 +24,8 @@ export function CaseCard({
   const canOpenReferral = isReferral && availableReferralCases > 0
   const badge = isReferral ? giftCase.subtitle : giftCase.maxPrize
   const accent = theme.accentText || 'text-white'
+  // Full-bleed cinematic art (PNG/JPG) — same crop/scale as referral
+  const isCinematicArt = isReferral || giftCase.id === 'poor'
 
   return (
     <article
@@ -45,7 +47,7 @@ export function CaseCard({
           alt=""
           className={[
             'relative z-[1] size-full drop-shadow-[0_8px_18px_rgb(0_0_0/35%)]',
-            isReferral
+            isCinematicArt
               ? 'object-cover object-center scale-[1.12]'
               : 'object-contain scale-[1.08] p-1.5',
           ].join(' ')}
