@@ -138,7 +138,7 @@ test('admin reject → rejected + idempotent refund', () => {
       donateText: 'Привет со стрима',
     })
     const orderId = bought.order.orderId
-    const balanceAfterPurchase = 50_000 - 2499
+    const balanceAfterPurchase = 50_000 - 1000
 
     withStore((store) => {
       assert.equal(store.users['803'].balance, balanceAfterPurchase)

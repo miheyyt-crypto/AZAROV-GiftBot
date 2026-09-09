@@ -25,7 +25,7 @@ export function getTelegramLoginBotUsername(): string {
 }
 
 export const REFERRAL_CODE_PREFIX = 'ref_'
-export const REFERRAL_ACTIVATION_REWARD = 500
+export const REFERRAL_ACTIVATION_REWARD = 1000
 export const REFERRAL_CASE_EVERY = 5
 export const REFERRAL_INVITE_TASK_ID = 'referral-invite'
 export const REFERRAL_INVITE_TASK_REQUIRED = 3

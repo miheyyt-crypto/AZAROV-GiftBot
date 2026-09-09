@@ -2,6 +2,7 @@ import { CoinBalance } from '@/components/BalanceCard'
 import { ReferralHowItWorks } from '@/components/ReferralHowItWorks'
 import { ReferralInviteCard } from '@/components/ReferralInviteCard'
 import { useUserAccount } from '@/hooks/useUserAccount'
+import { REFERRAL_ACTIVATION_REWARD } from '@/lib/constants'
 
 export function Friends() {
   const account = useUserAccount()
@@ -14,7 +15,8 @@ export function Friends() {
       </header>
 
       <p className="mb-5 text-sm leading-relaxed text-text-secondary">
-        За каждого друга, который привяжет Kick по твоей ссылке — по 500 монет обоим.
+        За каждого друга, который привяжет Kick по твоей ссылке — по {REFERRAL_ACTIVATION_REWARD}{' '}
+        монет обоим.
       </p>
 
       <div className="space-y-3.5">

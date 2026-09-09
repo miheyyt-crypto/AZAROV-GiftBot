@@ -55,7 +55,7 @@ Do not commit `dist/`.
 |----------|-----------------|---------|
 | `BOT_TOKEN` | yes | Telegram bot token |
 | `BOT_USERNAME` | yes (for referral links) | Bot username without `@` |
-| `REFERRAL_REWARD` | optional | Coins for both sides when invitee links Kick (default `500`) |
+| `REFERRAL_REWARD` | optional | Coins for both sides when invitee links Kick (default `1000`) |
 | `WEBAPP_URL` | yes | Public HTTPS URL of the Mini App |
 | `TELEGRAM_CHANNEL` | recommended | Channel for subscribe task (`@azarov222`). Bot must be an **administrator** of this channel so `getChatMember` works. |
 | `KICK_CLIENT_ID` | for Kick link | Kick OAuth client id |
@@ -245,7 +245,7 @@ Use this URL in Railway health checks if configured.
 3. In @BotFather → Bot Settings → Menu Button / Web App: set the same URL.
 4. In @BotFather also configure **Main Mini App** (Direct Link) to the same URL — required for `https://t.me/<bot>?startapp=<code>` referral links to pass `start_param` into the Mini App.
 5. Redeploy or restart so the bot picks up `WEBAPP_URL`.
-6. Set `BOT_USERNAME=AZAROV_GiftBot` and optionally `REFERRAL_REWARD=500`.
+6. Set `BOT_USERNAME=AZAROV_GiftBot` and optionally `REFERRAL_REWARD=1000`.
 5. Open the bot → `/start` → WebApp button should open the Mini App.
 
 ---

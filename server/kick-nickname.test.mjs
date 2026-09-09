@@ -22,7 +22,7 @@ function withTempStore(run) {
   process.env.KICK_CLIENT_ID = 'test-client'
   process.env.KICK_CLIENT_SECRET = 'test-secret'
   process.env.KICK_REDIRECT_URI = 'https://example.com/api/kick/callback'
-  process.env.KICK_NICKNAME_TAG = 'AZAROV'
+  process.env.KICK_NICKNAME_TAG = 'azarov7777'
 
   return Promise.resolve()
     .then(() => run())
@@ -83,9 +83,9 @@ function usersFetchImpl(profile) {
 }
 
 test('kickNicknameMatches checks username and displayName', () => {
-  assert.equal(kickNicknameMatches({ username: 'x_AZAROV_y', displayName: 'x' }, 'AZAROV'), true)
-  assert.equal(kickNicknameMatches({ username: 'plain', displayName: 'fan AZAROV' }, 'AZAROV'), true)
-  assert.equal(kickNicknameMatches({ username: 'plain', displayName: 'plain' }, 'AZAROV'), false)
+  assert.equal(kickNicknameMatches({ username: 'x_azarov7777_y', displayName: 'x' }, 'azarov7777'), true)
+  assert.equal(kickNicknameMatches({ username: 'plain', displayName: 'fan azarov7777' }, 'azarov7777'), true)
+  assert.equal(kickNicknameMatches({ username: 'plain', displayName: 'plain' }, 'azarov7777'), false)
 })
 
 test('checkKickNickname grants reward once when tag present', async () => {
@@ -97,7 +97,7 @@ test('checkKickNickname grants reward once when tag present', async () => {
 
     const fetchImpl = usersFetchImpl({
       user_id: 7401,
-      username: 'fan_AZAROV',
+      username: 'fan_azarov7777',
       name: 'Fan',
     })
 
@@ -157,7 +157,7 @@ test('checkKickNickname requires linked Kick', async () => {
     })
 
     const result = await checkKickNickname(43, 'nick-unlink', {
-      fetchImpl: usersFetchImpl({ user_id: 1, username: 'AZAROV', name: 'A' }),
+      fetchImpl: usersFetchImpl({ user_id: 1, username: 'azarov7777', name: 'A' }),
     })
     assert.equal(result.success, false)
     assert.equal(result.code, 'KICK_NOT_CONNECTED')

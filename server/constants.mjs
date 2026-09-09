@@ -6,7 +6,7 @@ export const REFERRAL_INVITE_TASK_ID = 'referral-invite'
 export const REFERRAL_INVITE_TASK_REQUIRED = 3
 export const REFERRAL_INVITE_TASK_REWARD = 2000
 /** Default coins granted to both referrer and invitee when invitee links Kick. */
-export const REFERRAL_ACTIVATION_REWARD = 500
+export const REFERRAL_ACTIVATION_REWARD = 1000
 export const REFERRAL_CASE_EVERY = 5
 export const REFERRAL_CODE_PREFIX = 'ref_'
 export const REFERRAL_CODE_LENGTH = 8
@@ -17,7 +17,7 @@ export const KICK_FOLLOW_TASK_REWARD = 500
 export const KICK_NICKNAME_TASK_ID = 'kick-nickname'
 export const KICK_NICKNAME_TASK_REWARD = 400
 /** Substring required in Kick username or display name (override with KICK_NICKNAME_TAG). */
-export const KICK_NICKNAME_TAG_DEFAULT = 'AZAROV'
+export const KICK_NICKNAME_TAG_DEFAULT = 'azarov7777'
 /** Default Kick channel slug for the follow task (override with KICK_REQUIRED_CHANNEL). */
 export const KICK_REQUIRED_CHANNEL_DEFAULT = 'azarov7777'
 /**

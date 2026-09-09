@@ -67,7 +67,7 @@ export const products: ShopProduct[] = [
   {
     id: 'stream-donate',
     name: 'Донат на стрим',
-    price: 2499,
+    price: 1000,
     currency: 'coins',
     category: 'donate',
     image: donateImage,
@@ -94,7 +94,7 @@ export const products: ShopProduct[] = [
   },
   {
     id: 'stream-music',
-    name: 'Музыка на стрим',
+    name: 'Заказ музыки',
     price: 4000,
     currency: 'coins',
     category: 'donate',

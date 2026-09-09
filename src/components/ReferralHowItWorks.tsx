@@ -18,7 +18,7 @@ const steps = [
   },
   {
     title: `Оба получают по ${REFERRAL_ACTIVATION_REWARD} монет`,
-    text: 'Один раз за каждого нового друга: +500 тебе и +500 другу после его привязки Kick.',
+    text: `Один раз за каждого нового друга: +${REFERRAL_ACTIVATION_REWARD} тебе и +${REFERRAL_ACTIVATION_REWARD} другу после его привязки Kick.`,
     tone: 'gold' as const,
   },
   {

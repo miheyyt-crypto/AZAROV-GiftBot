@@ -257,7 +257,7 @@ export async function handleTaskAction(
       return {
         success: false,
         code: result.code,
-        message: result.message || 'Приписка AZAROV в нике Kick не найдена.',
+        message: result.message || 'Приписка azarov7777 в нике Kick не найдена.',
       }
     } catch {
       return {
