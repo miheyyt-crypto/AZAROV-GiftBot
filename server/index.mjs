@@ -1998,22 +1998,42 @@ app.post(
 app.post(
   '/api/withdrawals/create',
   withEconomicUser(async (req, res, telegramUser) => {
-    bootstrapUser(telegramUser, '')
-    const result = createWithdrawal(telegramUser.id, {
-      itemId: req.body?.itemId,
-      walletAddress: req.body?.walletAddress,
-    })
-    if (result.success && result.withdrawal) {
-      void notifyAdminsNewWithdrawal(result.withdrawal).catch((error) => {
-        console.error('[withdrawal-admin] create notify failed', {
-          message: error instanceof Error ? error.message : 'unknown_error',
+    try {
+      bootstrapUser(telegramUser, '')
+      const result = createWithdrawal(telegramUser.id, {
+        itemId: req.body?.itemId,
+        walletAddress: req.body?.walletAddress,
+      })
+      if (!result.success) {
+        console.error('[WITHDRAWAL]', {
+          stage: 'create_rejected',
+          code: result.code || null,
+          userId: telegramUser.id,
+          itemId: req.body?.itemId != null ? String(req.body.itemId) : null,
         })
+      }
+      if (result.success && result.withdrawal) {
+        void notifyAdminsNewWithdrawal(result.withdrawal).catch((error) => {
+          console.error('[WITHDRAWAL]', {
+            stage: 'admin_notify_failed',
+            withdrawalId: result.withdrawal?.id || null,
+            message: error instanceof Error ? error.message : 'unknown_error',
+          })
+        })
+      }
+      res.status(result.success ? 200 : 400).json({
+        ...result,
+        user: toPublicUser(getUser(telegramUser.id)),
+      })
+    } catch (error) {
+      console.error('[WITHDRAWAL]', error)
+      res.status(500).json({
+        success: false,
+        code: 'SERVER_ERROR',
+        message: 'Не удалось создать заявку. Попробуйте ещё раз.',
+        user: toPublicUser(getUser(telegramUser.id)),
       })
     }
-    res.status(result.success ? 200 : 400).json({
-      ...result,
-      user: toPublicUser(getUser(telegramUser.id)),
-    })
   }),
 )
 

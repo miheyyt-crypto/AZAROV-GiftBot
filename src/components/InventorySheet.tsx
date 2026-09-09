@@ -81,10 +81,14 @@ export function InventorySheet({ onClose }: InventorySheetProps) {
 
             {caseOpenings.map((item) => {
               const status = String(item.withdrawalStatus || 'AVAILABLE').toUpperCase()
-              const isRub = item.currency === 'RUB'
-              const canWithdraw = Boolean(item.canWithdraw)
+              const isRub = String(item.currency || '').toUpperCase() === 'RUB'
               const pending = status === 'PENDING_WITHDRAWAL'
               const withdrawn = status === 'WITHDRAWN'
+              // Prefer server flag, but never leave RUB+AVAILABLE visually clickable yet inert.
+              const canWithdraw =
+                typeof item.canWithdraw === 'boolean'
+                  ? item.canWithdraw
+                  : isRub && !pending && !withdrawn && Number(item.amount) >= 1
 
               return (
                 <article
@@ -130,7 +134,18 @@ export function InventorySheet({ onClose }: InventorySheetProps) {
                     <button
                       type="button"
                       disabled={!canWithdraw}
-                      onClick={() => setWithdrawItem(item)}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        if (!canWithdraw) {
+                          return
+                        }
+                        if (!item.id) {
+                          console.error('[WITHDRAWAL]', { stage: 'missing_item_id', item })
+                          return
+                        }
+                        setWithdrawItem(item)
+                      }}
                       className={[
                         'mt-3 flex min-h-11 w-full items-center justify-center rounded-full px-4',
                         'text-sm font-bold transition active:scale-[0.98]',

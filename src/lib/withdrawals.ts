@@ -73,20 +73,44 @@ export async function createWithdrawalRequest(input: {
     headers.set('Authorization', `tma ${initData}`)
   }
 
-  const response = await fetch(apiUrl('/api/withdrawals/create'), {
-    method: 'POST',
-    headers,
-    credentials: 'include',
-    body: JSON.stringify({
-      itemId: input.itemId,
-      walletAddress: String(input.walletAddress || '').trim(),
-    }),
-  })
+  try {
+    const response = await fetch(apiUrl('/api/withdrawals/create'), {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify({
+        itemId: input.itemId,
+        walletAddress: String(input.walletAddress || '').trim(),
+      }),
+    })
 
-  const payload = (await response.json().catch(() => null)) as WithdrawalCreateResponse | null
-  if (!payload) {
-    return { success: false, code: 'BAD_RESPONSE', message: 'Пустой ответ сервера.' }
+    const payload = (await response.json().catch(() => null)) as WithdrawalCreateResponse | null
+    if (!payload) {
+      console.error('[WITHDRAWAL]', {
+        stage: 'empty_response',
+        status: response.status,
+        itemId: input.itemId,
+      })
+      return { success: false, code: 'BAD_RESPONSE', message: 'Пустой ответ сервера.' }
+    }
+
+    if (!payload.success) {
+      console.error('[WITHDRAWAL]', {
+        stage: 'api_error',
+        status: response.status,
+        code: payload.code || null,
+        itemId: input.itemId,
+      })
+    }
+
+    applyRemoteUser(payload.user)
+    return payload
+  } catch (error) {
+    console.error('[WITHDRAWAL]', error)
+    return {
+      success: false,
+      code: 'NETWORK_ERROR',
+      message: 'Не удалось создать заявку. Попробуйте ещё раз.',
+    }
   }
-  applyRemoteUser(payload.user)
-  return payload
 }

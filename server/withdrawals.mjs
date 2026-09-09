@@ -128,6 +128,7 @@ export function createWithdrawalOnStore(store, userId, input = {}) {
 
   const uid = Number(userId)
   if (!Number.isInteger(uid) || uid <= 0) {
+    console.error('[WITHDRAWAL]', { stage: 'unauthorized' })
     return {
       success: false,
       code: 'UNAUTHORIZED',
@@ -135,8 +136,10 @@ export function createWithdrawalOnStore(store, userId, input = {}) {
     }
   }
 
+  // Intentionally ignore any client-provided amount / userId / status.
   const itemId = String(input.itemId || '').trim()
   if (!itemId) {
+    console.error('[WITHDRAWAL]', { stage: 'missing_item_id', userId: uid })
     return {
       success: false,
       code: 'ITEM_NOT_FOUND',
@@ -147,6 +150,7 @@ export function createWithdrawalOnStore(store, userId, input = {}) {
   const walletRaw = String(input.walletAddress || '')
   const walletAddress = normalizeTronAddress(walletRaw)
   if (!isValidTronAddress(walletRaw)) {
+    console.error('[WITHDRAWAL]', { stage: 'invalid_wallet', userId: uid, itemId })
     return {
       success: false,
       code: 'INVALID_WALLET',

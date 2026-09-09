@@ -214,3 +214,32 @@ test('store version includes withdrawals', () => {
   assert.equal(store.version, 14)
   assert.ok(store.withdrawals)
 })
+
+test('withdrawal persists across store reload', async () => {
+  await withTempStore(async () => {
+    const created = withStore((store) => {
+      const user = seedUser(store, 501)
+      seedRubOpening(store, user, { openingId: 'open-persist', amount: 2000 })
+      return createWithdrawalOnStore(store, 501, {
+        itemId: 'open-persist',
+        walletAddress: VALID_TRON,
+      })
+    })
+    assert.equal(created.success, true)
+
+    const reloaded = withStore((store) => {
+      const wd = store.withdrawals[created.withdrawal.id]
+      const opening = store.users['501'].caseOpenings[0]
+      return {
+        status: wd?.status,
+        amount: wd?.amountRub,
+        itemStatus: opening.withdrawalStatus,
+        activeId: opening.activeWithdrawalId,
+      }
+    })
+    assert.equal(reloaded.status, WITHDRAWAL_STATUS.PENDING)
+    assert.equal(reloaded.amount, 2000)
+    assert.equal(reloaded.itemStatus, ITEM_WITHDRAWAL_STATUS.PENDING_WITHDRAWAL)
+    assert.equal(reloaded.activeId, created.withdrawal.id)
+  })
+})

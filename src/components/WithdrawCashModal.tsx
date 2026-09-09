@@ -1,5 +1,6 @@
 import { Info, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { useNotifications } from '@/components/NotificationProvider'
 import { formatBalance } from '@/lib/balance'
@@ -26,7 +27,13 @@ export function WithdrawCashModal({ item, onClose, onSuccess }: WithdrawCashModa
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setVisible(true))
-    return () => cancelAnimationFrame(id)
+    const previousOverflow = document.body.style.overflow
+    // Inventory ProfileSheet already locks overflow; keep it locked while modal is open.
+    document.body.style.overflow = 'hidden'
+    return () => {
+      cancelAnimationFrame(id)
+      document.body.style.overflow = previousOverflow
+    }
   }, [])
 
   async function handleSubmit() {
@@ -45,6 +52,11 @@ export function WithdrawCashModal({ item, onClose, onSuccess }: WithdrawCashModa
       })
       if (!result.success || !result.withdrawal) {
         const message = withdrawalErrorMessage(result.code, result.message)
+        console.error('[WITHDRAWAL]', {
+          stage: 'create_rejected',
+          code: result.code || null,
+          itemId: item.id,
+        })
         setError(message)
         showNotification({ type: 'error', title: 'Вывод', message })
         return
@@ -52,12 +64,13 @@ export function WithdrawCashModal({ item, onClose, onSuccess }: WithdrawCashModa
 
       showNotification({
         type: 'success',
-        title: 'Заявка создана',
-        message: `${formatBalance(result.withdrawal.amountRub)} ₽ · ${result.withdrawal.id} · на рассмотрении`,
+        title: 'Заявка на вывод отправлена',
+        message: `${formatBalance(result.withdrawal.amountRub)} ₽ · ${result.withdrawal.id} · администратору`,
       })
       onSuccess(result.withdrawal)
       onClose()
-    } catch {
+    } catch (error) {
+      console.error('[WITHDRAWAL]', error)
       const message = 'Не удалось создать заявку. Попробуйте ещё раз.'
       setError(message)
       showNotification({ type: 'error', title: 'Вывод', message })
@@ -66,8 +79,13 @@ export function WithdrawCashModal({ item, onClose, onSuccess }: WithdrawCashModa
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center">
+  if (typeof document === 'undefined') {
+    return null
+  }
+
+  // Must render above ProfileSheet (z-[100]) — previously z-80 opened behind inventory.
+  return createPortal(
+    <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center">
       <button
         type="button"
         aria-label="Закрыть"
@@ -78,15 +96,21 @@ export function WithdrawCashModal({ item, onClose, onSuccess }: WithdrawCashModa
         onClick={onClose}
       />
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="withdraw-modal-title"
         className={[
           'ui-sheet relative z-[1] w-full max-w-md rounded-t-[28px] border border-white/10 bg-[#121018] p-5 shadow-[0_-12px_40px_rgb(0_0_0/45%)] sm:rounded-[28px]',
           'transition-transform duration-200',
           visible ? 'translate-y-0' : 'translate-y-6',
         ].join(' ')}
+        onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-white">Вывод средств</h2>
+            <h2 id="withdraw-modal-title" className="text-lg font-bold text-white">
+              Вывод средств
+            </h2>
             <p className="mt-1 text-sm text-muted">Заявка на выплату USDT TRC20</p>
           </div>
           <button
@@ -152,6 +176,7 @@ export function WithdrawCashModal({ item, onClose, onSuccess }: WithdrawCashModa
           {busy ? 'Отправка…' : 'Отправить заявку'}
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
