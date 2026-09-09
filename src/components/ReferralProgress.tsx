@@ -13,15 +13,15 @@ export function ReferralProgress({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-[#a1a1aa]">{label}</span>
-        <span className="font-medium text-white">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="truncate text-[#9b96ab]">{label}</span>
+        <span className="shrink-0 font-semibold tabular-nums text-white">
           {current} / {required}
         </span>
       </div>
 
       <div
-        className="h-1.5 overflow-hidden rounded-full bg-white/10"
+        className="h-2 overflow-hidden rounded-full bg-white/[0.08]"
         role="progressbar"
         aria-valuenow={current}
         aria-valuemin={0}
@@ -29,7 +29,7 @@ export function ReferralProgress({
         aria-label={`${label}: ${current} из ${required}`}
       >
         <div
-          className="h-full rounded-full bg-[#9d59ff] transition-all duration-700 ease-out"
+          className="h-full rounded-full bg-[linear-gradient(90deg,#9b4dff,#a855f7)] shadow-[0_0_12px_rgb(168_85_247/45%)] transition-all duration-700 ease-out"
           style={{ width: `${progress}%` }}
         />
       </div>

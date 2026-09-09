@@ -419,3 +419,57 @@ body {
     transform: none !important;
   }
 }
+
+/* ── Friends / Referrals tab ─────────────────────────────────────── */
+
+.friends-page {
+  --friends-purple: #8b3dff;
+  --friends-blue-a: #20bfff;
+  --friends-blue-b: #2196ff;
+  --friends-green: #00c853;
+  --friends-gold: #ffb300;
+}
+
+.friends-panel {
+  animation: friends-rise 420ms var(--press-ease) both;
+}
+
+.friends-step {
+  transition:
+    border-color var(--motion-base) ease,
+    transform var(--motion-fast) var(--press-ease),
+    box-shadow var(--motion-base) ease;
+}
+
+.friends-step:active {
+  transform: scale(0.98);
+}
+
+.friends-cta::after {
+  content: '';
+  position: absolute;
+  inset: auto 12% -10px;
+  height: 18px;
+  border-radius: 9999px;
+  background: rgb(33 150 255 / 45%);
+  filter: blur(12px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+@keyframes friends-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .friends-panel {
+    animation: none;
+  }
+}
