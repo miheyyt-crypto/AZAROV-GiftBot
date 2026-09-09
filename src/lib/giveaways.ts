@@ -1,4 +1,5 @@
 import { MOCK_GIVEAWAYS } from '@/data/giveaways'
+import { normalizeGiveawayEligibility } from '@/lib/giveaway-eligibility'
 import { getTelegramInitData } from '@/lib/telegram'
 import type {
   Giveaway,
@@ -85,6 +86,7 @@ function normalizeGiveaway(raw: Partial<Giveaway> & { id?: string | number }): G
           : null,
     winnersCount: Math.floor(winnersCount),
     participantsCount: Math.max(0, Math.floor(Number(raw.participantsCount) || 0)),
+    eligibility: normalizeGiveawayEligibility(raw.eligibility),
     startAt: raw.startAt ? String(raw.startAt) : undefined,
     endAt: raw.endAt ? String(raw.endAt) : undefined,
     createdAt: raw.createdAt ? String(raw.createdAt) : undefined,
@@ -156,6 +158,12 @@ export async function participateGiveaway(giveawayId: string): Promise<Participa
       success: false,
       code: result.data.code || 'PARTICIPATE_FAILED',
       message: result.data.message || 'Не удалось записаться в розыгрыш.',
+      requirement: result.data.requirement
+        ? normalizeGiveawayEligibility(result.data.requirement)
+        : undefined,
+      giveaway: result.data.giveaway
+        ? normalizeGiveaway(result.data.giveaway) || undefined
+        : undefined,
     }
   }
   return {

@@ -4,6 +4,8 @@ export type GiveawayTab = GiveawayStatus
 
 export type GiveawayPrizeType = 'coins' | 'custom' | 'text'
 
+export type GiveawayEligibility = 'all' | 'category_a' | 'category_b'
+
 export type GiveawayWinner = {
   userId: number
   username: string | null
@@ -26,6 +28,8 @@ export type Giveaway = {
   customPrize?: string | null
   winnersCount: number
   participantsCount?: number
+  /** Who may join; missing/legacy → treated as all. */
+  eligibility?: GiveawayEligibility
   startAt?: string
   endAt?: string
   createdAt?: string
@@ -67,4 +71,6 @@ export type ParticipateGiveawayResponse = {
   giveaway?: Giveaway
   code?: string
   message?: string
+  /** Present when code is GIVEAWAY_NOT_ELIGIBLE. */
+  requirement?: GiveawayEligibility
 }

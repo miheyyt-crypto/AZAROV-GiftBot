@@ -2,6 +2,7 @@ import { Trophy } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import { formatWinnersLabel, resolveGiveawayImageSrc } from '@/lib/giveaways'
+import { getGiveawayEligibilityUi } from '@/lib/giveaway-eligibility'
 import { ROUTES } from '@/lib/constants'
 import type { Giveaway } from '@/types/giveaway'
 
@@ -10,6 +11,8 @@ interface GiveawayCardProps {
 }
 
 export function GiveawayCard({ giveaway }: GiveawayCardProps) {
+  const eligibilityUi = getGiveawayEligibilityUi(giveaway.eligibility)
+
   return (
     <Link
       to={`${ROUTES.giveaways}/${encodeURIComponent(giveaway.id)}`}
@@ -29,6 +32,12 @@ export function GiveawayCard({ giveaway }: GiveawayCardProps) {
         <h3 className="truncate px-2.5 py-2 text-[13px] font-bold leading-tight tracking-tight text-white">
           {giveaway.title}
         </h3>
+
+        {eligibilityUi.id !== 'all' ? (
+          <p className="truncate px-2.5 pb-1 text-[10px] font-medium text-muted">
+            {eligibilityUi.publicLabel}
+          </p>
+        ) : null}
 
         <div className="mt-auto flex items-center gap-1.5 border-t border-white/[0.06] px-2.5 py-2">
           <Trophy size={13} className="shrink-0 text-muted" aria-hidden />

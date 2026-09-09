@@ -1703,11 +1703,15 @@ app.post(
           ? 404
           : result.code === 'ENDED' || result.code === 'NOT_ACTIVE' || result.code === 'NOT_STARTED'
             ? 409
-            : 400
+            : result.code === 'GIVEAWAY_NOT_ELIGIBLE'
+              ? 403
+              : 400
       res.status(status).json({
         success: false,
         code: result.code,
         message: result.message,
+        ...(result.requirement ? { requirement: result.requirement } : {}),
+        ...(result.giveaway ? { giveaway: result.giveaway } : {}),
         user: toPublicUser(getUser(telegramUser.id)),
       })
       return

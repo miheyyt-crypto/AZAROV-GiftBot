@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import { CoinBalance } from '@/components/BalanceCard'
 import { PartnerBanner } from '@/components/PartnerBanner'
@@ -8,6 +9,7 @@ import { TaskCategoryFilter } from '@/components/TaskCategoryFilter'
 import { TaskDetailSheet } from '@/components/TaskDetailSheet'
 import { TasksEmptyState } from '@/components/TasksEmptyState'
 import { getPartnerById, getPartners } from '@/data/partners'
+import { getTasks } from '@/data/tasks'
 import { useUserAccount } from '@/hooks/useUserAccount'
 import {
   filterTasks,
@@ -19,6 +21,7 @@ import type { FilterCategory, Task } from '@/types'
 
 export function Tasks() {
   const account = useUserAccount()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [activeCategory, setActiveCategory] = useState<FilterCategory>('all')
   const [activePartnerId, setActivePartnerId] = useState<string | null>(null)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
@@ -46,6 +49,22 @@ export function Tasks() {
 
   const hasTasks = filteredTasks.length > 0
   const activePartner = activePartnerId ? getPartnerById(activePartnerId) : null
+
+  useEffect(() => {
+    const taskId = String(searchParams.get('task') || '').trim()
+    if (!taskId) {
+      return
+    }
+    const match =
+      allTasks.find((task) => task.id === taskId) ||
+      getTasks().find((task) => task.id === taskId)
+    if (match) {
+      setSelectedTask(match)
+    }
+    const next = new URLSearchParams(searchParams)
+    next.delete('task')
+    setSearchParams(next, { replace: true })
+  }, [allTasks, searchParams, setSearchParams])
 
   return (
     <div className="ui-page">

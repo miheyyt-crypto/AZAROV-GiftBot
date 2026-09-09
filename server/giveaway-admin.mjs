@@ -1,10 +1,13 @@
 import {
   createGiveaway,
+  getEligibilityConfig,
   isCoinsPrize,
   listAdminGiveaways,
   markPrizeDelivered,
+  normalizeGiveawayEligibility,
   notifyGiveawayTelegramJobs,
   parseGiveawayId,
+  resolveGiveawayEligibility,
 } from './giveaways.mjs'
 import { sendAdminRootMenu } from './community-admin.mjs'
 import {
@@ -56,6 +59,7 @@ function setPendingGiveawayWizard(adminId, patch) {
     durationMs: null,
     durationLabel: null,
     imageFileId: null,
+    eligibility: 'all',
   }
   pendingGiveawayByAdmin.set(key, {
     ...prev,
@@ -293,6 +297,20 @@ export function buildGiveawayImageKeyboard() {
   }
 }
 
+export function buildGiveawayEligibilityKeyboard() {
+  const all = getEligibilityConfig('all')
+  const a = getEligibilityConfig('category_a')
+  const b = getEligibilityConfig('category_b')
+  return {
+    inline_keyboard: [
+      [{ text: all.adminButton, callback_data: 'gw:elig:all' }],
+      [{ text: a.adminButton, callback_data: 'gw:elig:category_a' }],
+      [{ text: b.adminButton, callback_data: 'gw:elig:category_b' }],
+      [{ text: '❌ Отмена', callback_data: 'gw:cancel' }],
+    ],
+  }
+}
+
 /** Largest Telegram photo size file_id from message.photo[]. */
 export function extractLargestPhotoFileId(message) {
   const photos = message?.photo
@@ -361,6 +379,20 @@ function formatImageLine(giveaway) {
     : '🖼️ Изображение: ❌ нет'
 }
 
+function formatEligibilityLine(giveawayOrWizard) {
+  const eligibility = resolveGiveawayEligibility(
+    giveawayOrWizard?.eligibility ?? giveawayOrWizard,
+  )
+  const config = getEligibilityConfig(eligibility)
+  if (eligibility === 'all') {
+    return `Участники: 👤 ${config.adminLabel}`
+  }
+  if (eligibility === 'category_a') {
+    return `Участники: 👥 Только категория A`
+  }
+  return `Участники: ⭐ Только категория B`
+}
+
 function formatActiveGiveawayBlock(giveaway) {
   return [
     `🎁 Розыгрыш <code>${escapeHtml(giveaway.id)}</code>`,
@@ -368,6 +400,7 @@ function formatActiveGiveawayBlock(giveaway) {
     escapeHtml(formatPrizeLine(giveaway)),
     `🏆 Победителей: ${Number(giveaway.winnersCount) || 0}`,
     `👥 Участников: ${Number(giveaway.participantsCount) || 0}`,
+    escapeHtml(formatEligibilityLine(giveaway)),
     escapeHtml(formatImageLine(giveaway)),
     `⏱ Окончание: ${escapeHtml(formatDateRu(giveaway.endAt))}`,
   ].join('\n')
@@ -380,6 +413,7 @@ function formatHistoryGiveawayBlock(giveaway) {
     escapeHtml(formatPrizeLine(giveaway)),
     `🏆 Победителей: ${Number(giveaway.winnersCount) || 0}`,
     `👥 Участников: ${Number(giveaway.participantsCount) || 0}`,
+    escapeHtml(formatEligibilityLine(giveaway)),
     escapeHtml(formatImageLine(giveaway)),
     '',
     ...formatWinnerAdminBlock(giveaway).map((line) => escapeHtml(line)),
@@ -436,6 +470,7 @@ async function startCreateWizard(ctx, adminId) {
     durationMs: null,
     durationLabel: null,
     imageFileId: null,
+    eligibility: 'all',
   })
   await replyHtml(
     ctx,
@@ -459,6 +494,21 @@ async function askImage(ctx, adminId) {
       'Можно отправить фотографию или нажать «Пропустить».',
     ].join('\n'),
     { reply_markup: buildGiveawayImageKeyboard() },
+  )
+}
+
+async function askEligibility(ctx, adminId) {
+  setPendingGiveawayWizard(adminId, {
+    step: 'await_eligibility',
+  })
+  await replyHtml(
+    ctx,
+    [
+      '👥 <b>Кто может участвовать?</b>',
+      '',
+      'Выберите ограничение доступа к розыгрышу:',
+    ].join('\n'),
+    { reply_markup: buildGiveawayEligibilityKeyboard() },
   )
 }
 
@@ -542,6 +592,7 @@ function buildConfirmCaption(wizard) {
     `🏆 Победителей: ${wizard.winnersCount}`,
     `⏱ Длительность: ${escapeHtml(wizard.durationLabel)}`,
     imageLine,
+    escapeHtml(formatEligibilityLine(wizard)),
     '',
     'После создания:',
     '▶️ Начало: сейчас',
@@ -591,6 +642,7 @@ async function createFromWizard(ctx, adminId, wizard) {
       prizeAmount: wizard.prizeType === 'coins' ? wizard.prizeAmount : null,
       prizeText: wizard.prizeType === 'custom' ? wizard.prizeText : null,
       winnersCount: wizard.winnersCount,
+      eligibility: resolveGiveawayEligibility(wizard.eligibility),
       startAt: now.toISOString(),
       endAt: end.toISOString(),
     },
@@ -616,6 +668,7 @@ async function createFromWizard(ctx, adminId, wizard) {
       escapeHtml(formatPrizeLine(g)),
       `🏆 Победителей: ${Number(g.winnersCount) || 0}`,
       `⏱ Длительность: ${escapeHtml(wizard.durationLabel)}`,
+      escapeHtml(formatEligibilityLine(g)),
       '',
       '▶️ Начало: сейчас',
       `🏁 Окончание: ${escapeHtml(formatDateRu(g.endAt))}`,
@@ -792,13 +845,34 @@ export async function handleGiveawayAdminCallback(ctx) {
       return true
     }
     setPendingGiveawayWizard(adminId, {
-      step: 'await_confirm',
+      step: 'await_eligibility',
       imageFileId: null,
+    })
+    await answerGiveawayCallback(ctx)
+    await askEligibility(ctx, adminId)
+    return true
+  }
+
+  const eligMatch = /^gw:elig:(all|category_a|category_b)$/i.exec(data)
+  if (eligMatch) {
+    const wizard = getPendingGiveawayWizard(adminId)
+    if (!wizard || wizard.step !== 'await_eligibility') {
+      await answerGiveawayCallback(ctx, 'Сначала начните создание заново', true)
+      return true
+    }
+    const eligibility = normalizeGiveawayEligibility(eligMatch[1])
+    if (!eligibility) {
+      await answerGiveawayCallback(ctx, 'Некорректное ограничение', true)
+      return true
+    }
+    setPendingGiveawayWizard(adminId, {
+      step: 'await_confirm',
+      eligibility,
     })
     await answerGiveawayCallback(ctx)
     await showConfirm(ctx, adminId, {
       ...wizard,
-      imageFileId: null,
+      eligibility,
     })
     return true
   }
@@ -814,7 +888,8 @@ export async function handleGiveawayAdminCallback(ctx) {
       wizard.step !== 'await_confirm' ||
       !prizeReady ||
       !wizard.winnersCount ||
-      !wizard.durationMs
+      !wizard.durationMs ||
+      !normalizeGiveawayEligibility(wizard.eligibility || 'all')
     ) {
       await answerGiveawayCallback(ctx, 'Нет данных для создания', true)
       return true
@@ -842,7 +917,8 @@ export async function handleGiveawayWizardMessage(ctx) {
     !wizard ||
     wizard.step === 'idle' ||
     wizard.step === 'await_confirm' ||
-    wizard.step === 'await_prize_type'
+    wizard.step === 'await_prize_type' ||
+    wizard.step === 'await_eligibility'
   ) {
     return false
   }
@@ -974,13 +1050,10 @@ export async function handleGiveawayWizardPhoto(ctx) {
   }
 
   setPendingGiveawayWizard(adminId, {
-    step: 'await_confirm',
+    step: 'await_eligibility',
     imageFileId: fileId,
   })
-  await showConfirm(ctx, adminId, {
-    ...wizard,
-    imageFileId: fileId,
-  })
+  await askEligibility(ctx, adminId)
   return true
 }
 

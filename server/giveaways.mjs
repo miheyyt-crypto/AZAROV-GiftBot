@@ -1,9 +1,23 @@
 import crypto from 'node:crypto'
 
+import {
+  checkGiveawayEligibility,
+  normalizeGiveawayEligibility,
+  resolveGiveawayEligibility,
+} from './giveaway-eligibility.mjs'
 import { createNotificationOnStore, NOTIFICATION_TYPE } from './notifications.mjs'
 import { withStore, withStoreRead } from './store.mjs'
 import { getAdminNotifyChatIds, sendTelegramMessage } from './telegram-notify.mjs'
 import { addCoins, hasEvent, TX_TYPE, utcNow } from './wallet.mjs'
+
+export {
+  checkGiveawayEligibility,
+  GIVEAWAY_ELIGIBILITY,
+  GIVEAWAY_ELIGIBILITY_CONFIG,
+  getEligibilityConfig,
+  normalizeGiveawayEligibility,
+  resolveGiveawayEligibility,
+} from './giveaway-eligibility.mjs'
 
 const GIVEAWAY_ID_RE = /^[a-zA-Z0-9_-]{8,64}$/
 const TITLE_MAX = 160
@@ -219,6 +233,19 @@ export function validateGiveawayCreateInput(body) {
     }
   }
 
+  let eligibility = 'all'
+  if (body.eligibility != null && String(body.eligibility).trim() !== '') {
+    const normalized = normalizeGiveawayEligibility(body.eligibility)
+    if (!normalized) {
+      return {
+        ok: false,
+        code: 'INVALID_ELIGIBILITY',
+        message: 'eligibility должен быть all, category_a или category_b.',
+      }
+    }
+    eligibility = normalized
+  }
+
   return {
     ok: true,
     value: {
@@ -232,6 +259,7 @@ export function validateGiveawayCreateInput(body) {
       winnersCount: winners.value,
       startAt: start.value,
       endAt: end.value,
+      eligibility,
     },
   }
 }
@@ -513,6 +541,7 @@ export function toPublicGiveaway(store, giveaway, { userId = null, includeWinner
     customPrize: isCustomPrize(giveaway) ? giveaway.prizeText : null,
     winnersCount: Number(giveaway.winnersCount) || 0,
     participantsCount: Number(giveaway.participantsCount) || 0,
+    eligibility: resolveGiveawayEligibility(giveaway),
     startAt: giveaway.startAt,
     endAt: giveaway.endAt,
     createdAt: giveaway.createdAt,
@@ -594,6 +623,7 @@ export function createGiveawayOnStore(store, input, { createdBy = null, nowIso =
     prizeText: data.prizeText,
     winnersCount: data.winnersCount,
     participantsCount: 0,
+    eligibility: data.eligibility || 'all',
     startAt: data.startAt,
     endAt: data.endAt,
     createdAt: nowIso,
@@ -950,6 +980,18 @@ export function participateOnStore(store, giveawayId, userId, { nowIso = utcNow(
       participating: true,
       alreadyParticipating: true,
       participantsCount: Number(giveaway.participantsCount) || 0,
+      giveaway: toPublicGiveaway(store, giveaway, { userId: uid }),
+    }
+  }
+
+  const user = store.users[String(uid)]
+  const eligibilityCheck = checkGiveawayEligibility(user, giveaway)
+  if (!eligibilityCheck.eligible) {
+    return {
+      success: false,
+      code: 'GIVEAWAY_NOT_ELIGIBLE',
+      requirement: eligibilityCheck.requirement,
+      message: eligibilityCheck.message || 'Вы не можете участвовать в этом розыгрыше.',
       giveaway: toPublicGiveaway(store, giveaway, { userId: uid }),
     }
   }

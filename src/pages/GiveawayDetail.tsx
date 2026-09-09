@@ -1,4 +1,4 @@
-import { ArrowLeft, Gift, Trophy, Users } from 'lucide-react'
+import { ArrowLeft, Gift, Trophy, Users, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
@@ -11,8 +11,12 @@ import {
   participateGiveaway,
   resolveGiveawayImageSrc,
 } from '@/lib/giveaways'
+import {
+  getGiveawayEligibilityUi,
+  type GiveawayEligibilityUiConfig,
+} from '@/lib/giveaway-eligibility'
 import { ROUTES } from '@/lib/constants'
-import type { Giveaway } from '@/types/giveaway'
+import type { Giveaway, GiveawayEligibility } from '@/types/giveaway'
 
 function winnerLabel(winner: NonNullable<Giveaway['winners']>[number]): string {
   if (winner.username) {
@@ -33,6 +37,9 @@ export function GiveawayDetail() {
   const [busy, setBusy] = useState(false)
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [actionMessage, setActionMessage] = useState('')
+  const [eligibilityModal, setEligibilityModal] = useState<GiveawayEligibilityUiConfig | null>(
+    null,
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -77,6 +84,13 @@ export function GiveawayDetail() {
     const result = await participateGiveaway(giveaway.id)
     setBusy(false)
     if (!result.success) {
+      if (result.code === 'GIVEAWAY_NOT_ELIGIBLE') {
+        const requirement = (result.requirement ||
+          giveaway.eligibility ||
+          'all') as GiveawayEligibility
+        setEligibilityModal(getGiveawayEligibilityUi(requirement))
+        return
+      }
       setActionMessage(result.message || 'Не удалось принять участие.')
       return
     }
@@ -129,6 +143,9 @@ export function GiveawayDetail() {
 
   const isActive = giveaway.status === 'active'
   const participating = Boolean(giveaway.isParticipating)
+  const eligibilityUi = getGiveawayEligibilityUi(giveaway.eligibility)
+  const showLockedHint =
+    isActive && !participating && eligibilityUi.id !== 'all' && eligibilityUi.lockedHint
 
   return (
     <div className="ui-page">
@@ -159,6 +176,9 @@ export function GiveawayDetail() {
             {giveaway.description ? (
               <p className="mt-2 text-sm leading-relaxed text-text-secondary">{giveaway.description}</p>
             ) : null}
+            <p className="mt-3 inline-flex max-w-full items-center rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-text-secondary">
+              {eligibilityUi.publicLabel}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -193,6 +213,10 @@ export function GiveawayDetail() {
               </p>
             </div>
           </div>
+
+          {showLockedHint ? (
+            <p className="text-center text-xs font-medium text-amber-200/90">{eligibilityUi.lockedHint}</p>
+          ) : null}
 
           {isActive ? (
             <button
@@ -245,6 +269,54 @@ export function GiveawayDetail() {
           ) : null}
         </div>
       </article>
+
+      {eligibilityModal ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="giveaway-eligibility-title"
+        >
+          <div className="w-full max-w-md rounded-[22px] border border-white/10 bg-[#17141c] p-5 shadow-2xl">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <h2 id="giveaway-eligibility-title" className="text-lg font-bold text-white">
+                {eligibilityModal.denyTitle}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setEligibilityModal(null)}
+                className="rounded-full p-1.5 text-muted hover:bg-white/5 hover:text-white"
+                aria-label="Закрыть"
+              >
+                <X size={18} aria-hidden />
+              </button>
+            </div>
+            <p className="text-sm leading-relaxed text-text-secondary">
+              {eligibilityModal.denyDescription}
+            </p>
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const path = eligibilityModal.actionPath
+                  setEligibilityModal(null)
+                  navigate(path)
+                }}
+                className="flex min-h-11 w-full items-center justify-center rounded-[14px] bg-kick px-4 text-sm font-semibold text-white hover:brightness-110"
+              >
+                {eligibilityModal.actionLabel}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEligibilityModal(null)}
+                className="flex min-h-11 w-full items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white/85"
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
