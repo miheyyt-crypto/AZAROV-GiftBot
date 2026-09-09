@@ -108,7 +108,7 @@ export function Profile() {
           </h2>
           <p className="truncate text-sm text-text-secondary">{displayUsername}</p>
           {isDemo && (
-            <p className="mt-1 text-[10px] font-medium text-neon-purple">Demo mode</p>
+            <p className="mt-1 text-[10px] font-medium text-neon-purple">Демо-режим</p>
           )}
         </div>
       </section>

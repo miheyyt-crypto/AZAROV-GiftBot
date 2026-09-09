@@ -42,7 +42,7 @@ function validateField(field: ProductCheckoutField, value: string): string | nul
   if (field.type === 'telegram_username' || field.type === 'kick_username') {
     const username = normalizeTelegramUsername(trimmed)
     if (!/^@[A-Za-z0-9_]{4,32}$/.test(username)) {
-      return 'Укажи корректный @username.'
+      return 'Укажи корректный @ник.'
     }
     return null
   }

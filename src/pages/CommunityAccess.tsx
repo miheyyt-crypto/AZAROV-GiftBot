@@ -130,7 +130,7 @@ export function CommunityAccess() {
       return
     }
     if (!isValidTelegramUsername(username)) {
-      setError('❌ Укажите Telegram username')
+      setError('❌ Укажите имя пользователя Telegram')
       return
     }
     if (!file) {
@@ -204,7 +204,8 @@ export function CommunityAccess() {
               <span className="font-mono text-white">{request.welvuraId || '—'}</span>
             </p>
             <p className="break-all">
-              Username: {request.username ? `@${request.username}` : 'отсутствует'}
+              Имя пользователя:{' '}
+              {request.username ? `@${request.username}` : 'отсутствует'}
             </p>
           </div>
           {request.status === 'rejected' ? (
@@ -244,7 +245,7 @@ export function CommunityAccess() {
 
           <div>
             <label htmlFor="community-username" className="text-xs font-semibold text-muted">
-              Telegram username
+              Имя пользователя Telegram
             </label>
             <div className="relative mt-1.5">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">
@@ -255,7 +256,7 @@ export function CommunityAccess() {
                 type="text"
                 value={normalizeUsernameInput(username)}
                 onChange={(event) => setUsername(event.target.value)}
-                placeholder="username"
+                placeholder="ник"
                 autoComplete="off"
                 className="w-full rounded-[14px] border border-white/[0.08] bg-black/30 py-3 pl-8 pr-3 text-sm text-white placeholder:text-muted focus:border-kick/50 focus:outline-none"
               />

@@ -84,7 +84,7 @@ export function PartnerTaskItem({
     }
 
     if (!file) {
-      setLocalError('Добавь скриншот (JPG, PNG или WEBP).')
+      setLocalError('Добавьте скриншот (JPG, PNG или WEBP).')
       return
     }
 

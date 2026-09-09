@@ -92,7 +92,7 @@ export function getDisplayUsername(user: TelegramUser): string {
     return `@${user.username}`
   }
 
-  return '@username не указан'
+  return 'Имя пользователя не указано'
 }
 
 export function getHeaderDisplayName(user: TelegramUser): string {

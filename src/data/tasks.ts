@@ -21,7 +21,7 @@ export const tasks: Task[] = [
   {
     id: 'kick-connect',
     title: 'Привяжи Kick',
-    description: 'Привяжи свой аккаунт Kick к AZAROV - GiftBot.',
+    description: 'Привяжи свой аккаунт Kick к AZAROV — GiftBot.',
     category: 'kick',
     reward: 400,
     type: 'kick_connect',
@@ -31,7 +31,7 @@ export const tasks: Task[] = [
   {
     id: 'kick-follow',
     title: 'Зафолловься на канал Kick',
-    description: 'Подпишись на канал kick.com/azarov7777 с привязанного Kick аккаунта.',
+    description: 'Подпишись на канал kick.com/azarov7777 с привязанного Kick-аккаунта.',
     category: 'kick',
     reward: 500,
     type: 'kick_follow',
@@ -50,7 +50,7 @@ export const tasks: Task[] = [
   },
   {
     id: 'referral-invite',
-    title: 'Пригласи 3 друзей',
+    title: 'Пригласи 3 друга',
     description:
       `Друг считается после успешной привязки Kick по твоей ссылке. За каждого такого друга ты получаешь ${REFERRAL_ACTIVATION_REWARD} монет — один раз.`,
     category: 'telegram',

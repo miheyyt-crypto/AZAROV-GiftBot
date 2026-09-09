@@ -60,7 +60,7 @@ export function TelegramLoginButton({ onAuth, disabled = false }: TelegramLoginB
   if (!botUsername) {
     return (
       <p className="text-center text-sm text-muted">
-        Логин через Telegram временно недоступен: не задан username бота.
+        Вход через Telegram временно недоступен: не задано имя бота.
       </p>
     )
   }

@@ -118,7 +118,7 @@ export function GiveawaysSection({
         {loadState === 'ready' && tab === 'active' && visible.length === 0 ? (
           <GiveawaysEmptyState
             title="Нет активных розыгрышей"
-            description="Загляните в завершённые или следите за анонсами"
+            description="Загляните в завершённые или следите за анонсами."
             actionLabel="Посмотреть историю"
             onAction={() => setTab('completed')}
           />

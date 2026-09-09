@@ -272,7 +272,7 @@ export async function initiateKickOAuth(): Promise<{
         code: result.code,
         message:
           result.message ||
-          'Привязка Kick пока недоступна. Проверь KICK_CLIENT_ID / SECRET на сервере.',
+          'Привязка Kick пока недоступна. Попробуй позже.',
       }
     }
 

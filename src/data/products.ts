@@ -37,7 +37,7 @@ export const products: ShopProduct[] = [
     imageClassName: 'object-contain scale-[0.85]',
     description: 'Настоящий подарок Telegram за 100 звёзд.',
     detailText:
-      'Настоящий подарок Telegram за 100 звезд. Бот пришлёт его тебе сам, на аккаунт, с которого ты покупаешь — ник вводить не нужно. Отправляем сразу после проверки заказа. Алмаз после получения - на звезды обменять нельзя.',
+      'Настоящий подарок Telegram за 100 звёзд. Бот пришлёт его тебе сам, на аккаунт, с которого ты покупаешь — ник вводить не нужно. Отправляем сразу после проверки заказа. Алмаз после получения — на звёзды обменять нельзя.',
     infoText:
       'Бот пришлёт подарок тебе сам — на этот же аккаунт, с которого покупаешь. Ник вводить не нужно, отправим сразу после проверки заказа.',
     checkoutField: null,
@@ -53,7 +53,7 @@ export const products: ShopProduct[] = [
     imageClassName: 'object-contain scale-[0.9]',
     description: 'Выплата 5 000 ₽ на USDT TRC20.',
     detailText:
-      'Выплата в производится на вашу криптовалюту например - USDT по сети TRC20. Обработка до 24 часов.',
+      'Выплата производится на вашу криптовалюту, например USDT по сети TRC20. Обработка до 24 часов.',
     infoText: ADMIN_ORDERS_INFO,
     checkoutField: {
       type: 'usdt_trc20',
@@ -79,13 +79,13 @@ export const products: ShopProduct[] = [
     checkoutFields: [
       {
         type: 'donate_nickname',
-        label: 'Твой Ник',
+        label: 'Твой ник',
         placeholder: 'Ник на стриме',
         maxLength: 20,
       },
       {
         type: 'donate_text',
-        label: 'Текст Доната',
+        label: 'Текст доната',
         placeholder: 'Текст для озвучки на стриме',
         maxLength: 300,
       },
@@ -102,7 +102,7 @@ export const products: ShopProduct[] = [
     imageClassName: 'object-contain scale-[1.15] translate-y-[5px]',
     description: 'Заказ трека на стрим.',
     detailText:
-      'Здесь ты можешь добавить любую музыку на стрим, просто отправь ссылку на свой трек. (Принимаются ссылки с платформ YouTube, SoundCloud)',
+      'Здесь ты можешь добавить любую музыку на стрим, просто отправь ссылку на свой трек. Принимаются ссылки с платформ YouTube и SoundCloud.',
     infoText: ADMIN_ORDERS_INFO,
     checkoutField: {
       type: 'track_url',

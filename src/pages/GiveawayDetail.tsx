@@ -77,7 +77,7 @@ export function GiveawayDetail() {
     const result = await participateGiveaway(giveaway.id)
     setBusy(false)
     if (!result.success) {
-      setActionMessage(result.message || 'Не удалось участвовать.')
+      setActionMessage(result.message || 'Не удалось принять участие.')
       return
     }
     if (result.giveaway) {

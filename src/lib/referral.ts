@@ -116,6 +116,12 @@ export function getReferralCaseRemainingLabel(remaining: number): string {
     return 'Остался 1 друг'
   }
 
+  const mod10 = remaining % 10
+  const mod100 = remaining % 100
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    return `Осталось пригласить ${remaining} друга`
+  }
+
   return `Осталось пригласить ${remaining} друзей`
 }
 

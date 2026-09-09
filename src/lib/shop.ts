@@ -12,13 +12,13 @@ import type { PurchaseFulfillmentData, ShopOrder } from '@/types/shop'
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   pending: 'Ожидает выполнения',
   processing: 'Выполняется',
-  completed: 'Выполнено',
-  cancelled: 'Отменено',
+  completed: 'Выполнен',
+  cancelled: 'Отменён',
   rejected: 'Отклонён',
   PENDING: 'Ожидает выполнения',
   PROCESSING: 'Выполняется',
-  COMPLETED: 'Выполнено',
-  CANCELLED: 'Отменено',
+  COMPLETED: 'Выполнен',
+  CANCELLED: 'Отменён',
   REJECTED: 'Отклонён',
 }
 

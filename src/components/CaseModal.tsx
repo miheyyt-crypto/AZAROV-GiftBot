@@ -101,7 +101,7 @@ export function CaseModal({
     }
 
     if (isReferral) {
-      return canOpenReferral ? 'Открыть кейс' : 'Получается за каждые 5 друзей'
+      return canOpenReferral ? 'Открыть кейс' : 'Выдаётся за каждые 5 друзей'
     }
 
     if (!canAfford) {

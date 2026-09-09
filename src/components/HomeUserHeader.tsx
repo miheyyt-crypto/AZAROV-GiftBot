@@ -16,7 +16,7 @@ export function HomeUserHeader() {
             {displayName}
           </p>
           <p className="truncate text-xs text-muted">
-            {isDemo ? 'Demo mode' : displayLabel}
+            {isDemo ? 'Демо-режим' : displayLabel}
           </p>
         </div>
       </div>

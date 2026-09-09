@@ -20,7 +20,7 @@ import type { AppError, LoadState } from '@/types/errors'
 
 const filters: Array<{ id: OperationFilter; label: string }> = [
   { id: 'all', label: 'Все' },
-  { id: 'income', label: 'Получения' },
+  { id: 'income', label: 'Приход' },
   { id: 'purchases', label: 'Покупки' },
   { id: 'rewards', label: 'Награды' },
 ]
