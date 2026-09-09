@@ -1,5 +1,5 @@
 export const PRODUCTS = [
-  { id: 'diamond-autograph', name: 'Подарок Алмаз Роспись', price: 3333, available: true },
+  { id: 'diamond-autograph', name: 'Подарок Алмаз Роспись', price: 5555, available: true },
   { id: 'cash-5000', name: '5 000 ₽', price: 199999, available: true },
   { id: 'stream-donate', name: 'Донат на стрим', price: 2499, available: true },
   { id: 'stream-music', name: 'Музыка на стрим', price: 4000, available: true },

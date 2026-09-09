@@ -30,7 +30,7 @@ export const products: ShopProduct[] = [
   {
     id: 'diamond-autograph',
     name: 'Подарок Алмаз Роспись',
-    price: 3333,
+    price: 5555,
     currency: 'coins',
     category: 'other',
     image: diamondImage,
