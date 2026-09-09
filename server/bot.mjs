@@ -88,7 +88,7 @@ const WELCOME_PHOTO_PATH = path.join(
 
 function buildWelcomeText() {
   return [
-    '✨Добро пожаловать в AZAROV GIFTBOX!',
+    '✨Добро пожаловать в AZAROV GIFTBOT!',
     '',
     'Смотри эфиры AZAROV на KICK, выполняй задания и копи монеты. Обменивай их в магазине на приветы, активности в эфире, подписки, пополнения и ценные призы.',
     '',
