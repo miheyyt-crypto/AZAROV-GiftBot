@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 
 import minesBanner from '@/assets/banners/mines-banner.jpg'
+import towerBanner from '@/assets/banners/tower-banner.png'
 import { GameBanner } from '@/components/GameBanner'
 import { ROUTES } from '@/lib/constants'
 
@@ -18,7 +19,11 @@ export function GamesBannerGrid({ className = '' }: GamesBannerGridProps) {
         image={minesBanner}
         onClick={() => navigate(ROUTES.mines)}
       />
-      <GameBanner ariaLabel="Открыть Tower" onClick={() => navigate(ROUTES.tower)} />
+      <GameBanner
+        ariaLabel="Открыть Tower"
+        image={towerBanner}
+        onClick={() => navigate(ROUTES.tower)}
+      />
     </div>
   )
 }
