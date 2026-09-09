@@ -165,7 +165,7 @@ export function PartnerTaskItem({
               <span className="text-xs font-medium text-white/40">{lockedHint}</span>
             )}
 
-            {!isCompleted && !isLocked && !isPending && (
+            {!isCompleted && !isLocked && !isPending && task.type !== 'account_link' && (
               <button
                 type="button"
                 onClick={onOpen}
@@ -250,6 +250,17 @@ export function PartnerTaskItem({
               >
                 {isLoading ? 'Отправка...' : submitLabel}
               </button>
+
+              {task.type === 'account_link' && (
+                <button
+                  type="button"
+                  onClick={onOpen}
+                  disabled={isLoading}
+                  className="w-full rounded-[14px] bg-kick px-3 py-2.5 text-sm font-semibold text-white transition-[filter] hover:brightness-110 active:brightness-95 disabled:opacity-60"
+                >
+                  {isLoading ? '...' : openLabel}
+                </button>
+              )}
             </div>
           )}
 
