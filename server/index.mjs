@@ -77,6 +77,12 @@ import {
 } from './shop.mjs'
 import { openCase } from './cases.mjs'
 import {
+  cashoutMines,
+  getActiveMinesGame,
+  revealMinesCell,
+  startMinesGame,
+} from './mines.mjs'
+import {
   getUnreadNotificationsCount,
   listNotificationsForUser,
   markAllNotificationsRead,
@@ -1824,6 +1830,68 @@ app.post(
     bootstrapUser(telegramUser, '')
     const result = openCase(telegramUser.id, caseId, requestId)
     res.json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.get(
+  '/api/mines/active',
+  withEconomicUser(async (_req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const result = getActiveMinesGame(telegramUser.id)
+    res.json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/mines/start',
+  withEconomicUser(async (req, res, telegramUser) => {
+    const requestId = parseRequestId(req.body?.requestId)
+    bootstrapUser(telegramUser, '')
+    const result = startMinesGame(telegramUser.id, {
+      bet: req.body?.bet,
+      mineCount: req.body?.mineCount,
+      requestId,
+    })
+    res.status(result.success ? 200 : 400).json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/mines/reveal',
+  withEconomicUser(async (req, res, telegramUser) => {
+    const requestId = parseRequestId(req.body?.requestId)
+    bootstrapUser(telegramUser, '')
+    const result = revealMinesCell(telegramUser.id, {
+      gameId: req.body?.gameId,
+      cellIndex: req.body?.cellIndex,
+      requestId,
+    })
+    res.status(result.success ? 200 : 400).json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/mines/cashout',
+  withEconomicUser(async (req, res, telegramUser) => {
+    const requestId = parseRequestId(req.body?.requestId)
+    bootstrapUser(telegramUser, '')
+    const result = cashoutMines(telegramUser.id, {
+      gameId: req.body?.gameId,
+      requestId,
+    })
+    res.status(result.success ? 200 : 400).json({
       ...result,
       user: toPublicUser(getUser(telegramUser.id)),
     })

@@ -28,11 +28,13 @@ const TRANSACTION_LABELS = {
   streak_freeze: 'Заморозка стрика',
   achievement_reward: 'Награда за достижение',
   giveaway_reward: 'Победа в розыгрыше',
+  mines_bet: 'Ставка в Mines',
+  mines_win: 'Выигрыш в Mines',
   admin_adjustment: 'Корректировка баланса',
   refund: 'Возврат',
 }
 
-const PURCHASE_TYPES = new Set(['case_purchase', 'shop_purchase'])
+const PURCHASE_TYPES = new Set(['case_purchase', 'shop_purchase', 'mines_bet'])
 const REWARD_TYPES = new Set([
   'task_reward',
   'referral_reward',
@@ -40,6 +42,7 @@ const REWARD_TYPES = new Set([
   'case_reward',
   'achievement_reward',
   'giveaway_reward',
+  'mines_win',
 ])
 
 function getCaseName(caseId) {

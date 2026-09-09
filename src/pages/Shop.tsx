@@ -47,6 +47,20 @@ export function Shop() {
         <>
           <button
             type="button"
+            onClick={() => navigate(ROUTES.mines)}
+            className="mb-4 flex min-h-[72px] w-full items-center justify-between overflow-hidden rounded-[20px] border border-[rgb(139_61_255/35%)] bg-[linear-gradient(110deg,#1a1230_0%,#12101c_55%,#0e1620_100%)] px-4 py-3.5 text-left shadow-[0_0_24px_rgb(139_61_255/15%)] transition active:scale-[0.99]"
+          >
+            <span className="min-w-0">
+              <span className="block text-base font-bold text-white">💣 Mines</span>
+              <span className="mt-0.5 block text-xs text-[#9b96ab]">
+                Мини-игра на монеты · ставка от 100
+              </span>
+            </span>
+            <ChevronRight size={18} className="shrink-0 text-neon-purple" />
+          </button>
+
+          <button
+            type="button"
             onClick={() => navigate(ROUTES.orders)}
             className="ui-card mb-4 flex min-h-12 w-full items-center justify-between px-4 py-3.5 text-left"
           >

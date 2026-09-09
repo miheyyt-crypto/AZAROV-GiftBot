@@ -11,6 +11,7 @@ import {
   GiveawayDetailPage,
   GiveawaysPage,
   HomePage,
+  MinesPage,
   NotFoundPage,
   OperationsHistoryPage,
   OrdersPage,
@@ -37,6 +38,7 @@ export default function App() {
           <Route path={ROUTES.giveaways} element={<GiveawaysPage />} />
           <Route path={`${ROUTES.giveaways}/:giveawayId`} element={<GiveawayDetailPage />} />
           <Route path={ROUTES.communityAccess} element={<CommunityAccessPage />} />
+          <Route path={ROUTES.mines} element={<MinesPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

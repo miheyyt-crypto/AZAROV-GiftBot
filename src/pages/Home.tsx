@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { CommunityAccessBanner } from '@/components/CommunityAccessBanner'
 import { GiveawaysSection } from '@/components/GiveawaysSection'
@@ -8,8 +9,10 @@ import { LeaderboardPodium } from '@/components/LeaderboardPodium'
 import { RecentDropsFeed } from '@/components/RecentDropsFeed'
 import { StreamStreakCard } from '@/components/StreamStreakCard'
 import { getHomeBanners } from '@/data/banners'
+import { ROUTES } from '@/lib/constants'
 
 export function Home() {
+  const navigate = useNavigate()
   const banners = useMemo(() => getHomeBanners(), [])
 
   return (
@@ -21,6 +24,20 @@ export function Home() {
       <div className="mt-6">
         <StreamStreakCard />
       </div>
+
+      <button
+        type="button"
+        onClick={() => navigate(ROUTES.mines)}
+        className="mt-4 flex min-h-[68px] w-full items-center justify-between rounded-[20px] border border-[rgb(139_61_255/30%)] bg-[linear-gradient(110deg,#18122a,#10141c)] px-4 py-3 text-left shadow-[0_0_20px_rgb(139_61_255/12%)] transition active:scale-[0.99]"
+      >
+        <span>
+          <span className="block text-sm font-bold text-white">💣 Mines</span>
+          <span className="mt-0.5 block text-xs text-[#9b96ab]">Играй на монеты · от 100</span>
+        </span>
+        <span className="rounded-full bg-[rgb(139_61_255/20%)] px-3 py-1 text-xs font-semibold text-[#d2b4ff]">
+          Играть
+        </span>
+      </button>
 
       <div className="mt-6">
         <GiveawaysSection />
