@@ -161,6 +161,7 @@ export async function participateGiveaway(giveawayId: string): Promise<Participa
       requirement: result.data.requirement
         ? normalizeGiveawayEligibility(result.data.requirement)
         : undefined,
+      missing: Array.isArray(result.data.missing) ? result.data.missing.map(String) : undefined,
       giveaway: result.data.giveaway
         ? normalizeGiveaway(result.data.giveaway) || undefined
         : undefined,

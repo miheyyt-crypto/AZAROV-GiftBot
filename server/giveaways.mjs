@@ -1,9 +1,10 @@
 import crypto from 'node:crypto'
 
+import { syncWelvuraVerifiedFromCommunityAccess } from './community-access.mjs'
 import {
   checkGiveawayEligibility,
   normalizeGiveawayEligibility,
-  resolveGiveawayEligibility,
+  resolvePublicGiveawayEligibility,
 } from './giveaway-eligibility.mjs'
 import { createNotificationOnStore, NOTIFICATION_TYPE } from './notifications.mjs'
 import { withStore, withStoreRead } from './store.mjs'
@@ -17,6 +18,9 @@ export {
   getEligibilityConfig,
   normalizeGiveawayEligibility,
   resolveGiveawayEligibility,
+  resolvePublicGiveawayEligibility,
+  WELVURA_TASK_1_ID,
+  WELVURA_TASK_2_ID,
 } from './giveaway-eligibility.mjs'
 
 const GIVEAWAY_ID_RE = /^[a-zA-Z0-9_-]{8,64}$/
@@ -240,7 +244,7 @@ export function validateGiveawayCreateInput(body) {
       return {
         ok: false,
         code: 'INVALID_ELIGIBILITY',
-        message: 'eligibility должен быть all, category_a или category_b.',
+        message: 'eligibility должен быть all, kick или welvura_verified.',
       }
     }
     eligibility = normalized
@@ -541,7 +545,7 @@ export function toPublicGiveaway(store, giveaway, { userId = null, includeWinner
     customPrize: isCustomPrize(giveaway) ? giveaway.prizeText : null,
     winnersCount: Number(giveaway.winnersCount) || 0,
     participantsCount: Number(giveaway.participantsCount) || 0,
-    eligibility: resolveGiveawayEligibility(giveaway),
+    eligibility: resolvePublicGiveawayEligibility(giveaway),
     startAt: giveaway.startAt,
     endAt: giveaway.endAt,
     createdAt: giveaway.createdAt,
@@ -985,12 +989,14 @@ export function participateOnStore(store, giveawayId, userId, { nowIso = utcNow(
   }
 
   const user = store.users[String(uid)]
+  syncWelvuraVerifiedFromCommunityAccess(store, user)
   const eligibilityCheck = checkGiveawayEligibility(user, giveaway)
   if (!eligibilityCheck.eligible) {
     return {
       success: false,
       code: 'GIVEAWAY_NOT_ELIGIBLE',
       requirement: eligibilityCheck.requirement,
+      missing: Array.isArray(eligibilityCheck.missing) ? eligibilityCheck.missing : [],
       message: eligibilityCheck.message || 'Вы не можете участвовать в этом розыгрыше.',
       giveaway: toPublicGiveaway(store, giveaway, { userId: uid }),
     }

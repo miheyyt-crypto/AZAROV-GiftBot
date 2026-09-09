@@ -4,7 +4,7 @@ export type GiveawayTab = GiveawayStatus
 
 export type GiveawayPrizeType = 'coins' | 'custom' | 'text'
 
-export type GiveawayEligibility = 'all' | 'category_a' | 'category_b'
+export type GiveawayEligibility = 'all' | 'kick' | 'welvura_verified'
 
 export type GiveawayWinner = {
   userId: number
@@ -73,4 +73,5 @@ export type ParticipateGiveawayResponse = {
   message?: string
   /** Present when code is GIVEAWAY_NOT_ELIGIBLE. */
   requirement?: GiveawayEligibility
+  missing?: string[]
 }

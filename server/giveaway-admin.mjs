@@ -8,6 +8,7 @@ import {
   notifyGiveawayTelegramJobs,
   parseGiveawayId,
   resolveGiveawayEligibility,
+  resolvePublicGiveawayEligibility,
 } from './giveaways.mjs'
 import { sendAdminRootMenu } from './community-admin.mjs'
 import {
@@ -299,13 +300,13 @@ export function buildGiveawayImageKeyboard() {
 
 export function buildGiveawayEligibilityKeyboard() {
   const all = getEligibilityConfig('all')
-  const a = getEligibilityConfig('category_a')
-  const b = getEligibilityConfig('category_b')
+  const kick = getEligibilityConfig('kick')
+  const welvura = getEligibilityConfig('welvura_verified')
   return {
     inline_keyboard: [
       [{ text: all.adminButton, callback_data: 'gw:elig:all' }],
-      [{ text: a.adminButton, callback_data: 'gw:elig:category_a' }],
-      [{ text: b.adminButton, callback_data: 'gw:elig:category_b' }],
+      [{ text: kick.adminButton, callback_data: 'gw:elig:kick' }],
+      [{ text: welvura.adminButton, callback_data: 'gw:elig:welvura_verified' }],
       [{ text: '❌ Отмена', callback_data: 'gw:cancel' }],
     ],
   }
@@ -383,14 +384,18 @@ function formatEligibilityLine(giveawayOrWizard) {
   const eligibility = resolveGiveawayEligibility(
     giveawayOrWizard?.eligibility ?? giveawayOrWizard,
   )
-  const config = getEligibilityConfig(eligibility)
-  if (eligibility === 'all') {
-    return `Участники: 👤 ${config.adminLabel}`
+  const id = eligibility || 'all'
+  const config = getEligibilityConfig(id)
+  if (id === 'all') {
+    return `Участники: 👥 ${config.historyLabel}`
   }
-  if (eligibility === 'category_a') {
-    return `Участники: 👥 Только категория A`
+  if (id === 'kick') {
+    return `Участники: 🎮 Kick`
   }
-  return `Участники: ⭐ Только категория B`
+  if (id === 'welvura_verified') {
+    return `Участники: 🎁 Welvura`
+  }
+  return `Участники: ${config.historyLabel}`
 }
 
 function formatActiveGiveawayBlock(giveaway) {
@@ -642,7 +647,7 @@ async function createFromWizard(ctx, adminId, wizard) {
       prizeAmount: wizard.prizeType === 'coins' ? wizard.prizeAmount : null,
       prizeText: wizard.prizeType === 'custom' ? wizard.prizeText : null,
       winnersCount: wizard.winnersCount,
-      eligibility: resolveGiveawayEligibility(wizard.eligibility),
+      eligibility: resolvePublicGiveawayEligibility(wizard.eligibility),
       startAt: now.toISOString(),
       endAt: end.toISOString(),
     },
@@ -853,7 +858,7 @@ export async function handleGiveawayAdminCallback(ctx) {
     return true
   }
 
-  const eligMatch = /^gw:elig:(all|category_a|category_b)$/i.exec(data)
+  const eligMatch = /^gw:elig:(all|kick|welvura_verified)$/i.exec(data)
   if (eligMatch) {
     const wizard = getPendingGiveawayWizard(adminId)
     if (!wizard || wizard.step !== 'await_eligibility') {

@@ -300,6 +300,11 @@ export function approveCommunityAccessOnStore(store, requestId, reviewedBy) {
   // Hook point for future invite link issuance.
   row.inviteReady = false
 
+  const owner = store.users?.[String(row.telegramId)]
+  if (owner) {
+    owner.welvuraVerified = true
+  }
+
   notifyCommunityAccessApprovedOnStore(store, row)
 
   return {
@@ -397,6 +402,25 @@ export function getAdminCommunityRequestOnStore(store, requestId) {
     success: true,
     request: publicRequest(store.communityAccessRequests[id], { includeAdmin: true }),
   }
+}
+
+/**
+ * Backfill user.welvuraVerified from an already-approved community-access request.
+ * Does not invent verification — only mirrors existing admin approval.
+ */
+export function syncWelvuraVerifiedFromCommunityAccess(store, user) {
+  if (!user || user.welvuraVerified === true) {
+    return Boolean(user?.welvuraVerified)
+  }
+  ensureMaps(store)
+  const userId = Number(user.telegramId)
+  const approved = Object.values(store.communityAccessRequests || {}).some(
+    (row) => Number(row.telegramId) === userId && row.status === 'approved',
+  )
+  if (approved) {
+    user.welvuraVerified = true
+  }
+  return Boolean(user.welvuraVerified)
 }
 
 /* ── withStore wrappers ─────────────────────────────────────────── */

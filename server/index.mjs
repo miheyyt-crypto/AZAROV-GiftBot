@@ -1711,6 +1711,7 @@ app.post(
         code: result.code,
         message: result.message,
         ...(result.requirement ? { requirement: result.requirement } : {}),
+        ...(Array.isArray(result.missing) ? { missing: result.missing } : {}),
         ...(result.giveaway ? { giveaway: result.giveaway } : {}),
         user: toPublicUser(getUser(telegramUser.id)),
       })

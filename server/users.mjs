@@ -152,6 +152,7 @@ export function createUser(store, telegramUser) {
     kickDisplayName: null,
     kickAvatarUrl: null,
     kickLinkedAt: null,
+    welvuraVerified: false,
     inviterRewardGranted: false,
     invitedRewardGranted: false,
     openedReferralCases: 0,
@@ -258,6 +259,7 @@ export function ensureUser(store, telegramUser) {
   existing.kickDisplayName = existing.kickDisplayName || null
   existing.kickAvatarUrl = existing.kickAvatarUrl || null
   existing.kickLinkedAt = existing.kickLinkedAt || null
+  existing.welvuraVerified = Boolean(existing.welvuraVerified)
   existing.inviterRewardGranted = Boolean(existing.inviterRewardGranted)
   existing.invitedRewardGranted = Boolean(existing.invitedRewardGranted)
   existing.openedReferralCases = existing.openedReferralCases || 0
@@ -365,6 +367,7 @@ export function toPublicUser(user, store = null) {
     kickUsername: user.kickUsername || null,
     kickDisplayName: user.kickDisplayName || null,
     kickAvatarUrl: user.kickAvatarUrl || null,
+    welvuraVerified: Boolean(user.welvuraVerified),
     referralRewardGranted: user.invitedRewardGranted || user.referralRewardClaimed,
     claimedTaskIds: user.completedTasks,
     completedTasks: user.completedTasks,

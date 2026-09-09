@@ -107,6 +107,7 @@ test('approve and reject community access update status', async () => {
     assert.equal(approved.success, true)
     assert.equal(approved.request.status, 'approved')
     assert.ok(approved.request.reviewedAt)
+    assert.equal(withStore((store) => store.users['503'].welvuraVerified), true)
 
     const status = withStore((store) => getCommunityAccessStatusOnStore(store, 503))
     assert.equal(status.request.status, 'approved')

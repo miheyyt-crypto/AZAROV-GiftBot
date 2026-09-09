@@ -52,17 +52,27 @@ export function Tasks() {
 
   useEffect(() => {
     const taskId = String(searchParams.get('task') || '').trim()
-    if (!taskId) {
+    const partnerId = String(searchParams.get('partner') || '').trim()
+    if (!taskId && !partnerId) {
       return
     }
-    const match =
-      allTasks.find((task) => task.id === taskId) ||
-      getTasks().find((task) => task.id === taskId)
-    if (match) {
-      setSelectedTask(match)
+
+    if (taskId) {
+      const match =
+        allTasks.find((task) => task.id === taskId) ||
+        getTasks().find((task) => task.id === taskId)
+      if (match) {
+        setSelectedTask(match)
+      }
     }
+
+    if (partnerId && getPartnerById(partnerId)) {
+      setActivePartnerId(partnerId)
+    }
+
     const next = new URLSearchParams(searchParams)
     next.delete('task')
+    next.delete('partner')
     setSearchParams(next, { replace: true })
   }, [allTasks, searchParams, setSearchParams])
 
