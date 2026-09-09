@@ -227,8 +227,9 @@ export function CommunityAccess() {
         <div className="min-w-0">
           <h1 className="text-xl font-bold tracking-tight text-white">🔒 Закрытое сообщество</h1>
           <p className="mt-1 text-sm leading-relaxed text-text-secondary">
-            Это закрытый эксклюзивный Telegram-чат для участников сообщества. Чтобы получить
-            доступ, отправьте заявку с необходимыми данными и подтверждением выполнения условия.
+            Доступ к эксклюзивному Telegram-чату вместе со мной. Много БОНУСОВ и ПОДАРКОВ лично от
+            меня. Чтобы получить доступ, отправь скриншот аккаунта, а также ID Welvura (доступ
+            только депам).
           </p>
         </div>
       </div>
