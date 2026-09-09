@@ -10,6 +10,8 @@ interface PartnerBannerProps {
   theme: PartnerTheme
   rewardSuffix?: string
   image?: string
+  /** Completed partner tasks; lit dashes = completedCount + 1 (capped). */
+  completedCount?: number
   onClick?: () => void
 }
 
@@ -52,10 +54,15 @@ export function PartnerBanner({
   theme,
   rewardSuffix,
   image,
+  completedCount = 0,
   onClick,
 }: PartnerBannerProps) {
   const styles = themeStyles[theme]
   const isCharacter = styles.imageMode === 'character'
+  const litCount = Math.min(
+    DOT_COUNT,
+    Math.max(1, Math.floor(completedCount) + 1),
+  )
 
   return (
     <button
@@ -99,8 +106,8 @@ export function PartnerBanner({
               <span
                 key={index}
                 className={[
-                  'h-1 w-3 rounded-full',
-                  index === 0 ? styles.dots : 'bg-white/20',
+                  'h-1 w-3 rounded-full transition-colors duration-300',
+                  index < litCount ? styles.dots : 'bg-white/20',
                 ].join(' ')}
               />
             ))}

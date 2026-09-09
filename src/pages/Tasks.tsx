@@ -11,6 +11,7 @@ import { TasksEmptyState } from '@/components/TasksEmptyState'
 import { getPartnerById, getPartners } from '@/data/partners'
 import { getTasks } from '@/data/tasks'
 import { useUserAccount } from '@/hooks/useUserAccount'
+import { getPartnerProgress } from '@/lib/partners'
 import {
   filterTasks,
   getVisibleTasks,
@@ -107,18 +108,26 @@ export function Tasks() {
       {/* Partner banners */}
       {showPartners && (
         <section className="mb-6 space-y-3">
-          {partners.map((partner) => (
-            <PartnerBanner
-              key={partner.id}
-              name={partner.name}
-              description={partner.description}
-              reward={partner.reward}
-              rewardSuffix={partner.rewardSuffix}
-              theme={partner.theme}
-              image={partner.image}
-              onClick={() => setActivePartnerId(partner.id)}
-            />
-          ))}
+          {partners.map((partner) => {
+            const { completed } = getPartnerProgress(
+              partner.id,
+              account.claimedTaskIds,
+              partner.tasks.length,
+            )
+            return (
+              <PartnerBanner
+                key={partner.id}
+                name={partner.name}
+                description={partner.description}
+                reward={partner.reward}
+                rewardSuffix={partner.rewardSuffix}
+                theme={partner.theme}
+                image={partner.image}
+                completedCount={completed}
+                onClick={() => setActivePartnerId(partner.id)}
+              />
+            )
+          })}
         </section>
       )}
 
