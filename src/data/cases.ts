@@ -15,7 +15,7 @@ export function rewardImageForPrize(currency: CaseRewardCurrency, amount: number
     return coinsImage
   }
   const rub = Math.floor(Number(amount) || 0)
-  if (rub === 1000 || rub === 2000) {
+  if (rub === 1000 || rub === 2000 || rub === 3000) {
     return rub1000Image
   }
   if (rub === 5000) {

@@ -219,7 +219,7 @@ export function CaseOpeningReel({
                     alt=""
                     className={[
                       'object-contain',
-                      item.reward.currency === 'COINS' ? 'h-[52%] w-[52%]' : 'h-full w-full',
+                      item.reward.currency === 'COINS' ? 'h-[52%] w-[52%]' : 'h-[70%] w-[70%]',
                     ].join(' ')}
                     draggable={false}
                   />

@@ -32,9 +32,10 @@ export function CaseRewardCard({ reward }: CaseRewardCardProps) {
           src={reward.image}
           alt=""
           className={[
+            'object-contain',
             reward.currency === 'COINS'
-              ? 'h-[49%] w-[49%] object-contain drop-shadow-[0_6px_14px_rgb(0_0_0/35%)]'
-              : 'size-full object-cover',
+              ? 'h-[49%] w-[49%] drop-shadow-[0_6px_14px_rgb(0_0_0/35%)]'
+              : 'h-[70%] w-[70%]',
           ].join(' ')}
         />
       </div>

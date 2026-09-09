@@ -254,7 +254,7 @@ export function CaseModal({
                       alt=""
                       className={[
                         'object-contain',
-                        reward.currency === 'COINS' ? 'h-[55%] w-[55%]' : 'size-full',
+                        reward.currency === 'COINS' ? 'h-[55%] w-[55%]' : 'h-[70%] w-[70%]',
                       ].join(' ')}
                     />
                   </div>
