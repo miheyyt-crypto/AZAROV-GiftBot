@@ -17,6 +17,7 @@ import {
   processLivestreamStatusUpdated,
   updateKickLivestreamStateOnStore,
 } from './kick-streak.mjs'
+import { resetKickLiveNotifyBootstrapForTests } from './kick-live-notify.mjs'
 import { computeLevelProgress, computeXpFromStats, XP_PER_LEVEL } from './level.mjs'
 import { claimAchievementOnStore, readAchievementProgress } from './profile.mjs'
 import { withStore } from './store.mjs'
@@ -32,12 +33,14 @@ function withTempStore(run) {
   const prevChannel = process.env.KICK_REQUIRED_CHANNEL
   const prevWindow = process.env.KICK_WATCH_ACTIVITY_WINDOW
 
+  resetKickLiveNotifyBootstrapForTests()
   process.env.AZAROV_STORE_DIR = dir
   process.env.KICK_CLIENT_ID = 'test-client'
   process.env.KICK_CLIENT_SECRET = 'test-secret'
   process.env.KICK_REDIRECT_URI = 'https://example.com/api/kick/callback'
   process.env.KICK_REQUIRED_CHANNEL = 'azarov7777'
   process.env.KICK_WATCH_ACTIVITY_WINDOW = '10'
+  delete process.env.KICK_NOTIFICATION_CHAT_ID
 
   return Promise.resolve()
     .then(() => run(dir))
@@ -55,6 +58,7 @@ function withTempStore(run) {
       if (prevWindow === undefined) delete process.env.KICK_WATCH_ACTIVITY_WINDOW
       else process.env.KICK_WATCH_ACTIVITY_WINDOW = prevWindow
       _resetKickApiCaches()
+      resetKickLiveNotifyBootstrapForTests()
       rmSync(dir, { recursive: true, force: true })
     })
 }

@@ -20,6 +20,7 @@ import {
   updateKickLivestreamStateOnStore,
 } from './kick-streak.mjs'
 import { STREAK_FREEZE_PRODUCT_ID } from './constants.mjs'
+import { resetKickLiveNotifyBootstrapForTests } from './kick-live-notify.mjs'
 import { getCoinHistory } from './profile.mjs'
 import { withStore } from './store.mjs'
 import { createUser } from './users.mjs'
@@ -28,6 +29,7 @@ function withTempStore(run) {
   const dir = mkdtempSync(path.join(tmpdir(), 'azarov-kick-streak-'))
   const previous = process.env.AZAROV_STORE_DIR
   const prevClient = process.env.KICK_CLIENT_ID
+  resetKickLiveNotifyBootstrapForTests()
   const prevSecret = process.env.KICK_CLIENT_SECRET
   const prevRedirect = process.env.KICK_REDIRECT_URI
   const prevChannel = process.env.KICK_REQUIRED_CHANNEL
@@ -37,6 +39,7 @@ function withTempStore(run) {
   process.env.KICK_CLIENT_SECRET = 'test-secret'
   process.env.KICK_REDIRECT_URI = 'https://example.com/api/kick/callback'
   process.env.KICK_REQUIRED_CHANNEL = 'azarov7777'
+  delete process.env.KICK_NOTIFICATION_CHAT_ID
 
   return Promise.resolve()
     .then(() => run(dir))
@@ -52,6 +55,7 @@ function withTempStore(run) {
       if (prevChannel === undefined) delete process.env.KICK_REQUIRED_CHANNEL
       else process.env.KICK_REQUIRED_CHANNEL = prevChannel
       _resetKickApiCaches()
+      resetKickLiveNotifyBootstrapForTests()
       rmSync(dir, { recursive: true, force: true })
     })
 }

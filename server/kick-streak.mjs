@@ -13,6 +13,13 @@ import {
 } from './kick-stats.mjs'
 import { withStore, withStoreRead } from './store.mjs'
 import { grantPendingLevelRewardsOnStore } from './level-rewards.mjs'
+import {
+  getKickNotificationChannelUrl,
+  planKickLiveStartedNotifyOnStore,
+  resolveKickLiveStreamKey,
+  sendKickLiveStartedTelegram,
+  unclaimKickLiveNotify,
+} from './kick-live-notify.mjs'
 
 const WEBHOOK_EVENT_TTL_MS = 7 * 24 * 60 * 60 * 1000
 /** Fresh livestream.status.updated / API snapshot window (ms). */
@@ -90,7 +97,15 @@ export function markKickWebhookEventProcessed(store, eventKey, meta = {}) {
 
 export function updateKickLivestreamStateOnStore(
   store,
-  { broadcasterUserId, channelSlug, isLive, startedAt, endedAt, source = 'webhook' },
+  {
+    broadcasterUserId,
+    channelSlug,
+    isLive,
+    startedAt,
+    endedAt,
+    livestreamId = null,
+    source = 'webhook',
+  },
 ) {
   const now = new Date().toISOString()
   store.kickLivestreamState = {
@@ -99,6 +114,7 @@ export function updateKickLivestreamStateOnStore(
     isLive: Boolean(isLive),
     startedAt: startedAt || null,
     endedAt: endedAt || null,
+    livestreamId: livestreamId != null && String(livestreamId).trim() ? String(livestreamId).trim() : null,
     source,
     updatedAt: now,
   }
@@ -372,35 +388,78 @@ export async function processLivestreamStatusUpdated(payload, options = {}) {
       : payload?.livestream_id != null
         ? String(payload.livestream_id)
         : null
+  const startedAt = payload?.started_at || null
+  const streamKey = resolveKickLiveStreamKey({
+    livestreamId,
+    startedAt,
+    broadcasterUserId,
+  })
 
-  withStore((store) => {
+  const plan = withStore((store) => {
+    const previousIsLive = Boolean(store.kickLivestreamState?.isLive)
     updateKickLivestreamStateOnStore(store, {
       broadcasterUserId,
       channelSlug: channelSlug || required.slug,
       isLive,
-      startedAt: payload?.started_at || null,
+      startedAt,
       endedAt: payload?.ended_at || null,
+      livestreamId,
       source: 'webhook',
     })
 
     if (!isLive) {
-      const streamKey =
-        livestreamId ||
-        (payload?.started_at ? `started:${payload.started_at}` : null)
       closeWatchSessionsOnStore(store, {
         streamId: streamKey,
         endedAtIso: payload?.ended_at || new Date().toISOString(),
       })
     }
+
+    return planKickLiveStartedNotifyOnStore(store, {
+      previousIsLive,
+      isLive,
+      streamKey,
+    })
   })
 
   logKickStreak('livestream_status', {
     broadcasterUserId,
     isLive,
     channelSlug: channelSlug || required.slug,
+    streamKey: streamKey || null,
+    notify: plan?.shouldSend || false,
+    notifyReason: plan?.reason || null,
   })
 
-  return { ok: true, isLive }
+  let notify = {
+    attempted: false,
+    sent: false,
+    reason: plan?.reason || null,
+  }
+
+  if (plan?.shouldSend) {
+    notify.attempted = true
+    const sendResult = await sendKickLiveStartedTelegram({
+      streamKey: plan.streamKey,
+      channelUrl: getKickNotificationChannelUrl(),
+      fetchImpl: options.fetchImpl || options.telegramFetchImpl,
+    })
+    if (sendResult.ok) {
+      notify.sent = true
+    } else {
+      // Do not keep a success claim when Telegram failed — allow a safe retry.
+      withStore((store) => {
+        unclaimKickLiveNotify(store, plan.streamKey)
+        return true
+      })
+      notify.reason = sendResult.error || 'telegram_send_failed'
+      logKickStreak('livestream_notify_failed', {
+        streamKey: plan.streamKey,
+        error: notify.reason,
+      })
+    }
+  }
+
+  return { ok: true, isLive, streamKey, notify }
 }
 
 /**
