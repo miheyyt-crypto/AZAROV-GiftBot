@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 
+import minesBanner from '@/assets/banners/mines-banner.jpg'
 import { GameBanner } from '@/components/GameBanner'
 import { ROUTES } from '@/lib/constants'
 
@@ -12,7 +13,11 @@ export function GamesBannerGrid({ className = '' }: GamesBannerGridProps) {
 
   return (
     <div className={['grid grid-cols-2 gap-3', className].filter(Boolean).join(' ')}>
-      <GameBanner ariaLabel="Открыть Mines" onClick={() => navigate(ROUTES.mines)} />
+      <GameBanner
+        ariaLabel="Открыть Mines"
+        image={minesBanner}
+        onClick={() => navigate(ROUTES.mines)}
+      />
       <GameBanner ariaLabel="Открыть Tower" onClick={() => navigate(ROUTES.tower)} />
     </div>
   )
