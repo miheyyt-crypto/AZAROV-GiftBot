@@ -11,6 +11,7 @@ import {
   finalizeGiveawayOnStore,
   getPublicGiveawayOnStore,
   listPublicGiveawaysOnStore,
+  markPrizeDeliveredOnStore,
   participateOnStore,
   pickRandomWinners,
   stopGiveawayScheduler,
@@ -400,8 +401,91 @@ test('text prize does not grant coins', async () => {
     withStore((store) => finalizeGiveawayOnStore(store, giveawayId))
     const balance = withStore((store) => Number(store.users['901'].balance))
     assert.equal(balance, 0)
+    const row = withStore((store) => store.giveaways[giveawayId])
+    assert.equal(row.prizeType, 'custom')
+    assert.equal(row.prizeDeliveryStatus, 'pending')
     const notifs = withStore((store) => Object.values(store.notifications))
     assert.equal(notifs.length, 1)
     assert.match(notifs[0].message, /Telegram Premium/)
+  })
+})
+
+test('custom prize stores winnersInfo and can be marked delivered', async () => {
+  await withTempStore(async () => {
+    const giveawayId = withStore((store) => {
+      seedUser(store, 911, { username: 'winner_custom', firstName: 'Winner' })
+      const created = createGiveawayOnStore(
+        store,
+        validCreateBody({
+          prizeType: 'custom',
+          prizeAmount: null,
+          prizeText: '5 000 рублей',
+          winnersCount: 1,
+        }),
+      )
+      participateOnStore(store, created.giveaway.id, 911)
+      store.giveaways[created.giveaway.id].endAt = pastIso(0.01)
+      return created.giveaway.id
+    })
+
+    const finalized = withStore((store) => finalizeGiveawayOnStore(store, giveawayId))
+    assert.equal(finalized.giveaway.prizeDeliveryStatus, 'pending')
+    assert.equal(finalized.giveaway.winnerTelegramId, 911)
+    assert.equal(finalized.giveaway.winnerUsername, 'winner_custom')
+    assert.equal(finalized.giveaway.winnerFirstName, 'Winner')
+    assert.ok(finalized.telegramJobs.some((job) => job.kind === 'admin'))
+
+    const balance = withStore((store) => Number(store.users['911'].balance))
+    assert.equal(balance, 0)
+
+    const marked = withStore((store) => markPrizeDeliveredOnStore(store, giveawayId))
+    assert.equal(marked.success, true)
+    assert.equal(marked.giveaway.prizeDeliveryStatus, 'delivered')
+
+    const again = withStore((store) => markPrizeDeliveredOnStore(store, giveawayId))
+    assert.equal(again.alreadyDelivered, true)
+  })
+})
+
+test('winner without username still stores telegramId', async () => {
+  await withTempStore(async () => {
+    const giveawayId = withStore((store) => {
+      createUser(store, { id: 921, first_name: 'NoNick', username: '' })
+      const created = createGiveawayOnStore(
+        store,
+        validCreateBody({
+          prizeType: 'custom',
+          prizeAmount: null,
+          prizeText: 'NFT подарок',
+          winnersCount: 1,
+        }),
+      )
+      participateOnStore(store, created.giveaway.id, 921)
+      store.giveaways[created.giveaway.id].endAt = pastIso(0.01)
+      return created.giveaway.id
+    })
+
+    const finalized = withStore((store) => finalizeGiveawayOnStore(store, giveawayId))
+    assert.equal(finalized.giveaway.winnerTelegramId, 921)
+    assert.equal(finalized.giveaway.winnerUsername, null)
+    assert.equal(finalized.giveaway.winnerFirstName, 'NoNick')
+  })
+})
+
+test('coin giveaway marks delivery as delivered and grants coins', async () => {
+  await withTempStore(async () => {
+    const giveawayId = withStore((store) => {
+      seedUser(store, 931)
+      const created = createGiveawayOnStore(
+        store,
+        validCreateBody({ winnersCount: 1, prizeAmount: 5000 }),
+      )
+      participateOnStore(store, created.giveaway.id, 931)
+      store.giveaways[created.giveaway.id].endAt = pastIso(0.01)
+      return created.giveaway.id
+    })
+    const finalized = withStore((store) => finalizeGiveawayOnStore(store, giveawayId))
+    assert.equal(finalized.giveaway.prizeDeliveryStatus, 'delivered')
+    assert.equal(withStore((store) => Number(store.users['931'].balance)), 5000)
   })
 })

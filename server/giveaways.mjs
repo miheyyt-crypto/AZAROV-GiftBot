@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 
 import { createNotificationOnStore, NOTIFICATION_TYPE } from './notifications.mjs'
 import { withStore, withStoreRead } from './store.mjs'
-import { sendTelegramMessage } from './telegram-notify.mjs'
+import { getAdminNotifyChatIds, sendTelegramMessage } from './telegram-notify.mjs'
 import { addCoins, hasEvent, TX_TYPE, utcNow } from './wallet.mjs'
 
 const GIVEAWAY_ID_RE = /^[a-zA-Z0-9_-]{8,64}$/
@@ -35,6 +35,48 @@ export function giveawayRewardEventId(giveawayId, userId) {
 
 export function giveawayWinnerNotificationKey(giveawayId, userId) {
   return `giveaway:${giveawayId}:winner:${userId}`
+}
+
+/** Normalize prize type. Legacy `text` maps to `custom`. */
+export function normalizePrizeType(raw) {
+  const value = String(raw || '')
+    .trim()
+    .toLowerCase()
+  if (value === 'coins') {
+    return 'coins'
+  }
+  if (value === 'custom' || value === 'text') {
+    return 'custom'
+  }
+  return null
+}
+
+export function isCoinsPrize(giveaway) {
+  return normalizePrizeType(giveaway?.prizeType) === 'coins'
+}
+
+export function isCustomPrize(giveaway) {
+  return normalizePrizeType(giveaway?.prizeType) === 'custom'
+}
+
+export function resolvePrizeAmount(body) {
+  if (body?.prizeAmount != null && body.prizeAmount !== '') {
+    return body.prizeAmount
+  }
+  if (body?.coinsAmount != null && body.coinsAmount !== '') {
+    return body.coinsAmount
+  }
+  return null
+}
+
+export function resolvePrizeText(body) {
+  if (body?.prizeText != null && String(body.prizeText).trim()) {
+    return String(body.prizeText).trim()
+  }
+  if (body?.customPrize != null && String(body.customPrize).trim()) {
+    return String(body.customPrize).trim()
+  }
+  return ''
 }
 
 function parseIsoDate(value, field) {
@@ -94,12 +136,13 @@ export function validateGiveawayCreateInput(body) {
     }
   }
 
-  const prizeType = String(body.prizeType || '').trim()
-  if (prizeType !== 'coins' && prizeType !== 'text') {
+  const prizeTypeRaw = String(body.prizeType || '').trim()
+  const prizeType = normalizePrizeType(prizeTypeRaw)
+  if (!prizeType) {
     return {
       ok: false,
       code: 'INVALID_PRIZE_TYPE',
-      message: 'prizeType должен быть coins или text.',
+      message: 'prizeType должен быть coins или custom.',
     }
   }
 
@@ -107,7 +150,7 @@ export function validateGiveawayCreateInput(body) {
   let prizeText = null
 
   if (prizeType === 'coins') {
-    const amount = parsePositiveInt(body.prizeAmount, {
+    const amount = parsePositiveInt(resolvePrizeAmount(body), {
       field: 'prizeAmount',
       min: 1,
       max: 1_000_000_000,
@@ -117,12 +160,12 @@ export function validateGiveawayCreateInput(body) {
     }
     prizeAmount = amount.value
   } else {
-    prizeText = String(body.prizeText ?? '').trim()
-    if (prizeText.length < 1 || prizeText.length > 240) {
+    prizeText = resolvePrizeText(body)
+    if (prizeText.length < 1 || prizeText.length > 500) {
       return {
         ok: false,
         code: 'INVALID_PRIZE_TEXT',
-        message: 'Для text-приза укажите prizeText (1–240 символов).',
+        message: 'Для своего приза укажите описание (1–500 символов).',
       }
     }
   }
@@ -242,18 +285,24 @@ export function validateGiveawayPatchInput(body, existing) {
     next.winnersCount = winners.value
   }
 
-  if (body.prizeAmount !== undefined || body.prizeText !== undefined || body.prizeType !== undefined) {
-    const prizeType = body.prizeType !== undefined ? String(body.prizeType).trim() : existing.prizeType
-    if (prizeType !== 'coins' && prizeType !== 'text') {
+  if (body.prizeAmount !== undefined || body.prizeText !== undefined || body.prizeType !== undefined || body.coinsAmount !== undefined || body.customPrize !== undefined) {
+    const prizeType =
+      body.prizeType !== undefined
+        ? normalizePrizeType(body.prizeType)
+        : normalizePrizeType(existing.prizeType)
+    if (!prizeType) {
       return {
         ok: false,
         code: 'INVALID_PRIZE_TYPE',
-        message: 'prizeType должен быть coins или text.',
+        message: 'prizeType должен быть coins или custom.',
       }
     }
     next.prizeType = prizeType
     if (prizeType === 'coins') {
-      const amountRaw = body.prizeAmount !== undefined ? body.prizeAmount : existing.prizeAmount
+      const amountRaw =
+        body.prizeAmount !== undefined || body.coinsAmount !== undefined
+          ? resolvePrizeAmount(body)
+          : existing.prizeAmount
       const amount = parsePositiveInt(amountRaw, {
         field: 'prizeAmount',
         min: 1,
@@ -265,14 +314,15 @@ export function validateGiveawayPatchInput(body, existing) {
       next.prizeAmount = amount.value
       next.prizeText = null
     } else {
-      const prizeText = String(
-        body.prizeText !== undefined ? body.prizeText : existing.prizeText ?? '',
-      ).trim()
-      if (prizeText.length < 1 || prizeText.length > 240) {
+      const prizeText =
+        body.prizeText !== undefined || body.customPrize !== undefined
+          ? resolvePrizeText(body)
+          : String(existing.prizeText ?? '').trim()
+      if (prizeText.length < 1 || prizeText.length > 500) {
         return {
           ok: false,
           code: 'INVALID_PRIZE_TEXT',
-          message: 'Для text-приза укажите prizeText (1–240 символов).',
+          message: 'Для своего приза укажите описание (1–500 символов).',
         }
       }
       next.prizeText = prizeText
@@ -379,10 +429,30 @@ function publicWinner(store, userId) {
 }
 
 function prizeLabel(giveaway) {
-  if (giveaway.prizeType === 'coins') {
+  if (isCoinsPrize(giveaway)) {
     return `${Number(giveaway.prizeAmount || 0).toLocaleString('ru-RU')} монет`
   }
   return String(giveaway.prizeText || 'приз')
+}
+
+function buildWinnerInfo(store, userId) {
+  const user = store.users?.[String(userId)]
+  return {
+    telegramId: Number(userId),
+    username: user?.username ? String(user.username) : null,
+    firstName: user?.firstName ? String(user.firstName) : null,
+  }
+}
+
+function resolveDeliveryStatus(giveaway) {
+  if (giveaway.prizeDeliveryStatus === 'pending' || giveaway.prizeDeliveryStatus === 'delivered') {
+    return giveaway.prizeDeliveryStatus
+  }
+  if (giveaway.status !== 'completed') {
+    return null
+  }
+  // Legacy completed coin giveaways without the field → delivered.
+  return isCoinsPrize(giveaway) ? 'delivered' : 'pending'
 }
 
 export function toPublicGiveaway(store, giveaway, { userId = null, includeWinners = false } = {}) {
@@ -390,15 +460,19 @@ export function toPublicGiveaway(store, giveaway, { userId = null, includeWinner
     return null
   }
 
+  const prizeType = normalizePrizeType(giveaway.prizeType) || giveaway.prizeType
+
   const base = {
     id: giveaway.id,
     title: giveaway.title,
     description: giveaway.description || '',
     image: giveaway.image,
     status: giveaway.status,
-    prizeType: giveaway.prizeType,
+    prizeType,
     prizeAmount: giveaway.prizeAmount,
     prizeText: giveaway.prizeText,
+    coinsAmount: isCoinsPrize(giveaway) ? giveaway.prizeAmount : null,
+    customPrize: isCustomPrize(giveaway) ? giveaway.prizeText : null,
     winnersCount: Number(giveaway.winnersCount) || 0,
     participantsCount: Number(giveaway.participantsCount) || 0,
     startAt: giveaway.startAt,
@@ -422,9 +496,25 @@ export function toPublicGiveaway(store, giveaway, { userId = null, includeWinner
 
 export function toAdminGiveaway(store, giveaway) {
   const publicRow = toPublicGiveaway(store, giveaway, { includeWinners: true })
+  const winnersInfo = Array.isArray(giveaway.winnersInfo)
+    ? giveaway.winnersInfo.map((row) => ({
+        telegramId: Number(row.telegramId),
+        username: row.username || null,
+        firstName: row.firstName || null,
+      }))
+    : (Array.isArray(giveaway.winnerIds) ? giveaway.winnerIds : []).map((id) =>
+        buildWinnerInfo(store, id),
+      )
+
+  const first = winnersInfo[0] || null
   return {
     ...publicRow,
     winnerIds: Array.isArray(giveaway.winnerIds) ? [...giveaway.winnerIds] : [],
+    winnersInfo,
+    winnerTelegramId: first?.telegramId ?? null,
+    winnerUsername: first?.username ?? null,
+    winnerFirstName: first?.firstName ?? null,
+    prizeDeliveryStatus: resolveDeliveryStatus(giveaway),
     createdBy: giveaway.createdBy || null,
   }
 }
@@ -470,6 +560,8 @@ export function createGiveawayOnStore(store, input, { createdBy = null, nowIso =
     createdAt: nowIso,
     completedAt: null,
     winnerIds: [],
+    winnersInfo: [],
+    prizeDeliveryStatus: null,
     createdBy: createdBy != null ? String(createdBy) : null,
   }
 
@@ -542,8 +634,9 @@ function rewardWinnerOnStore(store, giveaway, userId) {
   const user = store.users?.[String(userId)]
   let coinsGranted = false
   let amount = 0
+  const custom = isCustomPrize(giveaway)
 
-  if (giveaway.prizeType === 'coins') {
+  if (isCoinsPrize(giveaway)) {
     amount = Number(giveaway.prizeAmount) || 0
     if (user && amount > 0) {
       const result = addCoins(store, user, amount, TX_TYPE.GIVEAWAY_REWARD, eventId, {
@@ -557,22 +650,26 @@ function rewardWinnerOnStore(store, giveaway, userId) {
     }
   }
 
-  const prizeMessage =
-    giveaway.prizeType === 'coins'
-      ? `Тебе начислено ${amount.toLocaleString('ru-RU')} монет.`
-      : `Твой приз: ${prizeLabel(giveaway)}.`
+  const prizeMessage = custom
+    ? `🎁 Приз:\n${prizeLabel(giveaway)}\n\nСвяжись с администрацией для получения приза.`
+    : `Тебе начислено ${amount.toLocaleString('ru-RU')} монет.`
+
+  const notificationTitle = custom ? '🎉 ПОЗДРАВЛЯЕМ!' : '🎉 Ты выиграл!'
+  const notificationMessage = custom
+    ? `Ты выиграл в розыгрыше!\n\n${prizeMessage}`
+    : `Поздравляем! Ты выиграл в розыгрыше «${giveaway.title}». ${prizeMessage}`
 
   const notification = createNotificationOnStore(store, {
     userId,
     type: NOTIFICATION_TYPE.GIVEAWAY_WON,
-    title: '🎉 Ты выиграл!',
-    message: `Поздравляем! Ты выиграл в розыгрыше «${giveaway.title}». ${prizeMessage}`,
+    title: notificationTitle,
+    message: notificationMessage,
     eventKey: notifyKey,
     relatedEntityType: 'giveaway',
     relatedEntityId: giveaway.id,
     metadata: {
       giveawayId: giveaway.id,
-      prizeType: giveaway.prizeType,
+      prizeType: normalizePrizeType(giveaway.prizeType),
       prizeAmount: giveaway.prizeAmount,
       prizeText: giveaway.prizeText,
     },
@@ -581,16 +678,29 @@ function rewardWinnerOnStore(store, giveaway, userId) {
   logGiveaway('winner_rewarded', {
     giveawayId: giveaway.id,
     userId,
-    prizeType: giveaway.prizeType,
+    prizeType: normalizePrizeType(giveaway.prizeType),
     coinsGranted,
     notificationCreated: Boolean(notification.created),
   })
+
+  const telegramText = custom
+    ? [
+        '🎉 <b>ПОЗДРАВЛЯЕМ!</b>',
+        '',
+        'Ты выиграл в розыгрыше!',
+        '',
+        '🎁 Приз:',
+        escapeHtml(prizeLabel(giveaway)),
+        '',
+        'Свяжись с администрацией для получения приза.',
+      ].join('\n')
+    : `🎉 Ты выиграл в розыгрыше «${escapeHtml(giveaway.title)}»!\n${escapeHtml(prizeMessage)}`
 
   return {
     userId: Number(userId),
     coinsGranted,
     amount,
-    telegramText: `🎉 Ты выиграл в розыгрыше «${escapeHtml(giveaway.title)}»!\n${escapeHtml(prizeMessage)}`,
+    telegramText,
   }
 }
 
@@ -600,6 +710,72 @@ function escapeHtml(value) {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
+}
+
+function buildAdminCompletionJob(store, giveaway) {
+  const winnersInfo = Array.isArray(giveaway.winnersInfo) ? giveaway.winnersInfo : []
+  const prizeLine = isCoinsPrize(giveaway)
+    ? `🪙 Приз: ${Number(giveaway.prizeAmount || 0).toLocaleString('ru-RU')} монет`
+    : `🎁 Приз: ${escapeHtml(prizeLabel(giveaway))}`
+  const deliveryLine = isCustomPrize(giveaway)
+    ? '🎁 Выдача приза: ⏳ Не выдан'
+    : '🎁 Выдача приза: ✅ Выдан'
+
+  const winnerBlocks =
+    winnersInfo.length === 0
+      ? ['🏆 Победитель: —']
+      : winnersInfo.map((winner, index) => {
+          const label = winnersInfo.length > 1 ? `🏆 Победитель ${index + 1}:` : '🏆 Победитель:'
+          const usernameLine = winner.username
+            ? `👤 @${escapeHtml(winner.username)}`
+            : '👤 Username: отсутствует'
+          const nameLine = winner.firstName
+            ? `Имя: ${escapeHtml(winner.firstName)}`
+            : null
+          return [
+            label,
+            usernameLine,
+            nameLine,
+            `🆔 Telegram ID: <code>${escapeHtml(String(winner.telegramId))}</code>`,
+          ]
+            .filter(Boolean)
+            .join('\n')
+        })
+
+  const text = [
+    '🏆 <b>РОЗЫГРЫШ ЗАВЕРШЁН</b>',
+    '',
+    prizeLine,
+    `👥 Участников: ${Number(giveaway.participantsCount) || 0}`,
+    '',
+    ...winnerBlocks,
+    '',
+    deliveryLine,
+    '',
+    `ID: <code>${escapeHtml(giveaway.id)}</code>`,
+  ].join('\n')
+
+  const buttons = []
+  if (isCustomPrize(giveaway)) {
+    buttons.push([{ text: '✅ Приз выдан', callback_data: `gw:delivered:${giveaway.id}` }])
+  }
+  for (const winner of winnersInfo) {
+    if (winner.username) {
+      buttons.push([
+        {
+          text: winnersInfo.length > 1 ? `💬 @${winner.username}` : '💬 Открыть профиль победителя',
+          url: `https://t.me/${encodeURIComponent(winner.username)}`,
+        },
+      ])
+    }
+  }
+
+  return {
+    kind: 'admin',
+    text,
+    reply_markup: buttons.length ? { inline_keyboard: buttons } : undefined,
+    giveawayId: giveaway.id,
+  }
 }
 
 /**
@@ -624,25 +800,37 @@ export function finalizeGiveawayOnStore(store, giveawayId, { nowIso = utcNow() }
 
   const participantIds = listParticipantUserIds(store, id)
   const winnerIds = pickRandomWinners(participantIds, giveaway.winnersCount)
+  const winnersInfo = winnerIds.map((uid) => buildWinnerInfo(store, uid))
 
   giveaway.status = 'completed'
   giveaway.completedAt = nowIso
   giveaway.winnerIds = winnerIds
+  giveaway.winnersInfo = winnersInfo
   giveaway.participantsCount = participantIds.length
+  giveaway.prizeDeliveryStatus = isCoinsPrize(giveaway) ? 'delivered' : 'pending'
+
+  // Convenience single-winner mirrors for admin tooling.
+  const first = winnersInfo[0] || null
+  giveaway.winnerTelegramId = first?.telegramId ?? null
+  giveaway.winnerUsername = first?.username ?? null
+  giveaway.winnerFirstName = first?.firstName ?? null
 
   const telegramJobs = []
   for (const winnerId of winnerIds) {
     const rewarded = rewardWinnerOnStore(store, giveaway, winnerId)
     telegramJobs.push({
+      kind: 'winner',
       userId: rewarded.userId,
       text: rewarded.telegramText,
     })
   }
+  telegramJobs.push(buildAdminCompletionJob(store, giveaway))
 
   logGiveaway('finalized', {
     id,
     winners: winnerIds.length,
     participants: participantIds.length,
+    prizeType: normalizePrizeType(giveaway.prizeType),
   })
 
   return {
@@ -730,6 +918,8 @@ export function participateOnStore(store, giveawayId, userId, { nowIso = utcNow(
     id: key,
     giveawayId: id,
     userId: uid,
+    username: store.users[String(uid)]?.username || null,
+    firstName: store.users[String(uid)]?.firstName || null,
     joinedAt: nowIso,
   }
   giveaway.participantsCount = (Number(giveaway.participantsCount) || 0) + 1
@@ -855,10 +1045,34 @@ export function listAdminGiveaways() {
 
 export async function notifyGiveawayTelegramJobs(jobs = [], options = {}) {
   for (const job of jobs) {
-    if (!job?.userId || !job?.text) {
+    if (!job?.text) {
       continue
     }
+
     try {
+      if (job.kind === 'admin') {
+        const chatIds = getAdminNotifyChatIds()
+        for (const chatId of chatIds) {
+          const result = await sendTelegramMessage(
+            String(chatId),
+            job.text,
+            job.reply_markup ? { reply_markup: job.reply_markup } : {},
+            options,
+          )
+          if (!result?.ok) {
+            logGiveaway('notification_failed', {
+              kind: 'admin',
+              chatId: String(chatId),
+              error: result?.error || 'unknown',
+            })
+          }
+        }
+        continue
+      }
+
+      if (!job.userId) {
+        continue
+      }
       const result = await sendTelegramMessage(String(job.userId), job.text, {}, options)
       if (!result?.ok) {
         logGiveaway('notification_failed', {
@@ -868,11 +1082,48 @@ export async function notifyGiveawayTelegramJobs(jobs = [], options = {}) {
       }
     } catch (error) {
       logGiveaway('notification_failed', {
-        userId: job.userId,
+        kind: job.kind || 'winner',
+        userId: job.userId || null,
         error: error instanceof Error ? error.message : 'unknown_error',
       })
     }
   }
+}
+
+export function markPrizeDeliveredOnStore(store, giveawayId) {
+  ensureGiveawayMaps(store)
+  const id = parseGiveawayId(giveawayId)
+  if (!id || !store.giveaways[id]) {
+    return { success: false, code: 'NOT_FOUND', message: 'Розыгрыш не найден.' }
+  }
+  const giveaway = store.giveaways[id]
+  if (giveaway.status !== 'completed') {
+    return { success: false, code: 'NOT_COMPLETED', message: 'Розыгрыш ещё не завершён.' }
+  }
+  if (!isCustomPrize(giveaway)) {
+    return {
+      success: false,
+      code: 'NOT_CUSTOM',
+      message: 'Отмечать выдачу можно только для своего приза.',
+    }
+  }
+  if (giveaway.prizeDeliveryStatus === 'delivered') {
+    return {
+      success: true,
+      alreadyDelivered: true,
+      giveaway: toAdminGiveaway(store, giveaway),
+    }
+  }
+  giveaway.prizeDeliveryStatus = 'delivered'
+  return {
+    success: true,
+    alreadyDelivered: false,
+    giveaway: toAdminGiveaway(store, giveaway),
+  }
+}
+
+export function markPrizeDelivered(giveawayId) {
+  return withStore((store) => markPrizeDeliveredOnStore(store, giveawayId))
 }
 
 export function startGiveawayScheduler({ intervalMs = DEFAULT_SCHEDULER_MS } = {}) {

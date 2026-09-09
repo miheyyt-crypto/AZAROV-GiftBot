@@ -2,7 +2,7 @@ export type GiveawayStatus = 'active' | 'completed'
 
 export type GiveawayTab = GiveawayStatus
 
-export type GiveawayPrizeType = 'coins' | 'text'
+export type GiveawayPrizeType = 'coins' | 'custom' | 'text'
 
 export type GiveawayWinner = {
   userId: number
@@ -20,6 +20,8 @@ export type Giveaway = {
   prizeType?: GiveawayPrizeType
   prizeAmount?: number | null
   prizeText?: string | null
+  coinsAmount?: number | null
+  customPrize?: string | null
   winnersCount: number
   participantsCount?: number
   startAt?: string
@@ -30,6 +32,7 @@ export type Giveaway = {
   endedAt?: string
   isParticipating?: boolean
   winners?: GiveawayWinner[]
+  prizeDeliveryStatus?: 'pending' | 'delivered' | null
 }
 
 export type GiveawayParticipantState = {

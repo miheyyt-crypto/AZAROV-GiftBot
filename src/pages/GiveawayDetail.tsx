@@ -159,7 +159,9 @@ export function GiveawayDetail() {
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
               <p className="text-[11px] text-muted">Приз</p>
-              <p className="mt-1 text-sm font-semibold text-white">{formatPrizeLabel(giveaway)}</p>
+              <p className="mt-1 break-words text-sm font-semibold text-white">
+                {formatPrizeLabel(giveaway)}
+              </p>
             </div>
             <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
               <p className="text-[11px] text-muted">Победители</p>

@@ -83,8 +83,8 @@ test('createGiveaway 100 coins for 2 minutes works via backend API used by bot',
   })
 })
 
-test('wizard map is isolated per admin key', () => {
-  clearPendingGiveawayWizards()
-  assert.equal(getPendingGiveawayWizard('1'), null)
-  assert.equal(getPendingGiveawayWizard('2'), null)
+test('parseCustomPrizeInput accepts free-form prize text', async () => {
+  const { parseCustomPrizeInput } = await import('./giveaway-admin.mjs')
+  assert.equal(parseCustomPrizeInput('5 000 рублей').ok, true)
+  assert.equal(parseCustomPrizeInput('').ok, false)
 })

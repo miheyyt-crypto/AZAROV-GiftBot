@@ -1,7 +1,10 @@
 import {
   createGiveaway,
+  isCoinsPrize,
   listAdminGiveaways,
+  markPrizeDelivered,
   notifyGiveawayTelegramJobs,
+  parseGiveawayId,
 } from './giveaways.mjs'
 import {
   answerTelegramCallback,
@@ -12,6 +15,7 @@ import {
 const pendingGiveawayByAdmin = new Map()
 const WIZARD_TTL_MS = 30 * 60 * 1000
 const WINNERS_MAX = 1000
+const CUSTOM_PRIZE_MAX = 500
 
 export const GIVEAWAY_DURATION_PRESETS = [
   { id: '1m', label: '1 минута', ms: 60_000 },
@@ -44,7 +48,9 @@ function setPendingGiveawayWizard(adminId, patch) {
   const key = String(adminId)
   const prev = getPendingGiveawayWizard(adminId) || {
     step: 'idle',
+    prizeType: null,
     prizeAmount: null,
+    prizeText: null,
     winnersCount: null,
     durationMs: null,
     durationLabel: null,
@@ -148,11 +154,25 @@ export function parsePrizeAmountInput(raw) {
     .replace(/\s+/g, '')
     .replace(',', '.')
   if (!/^\d+$/.test(text)) {
-    return { ok: false, message: 'Введите целое число больше 0. Например: 100' }
+    return { ok: false, message: 'Введите целое число больше 0. Например: 1000' }
   }
   const value = Number(text)
   if (!Number.isInteger(value) || value <= 0 || value > 1_000_000_000) {
     return { ok: false, message: 'Приз должен быть целым числом больше 0.' }
+  }
+  return { ok: true, value }
+}
+
+export function parseCustomPrizeInput(raw) {
+  const value = String(raw || '').trim()
+  if (value.length < 1) {
+    return { ok: false, message: 'Введите описание приза. Например: 5 000 рублей' }
+  }
+  if (value.length > CUSTOM_PRIZE_MAX) {
+    return {
+      ok: false,
+      message: `Описание слишком длинное (максимум ${CUSTOM_PRIZE_MAX} символов).`,
+    }
   }
   return { ok: true, value }
 }
@@ -175,6 +195,54 @@ export function parseWinnersCountInput(raw) {
     }
   }
   return { ok: true, value }
+}
+
+export function buildGiveawayPrizeTypeKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: '🪙 Монеты', callback_data: 'gw:ptype:coins' },
+        { text: '🎁 Свой приз', callback_data: 'gw:ptype:custom' },
+      ],
+      [{ text: '❌ Отмена', callback_data: 'gw:cancel' }],
+    ],
+  }
+}
+
+function formatPrizeLine(giveawayOrWizard) {
+  if (giveawayOrWizard.prizeType === 'coins' || isCoinsPrize(giveawayOrWizard)) {
+    const amount = Number(giveawayOrWizard.prizeAmount || giveawayOrWizard.coinsAmount || 0)
+    return `🪙 Приз: ${amount.toLocaleString('ru-RU')} монет`
+  }
+  const text = giveawayOrWizard.prizeText || giveawayOrWizard.customPrize || 'приз'
+  return `🎁 Приз: ${text}`
+}
+
+function formatDeliveryLine(giveaway) {
+  if (isCoinsPrize(giveaway)) {
+    return '🎁 Выдача: ✅ Выдан'
+  }
+  return giveaway.prizeDeliveryStatus === 'delivered'
+    ? '🎁 Выдача: ✅ Выдан'
+    : '🎁 Выдача: ⏳ Не выдан'
+}
+
+function formatWinnerAdminBlock(giveaway) {
+  const info = Array.isArray(giveaway.winnersInfo) ? giveaway.winnersInfo : []
+  if (info.length === 0) {
+    return ['🏆 Победитель: —']
+  }
+  return info.flatMap((winner, index) => {
+    const title = info.length > 1 ? `🏆 Победитель ${index + 1}:` : '🏆 Победитель:'
+    const usernameLine = winner.username
+      ? `@${winner.username}`
+      : '@username отсутствует'
+    return [
+      title,
+      usernameLine,
+      `Telegram ID: ${winner.telegramId}`,
+    ]
+  })
 }
 
 export function buildGiveawayAdminMenuKeyboard() {
@@ -227,15 +295,29 @@ export function buildGiveawayStartAdminKeyboard() {
 }
 
 function winnerDisplay(giveaway) {
-  const winners = Array.isArray(giveaway.winners) ? giveaway.winners : []
-  if (winners.length === 0) {
-    const ids = Array.isArray(giveaway.winnerIds) ? giveaway.winnerIds : []
-    if (ids.length === 0) {
-      return '—'
+  const info = Array.isArray(giveaway.winnersInfo) ? giveaway.winnersInfo : []
+  if (info.length === 0) {
+    const winners = Array.isArray(giveaway.winners) ? giveaway.winners : []
+    if (winners.length === 0) {
+      const ids = Array.isArray(giveaway.winnerIds) ? giveaway.winnerIds : []
+      if (ids.length === 0) {
+        return '—'
+      }
+      return ids.map((id) => `id:${id}`).join(', ')
     }
-    return ids.map((id) => `id:${id}`).join(', ')
+    return winners
+      .map((w) => {
+        if (w.username) {
+          return `@${w.username}`
+        }
+        if (w.firstName) {
+          return w.firstName
+        }
+        return `id:${w.userId}`
+      })
+      .join(', ')
   }
-  return winners
+  return info
     .map((w) => {
       if (w.username) {
         return `@${w.username}`
@@ -243,7 +325,7 @@ function winnerDisplay(giveaway) {
       if (w.firstName) {
         return w.firstName
       }
-      return `id:${w.userId}`
+      return `id:${w.telegramId}`
     })
     .join(', ')
 }
@@ -252,7 +334,7 @@ function formatActiveGiveawayBlock(giveaway) {
   return [
     `🎁 Розыгрыш <code>${escapeHtml(giveaway.id)}</code>`,
     '',
-    `💰 Приз: ${Number(giveaway.prizeAmount || 0).toLocaleString('ru-RU')} монет`,
+    escapeHtml(formatPrizeLine(giveaway)),
     `🏆 Победителей: ${Number(giveaway.winnersCount) || 0}`,
     `👥 Участников: ${Number(giveaway.participantsCount) || 0}`,
     `⏱ Окончание: ${escapeHtml(formatDateRu(giveaway.endAt))}`,
@@ -262,9 +344,14 @@ function formatActiveGiveawayBlock(giveaway) {
 function formatHistoryGiveawayBlock(giveaway) {
   return [
     `🎁 Розыгрыш <code>${escapeHtml(giveaway.id)}</code>`,
-    `💰 ${Number(giveaway.prizeAmount || 0).toLocaleString('ru-RU')} монет`,
-    `🏆 Победитель: ${escapeHtml(winnerDisplay(giveaway))}`,
+    '',
+    escapeHtml(formatPrizeLine(giveaway)),
+    `🏆 Победителей: ${Number(giveaway.winnersCount) || 0}`,
     `👥 Участников: ${Number(giveaway.participantsCount) || 0}`,
+    '',
+    ...formatWinnerAdminBlock(giveaway).map((line) => escapeHtml(line)),
+    '',
+    escapeHtml(formatDeliveryLine(giveaway)),
     `🏁 Завершён: ${escapeHtml(formatDateRu(giveaway.completedAt || giveaway.endAt))}`,
   ].join('\n')
 }
@@ -308,22 +395,75 @@ export async function sendGiveawayAdminMenu(ctx) {
 
 async function startCreateWizard(ctx, adminId) {
   setPendingGiveawayWizard(adminId, {
-    step: 'await_prize',
+    step: 'await_prize_type',
+    prizeType: null,
     prizeAmount: null,
+    prizeText: null,
     winnersCount: null,
     durationMs: null,
     durationLabel: null,
   })
   await replyHtml(
     ctx,
+    ['🎁 <b>Тип приза</b>', '', 'Выберите тип приза для розыгрыша:'].join('\n'),
+    { reply_markup: buildGiveawayPrizeTypeKeyboard() },
+  )
+}
+
+async function askPrizeValue(ctx, adminId, prizeType) {
+  setPendingGiveawayWizard(adminId, {
+    step: 'await_prize',
+    prizeType,
+    prizeAmount: null,
+    prizeText: null,
+  })
+  if (prizeType === 'coins') {
+    await replyHtml(
+      ctx,
+      [
+        '💰 Введите количество монет:',
+        '',
+        'Например: <code>1000</code>',
+        '',
+        'Отмена: /cancel',
+      ].join('\n'),
+      {
+        reply_markup: {
+          inline_keyboard: [[{ text: '❌ Отмена', callback_data: 'gw:cancel' }]],
+        },
+      },
+    )
+    return
+  }
+  await replyHtml(
+    ctx,
     [
-      '🎁 <b>Создание розыгрыша</b>',
+      '🎁 Введите описание приза:',
       '',
-      'Введите размер приза в монетах.',
+      'Например:',
+      '<code>5 000 рублей</code>',
+      '<code>Steam Gift Card $50</code>',
+      '<code>NFT-подарок Telegram</code>',
       '',
-      'Например: <code>100</code>',
+      'Отмена: /cancel',
+    ].join('\n'),
+    {
+      reply_markup: {
+        inline_keyboard: [[{ text: '❌ Отмена', callback_data: 'gw:cancel' }]],
+      },
+    },
+  )
+}
+
+async function askWinners(ctx) {
+  await replyHtml(
+    ctx,
+    [
+      '🏆 Введите количество победителей.',
       '',
-      'Отмена: /cancel или кнопка ❌ Отмена',
+      'Например: <code>1</code>',
+      '',
+      `Допустимо: 1–${WINNERS_MAX}`,
     ].join('\n'),
     {
       reply_markup: {
@@ -336,10 +476,14 @@ async function startCreateWizard(ctx, adminId) {
 async function showConfirm(ctx, adminId, wizard) {
   const now = new Date()
   const end = new Date(now.getTime() + wizard.durationMs)
+  const prizeLine =
+    wizard.prizeType === 'coins'
+      ? `🪙 Приз: ${Number(wizard.prizeAmount).toLocaleString('ru-RU')} монет`
+      : `🎁 Приз: ${escapeHtml(wizard.prizeText)}`
   const text = [
     '🎁 <b>СОЗДАНИЕ РОЗЫГРЫША</b>',
     '',
-    `💰 Приз: ${wizard.prizeAmount.toLocaleString('ru-RU')} монет`,
+    prizeLine,
     `🏆 Победителей: ${wizard.winnersCount}`,
     `⏱ Длительность: ${escapeHtml(wizard.durationLabel)}`,
     '',
@@ -354,15 +498,18 @@ async function showConfirm(ctx, adminId, wizard) {
 async function createFromWizard(ctx, adminId, wizard) {
   const now = new Date()
   const end = new Date(now.getTime() + wizard.durationMs)
-  const title = `Розыгрыш ${wizard.prizeAmount.toLocaleString('ru-RU')} монет`
+  const title =
+    wizard.prizeType === 'coins'
+      ? `Розыгрыш ${Number(wizard.prizeAmount).toLocaleString('ru-RU')} монет`
+      : `Розыгрыш: ${String(wizard.prizeText).slice(0, 80)}`
   const result = createGiveaway(
     {
       title,
       description: `Автоматический розыгрыш. Победителей: ${wizard.winnersCount}.`,
       image: defaultGiveawayImage(),
-      prizeType: 'coins',
-      prizeAmount: wizard.prizeAmount,
-      prizeText: null,
+      prizeType: wizard.prizeType,
+      prizeAmount: wizard.prizeType === 'coins' ? wizard.prizeAmount : null,
+      prizeText: wizard.prizeType === 'custom' ? wizard.prizeText : null,
       winnersCount: wizard.winnersCount,
       startAt: now.toISOString(),
       endAt: end.toISOString(),
@@ -386,7 +533,7 @@ async function createFromWizard(ctx, adminId, wizard) {
     [
       '🎉 <b>РОЗЫГРЫШ ЗАПУЩЕН</b>',
       '',
-      `🎁 Приз: ${Number(g.prizeAmount || 0).toLocaleString('ru-RU')} монет`,
+      escapeHtml(formatPrizeLine(g)),
       `🏆 Победителей: ${Number(g.winnersCount) || 0}`,
       `⏱ Длительность: ${escapeHtml(wizard.durationLabel)}`,
       '',
@@ -479,6 +626,50 @@ export async function handleGiveawayAdminCallback(ctx) {
     return true
   }
 
+  const prizeTypeMatch = /^gw:ptype:(coins|custom)$/i.exec(data)
+  if (prizeTypeMatch) {
+    const wizard = getPendingGiveawayWizard(adminId)
+    if (!wizard || wizard.step !== 'await_prize_type') {
+      await answerGiveawayCallback(ctx, 'Сначала начните создание заново', true)
+      return true
+    }
+    await answerGiveawayCallback(ctx)
+    await askPrizeValue(ctx, adminId, prizeTypeMatch[1].toLowerCase())
+    return true
+  }
+
+  const deliveredMatch = /^gw:delivered:([a-zA-Z0-9_-]{8,64})$/.exec(data)
+  if (deliveredMatch) {
+    const giveawayId = parseGiveawayId(deliveredMatch[1])
+    if (!giveawayId) {
+      await answerGiveawayCallback(ctx, 'Некорректный id', true)
+      return true
+    }
+    const result = markPrizeDelivered(giveawayId)
+    if (!result.success) {
+      await answerGiveawayCallback(ctx, result.message || 'Ошибка', true)
+      return true
+    }
+    await answerGiveawayCallback(ctx, result.alreadyDelivered ? 'Уже отмечено' : 'Отмечено')
+    await replyHtml(
+      ctx,
+      [
+        '✅ Приз отмечен как выданный.',
+        '',
+        `ID: <code>${escapeHtml(giveawayId)}</code>`,
+        escapeHtml(formatDeliveryLine(result.giveaway)),
+      ].join('\n'),
+    )
+    try {
+      if (typeof ctx.editMessageReplyMarkup === 'function') {
+        await ctx.editMessageReplyMarkup({ inline_keyboard: [] })
+      }
+    } catch {
+      // Message may be too old to edit — ignore.
+    }
+    return true
+  }
+
   if (data === 'gw:active') {
     await answerGiveawayCallback(ctx)
     await showActiveGiveaways(ctx)
@@ -519,10 +710,14 @@ export async function handleGiveawayAdminCallback(ctx) {
 
   if (data === 'gw:confirm') {
     const wizard = getPendingGiveawayWizard(adminId)
+    const prizeReady =
+      wizard &&
+      ((wizard.prizeType === 'coins' && wizard.prizeAmount) ||
+        (wizard.prizeType === 'custom' && wizard.prizeText))
     if (
       !wizard ||
       wizard.step !== 'await_confirm' ||
-      !wizard.prizeAmount ||
+      !prizeReady ||
       !wizard.winnersCount ||
       !wizard.durationMs
     ) {
@@ -548,7 +743,12 @@ export async function handleGiveawayWizardMessage(ctx) {
   }
 
   const wizard = getPendingGiveawayWizard(adminId)
-  if (!wizard || wizard.step === 'idle' || wizard.step === 'await_confirm') {
+  if (
+    !wizard ||
+    wizard.step === 'idle' ||
+    wizard.step === 'await_confirm' ||
+    wizard.step === 'await_prize_type'
+  ) {
     return false
   }
 
@@ -568,30 +768,30 @@ export async function handleGiveawayWizardMessage(ctx) {
   }
 
   if (wizard.step === 'await_prize') {
-    const parsed = parsePrizeAmountInput(text)
-    if (!parsed.ok) {
-      await replyHtml(ctx, `⚠ ${escapeHtml(parsed.message)}`)
-      return true
+    if (wizard.prizeType === 'coins') {
+      const parsed = parsePrizeAmountInput(text)
+      if (!parsed.ok) {
+        await replyHtml(ctx, `⚠ ${escapeHtml(parsed.message)}`)
+        return true
+      }
+      setPendingGiveawayWizard(adminId, {
+        step: 'await_winners',
+        prizeAmount: parsed.value,
+        prizeText: null,
+      })
+    } else {
+      const parsed = parseCustomPrizeInput(text)
+      if (!parsed.ok) {
+        await replyHtml(ctx, `⚠ ${escapeHtml(parsed.message)}`)
+        return true
+      }
+      setPendingGiveawayWizard(adminId, {
+        step: 'await_winners',
+        prizeAmount: null,
+        prizeText: parsed.value,
+      })
     }
-    setPendingGiveawayWizard(adminId, {
-      step: 'await_winners',
-      prizeAmount: parsed.value,
-    })
-    await replyHtml(
-      ctx,
-      [
-        '🏆 Введите количество победителей.',
-        '',
-        'Например: <code>1</code>',
-        '',
-        `Допустимо: 1–${WINNERS_MAX}`,
-      ].join('\n'),
-      {
-        reply_markup: {
-          inline_keyboard: [[{ text: '❌ Отмена', callback_data: 'gw:cancel' }]],
-        },
-      },
-    )
+    await askWinners(ctx)
     return true
   }
 

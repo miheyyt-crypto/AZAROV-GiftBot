@@ -51,9 +51,26 @@ function normalizeGiveaway(raw: Partial<Giveaway> & { id?: string | number }): G
     description: raw.description ? String(raw.description) : '',
     image,
     status,
-    prizeType: raw.prizeType === 'coins' || raw.prizeType === 'text' ? raw.prizeType : undefined,
+    prizeType:
+      raw.prizeType === 'coins' || raw.prizeType === 'custom' || raw.prizeType === 'text'
+        ? raw.prizeType === 'text'
+          ? 'custom'
+          : raw.prizeType
+        : undefined,
     prizeAmount: raw.prizeAmount == null ? null : Number(raw.prizeAmount),
     prizeText: raw.prizeText == null ? null : String(raw.prizeText),
+    coinsAmount:
+      raw.coinsAmount != null
+        ? Number(raw.coinsAmount)
+        : raw.prizeType === 'coins'
+          ? Number(raw.prizeAmount)
+          : null,
+    customPrize:
+      raw.customPrize != null
+        ? String(raw.customPrize)
+        : raw.prizeType === 'custom' || raw.prizeType === 'text'
+          ? String(raw.prizeText || '')
+          : null,
     winnersCount: Math.floor(winnersCount),
     participantsCount: Math.max(0, Math.floor(Number(raw.participantsCount) || 0)),
     startAt: raw.startAt ? String(raw.startAt) : undefined,
@@ -194,15 +211,19 @@ export function formatParticipantsLabel(count: number): string {
   return `${n} участников`
 }
 
-export function formatPrizeLabel(giveaway: Pick<Giveaway, 'prizeType' | 'prizeAmount' | 'prizeText'>): string {
-  if (giveaway.prizeType === 'coins') {
-    const amount = Number(giveaway.prizeAmount) || 0
-    return `${amount.toLocaleString('ru-RU')} монет`
+export function formatPrizeLabel(
+  giveaway: Pick<
+    Giveaway,
+    'prizeType' | 'prizeAmount' | 'prizeText' | 'coinsAmount' | 'customPrize'
+  >,
+): string {
+  const type = giveaway.prizeType === 'text' ? 'custom' : giveaway.prizeType
+  if (type === 'coins') {
+    const amount = Number(giveaway.coinsAmount ?? giveaway.prizeAmount) || 0
+    return `🪙 ${amount.toLocaleString('ru-RU')} монет`
   }
-  if (giveaway.prizeType === 'text' && giveaway.prizeText) {
-    return String(giveaway.prizeText)
-  }
-  return 'Приз'
+  const custom = String(giveaway.customPrize || giveaway.prizeText || 'Приз').trim()
+  return `🎁 ${custom}`
 }
 
 export function formatCountdown(endAt: string | undefined, nowMs = Date.now()): string {
