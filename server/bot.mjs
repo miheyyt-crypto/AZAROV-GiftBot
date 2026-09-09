@@ -185,6 +185,25 @@ export function createBot() {
     }
   })
 
+  // Temporary helper: reveal chat_id for KICK_NOTIFICATION_CHAT_ID setup.
+  bot.command('chatid', async (ctx) => {
+    try {
+      if (!isAdminTelegramUser(ctx.from?.id)) {
+        return
+      }
+      const chatId = ctx.chat?.id
+      if (chatId == null) {
+        await ctx.reply('Не удалось определить chat_id.')
+        return
+      }
+      await ctx.reply(`🆔 Chat ID:\n${chatId}`)
+    } catch (error) {
+      console.error('[Telegram Bot] /chatid failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+    }
+  })
+
   // Preferred Telegraf path for inline buttons (reliably matches callback_data).
   async function onPartnerModerationAction(ctx) {
     try {
