@@ -9,6 +9,7 @@ export type AppErrorCode =
   | 'ALREADY_PURCHASED'
   | 'INVALID_ACTION'
   | 'RATE_LIMITED'
+  | 'MULTI_ACCOUNT_BLOCKED'
   | 'UNKNOWN_ERROR'
 
 export interface AppError {
@@ -64,6 +65,11 @@ export const APP_ERROR_MESSAGES: Record<AppErrorCode, AppErrorContent> = {
   RATE_LIMITED: {
     title: 'Слишком много запросов',
     message: 'Подожди немного и попробуй снова.',
+  },
+  MULTI_ACCOUNT_BLOCKED: {
+    title: 'Аккаунт заблокирован',
+    message:
+      'Обнаружена регистрация с устройства или сети, которая уже использовалась другим аккаунтом.',
   },
   UNKNOWN_ERROR: {
     title: 'Что-то пошло не так',

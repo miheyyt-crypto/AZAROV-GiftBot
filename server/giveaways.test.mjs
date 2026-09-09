@@ -375,7 +375,7 @@ test('public completed giveaway exposes winners without relying on client', asyn
 
 test('store migration creates giveaways maps at v8', () => {
   const store = createEmptyStore()
-  assert.equal(store.version, 14)
+  assert.equal(store.version, 15)
   assert.ok(store.giveaways)
   assert.ok(store.giveawayParticipants)
   assert.ok(store.communityAccessRequests)

@@ -1,3 +1,5 @@
+import { userCanEarnRewards } from './anti-abuse.mjs'
+
 /** Canonical ledger types (server-authoritative). */
 export const TX_TYPE = {
   TASK_REWARD: 'task_reward',
@@ -132,6 +134,19 @@ export function applyBalanceChange(store, user, amount, type, eventId, meta = {}
   const txType = normalizeTxType(type)
   if (!ALLOWED_TYPES.has(txType)) {
     throw new Error('invalid_tx_type')
+  }
+
+  // Hard deny credits for blocked multi-accounts.
+  if (delta > 0) {
+    const gate = userCanEarnRewards(user)
+    if (!gate.ok) {
+      return {
+        applied: false,
+        reason: 'blocked',
+        user,
+        transaction: null,
+      }
+    }
   }
 
   const referenceId = meta.referenceId ? String(meta.referenceId) : ''

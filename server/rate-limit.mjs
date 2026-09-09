@@ -55,9 +55,40 @@ export function timingSafeEqualString(a, b) {
 }
 
 export function clientIp(req) {
+  // Prefer Express-resolved IP when `trust proxy` is enabled (Railway).
+  const expressed = normalizeIpCandidate(req.ip)
+  if (expressed) {
+    return expressed
+  }
+
   const forwarded = req.headers['x-forwarded-for']
   if (typeof forwarded === 'string' && forwarded.trim()) {
-    return forwarded.split(',')[0].trim()
+    // Railway appends the real client as the left-most entry when proxying.
+    return normalizeIpCandidate(forwarded.split(',')[0]) || 'unknown'
   }
-  return req.socket?.remoteAddress || 'unknown'
+
+  const realIp = req.headers['x-real-ip']
+  if (typeof realIp === 'string' && realIp.trim()) {
+    return normalizeIpCandidate(realIp) || 'unknown'
+  }
+
+  return normalizeIpCandidate(req.socket?.remoteAddress) || 'unknown'
 }
+
+function normalizeIpCandidate(value) {
+  let ip = String(value || '')
+    .trim()
+    .toLowerCase()
+  if (!ip) {
+    return ''
+  }
+  if (ip.startsWith('::ffff:')) {
+    ip = ip.slice(7)
+  }
+  return ip
+}
+
+/** Auth / session endpoints — soft IP throttle (single process). */
+export const sessionAuthLimiter = createRateLimiter({ windowMs: 60_000, max: 40 })
+export const rewardMutationLimiter = createRateLimiter({ windowMs: 60_000, max: 60 })
+

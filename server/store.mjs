@@ -89,7 +89,7 @@ export function isPersistentStoreDir(dir = getDataDir()) {
 
 export function createEmptyStore() {
   return {
-    version: 14,
+    version: 15,
     users: {},
     referralIndex: {},
     referrals: {},
@@ -118,6 +118,9 @@ export function createEmptyStore() {
     giveaways: {},
     giveawayParticipants: {},
     communityAccessRequests: {},
+    deviceIndex: {},
+    ipHashIndex: {},
+    antiAbuseAudit: {},
   }
 }
 
@@ -152,6 +155,9 @@ function migrateStore(store) {
   store.promoCodes = store.promoCodes || {}
   store.promoUsages = store.promoUsages || {}
   store.withdrawals = store.withdrawals || {}
+  store.deviceIndex = store.deviceIndex || {}
+  store.ipHashIndex = store.ipHashIndex || {}
+  store.antiAbuseAudit = store.antiAbuseAudit || {}
 
   // One-shot upgrade: pending streak-freeze orders → inventory (strategy B).
   if (Number(store.version) < 5) {
@@ -234,6 +240,41 @@ function migrateStore(store) {
   if (Number(store.version) < 14) {
     store.withdrawals = store.withdrawals || {}
     store.version = 14
+  }
+
+  // Additive v15: hard anti-multi-account device/IP indexes.
+  // Existing users are grandfathered (antiAbuseBound=true) without claiming shared IPs.
+  if (Number(store.version) < 15) {
+    store.deviceIndex = store.deviceIndex || {}
+    store.ipHashIndex = store.ipHashIndex || {}
+    store.antiAbuseAudit = store.antiAbuseAudit || {}
+    const now = new Date().toISOString()
+    for (const user of Object.values(store.users || {})) {
+      if (!user || typeof user !== 'object') {
+        continue
+      }
+      if (user.createdAt == null) {
+        user.createdAt = now
+      }
+      if (user.blocked == null) {
+        user.blocked = false
+      }
+      if (user.blockReason === undefined) {
+        user.blockReason = null
+      }
+      if (user.blockedAt === undefined) {
+        user.blockedAt = null
+      }
+      if (user.primaryDeviceId === undefined) {
+        user.primaryDeviceId = null
+      }
+      if (user.primaryIpHash === undefined) {
+        user.primaryIpHash = null
+      }
+      // Do not auto-block legacy accounts that may share NAT/IP.
+      user.antiAbuseBound = true
+    }
+    store.version = 15
   }
 
   return store

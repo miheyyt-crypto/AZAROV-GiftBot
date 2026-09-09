@@ -37,6 +37,10 @@ export interface UserAccount {
   xpProgress?: number
   nextLevelReward?: number
   claimedLevelRewards?: number[]
+  blocked?: boolean
+  blockReason?: string | null
+  blockedAt?: string | null
+  antiAbuseBound?: boolean
 }
 
 export interface AppStoreData {

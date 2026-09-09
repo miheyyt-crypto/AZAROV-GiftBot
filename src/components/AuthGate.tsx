@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 
+import { BlockedAccountScreen } from '@/components/BlockedAccountScreen'
 import { LoginScreen } from '@/components/LoginScreen'
 import {
   completeTelegramWebLogin,
@@ -16,6 +17,7 @@ import {
   logoutCurrentWebSession,
   subscribeAuth,
 } from '@/lib/auth'
+import { MultiAccountBlockedError } from '@/lib/api'
 import { bootstrapSession } from '@/lib/session'
 import type { AuthStatus, TelegramLoginWidgetUser } from '@/types/auth'
 
@@ -44,6 +46,11 @@ interface AuthGateProps {
 export function AuthGate({ children }: AuthGateProps) {
   const [status, setStatus] = useState<AuthStatus>('loading')
   const [error, setError] = useState<string | null>(null)
+  const [blockCopy, setBlockCopy] = useState<{
+    title: string
+    message: string
+    detail: string
+  } | null>(null)
   const [loginBusy, setLoginBusy] = useState(false)
   const [, setTick] = useState(0)
 
@@ -55,6 +62,7 @@ export function AuthGate({ children }: AuthGateProps) {
     async function boot() {
       setStatus('loading')
       setError(null)
+      setBlockCopy(null)
 
       const timeout = window.setTimeout(() => {
         if (!cancelled) {
@@ -80,11 +88,21 @@ export function AuthGate({ children }: AuthGateProps) {
         } else {
           setStatus('unauthenticated')
         }
-      } catch {
-        if (!cancelled) {
-          setStatus('unauthenticated')
-          setError('Не удалось проверить сессию. Попробуй войти снова.')
+      } catch (err) {
+        if (cancelled) {
+          return
         }
+        if (err instanceof MultiAccountBlockedError) {
+          setBlockCopy({
+            title: err.title,
+            message: err.description,
+            detail: err.detail,
+          })
+          setStatus('blocked')
+          return
+        }
+        setStatus('unauthenticated')
+        setError('Не удалось проверить сессию. Попробуй войти снова.')
       } finally {
         window.clearTimeout(timeout)
       }
@@ -100,6 +118,7 @@ export function AuthGate({ children }: AuthGateProps) {
   const handleTelegramAuth = useCallback(async (payload: TelegramLoginWidgetUser) => {
     setLoginBusy(true)
     setError(null)
+    setBlockCopy(null)
 
     try {
       if (!payload?.id || !payload?.hash || !payload?.auth_date) {
@@ -109,6 +128,15 @@ export function AuthGate({ children }: AuthGateProps) {
       await completeTelegramWebLogin(payload)
       setStatus('authenticated')
     } catch (err) {
+      if (err instanceof MultiAccountBlockedError) {
+        setBlockCopy({
+          title: err.title,
+          message: err.description,
+          detail: err.detail,
+        })
+        setStatus('blocked')
+        return
+      }
       const message =
         err instanceof Error && err.message
           ? err.message
@@ -123,7 +151,7 @@ export function AuthGate({ children }: AuthGateProps) {
   const logout = useCallback(async () => {
     await logoutCurrentWebSession()
     setError(null)
-    // Stay on login screen — do not re-run boot (avoids loading flash / race with cleared cookie).
+    setBlockCopy(null)
     setStatus('unauthenticated')
   }, [])
 
@@ -146,6 +174,16 @@ export function AuthGate({ children }: AuthGateProps) {
         <div className="size-10 animate-spin rounded-full border-2 border-neon-purple/30 border-t-neon-purple" />
         <p className="text-sm text-muted">Загрузка…</p>
       </div>
+    )
+  }
+
+  if (status === 'blocked') {
+    return (
+      <BlockedAccountScreen
+        title={blockCopy?.title}
+        message={blockCopy?.message}
+        detail={blockCopy?.detail}
+      />
     )
   }
 

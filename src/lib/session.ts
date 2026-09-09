@@ -3,7 +3,7 @@ import {
   getCurrentAccount,
   setCurrentTelegramId,
 } from '@/lib/account'
-import { bootstrapRemoteSession } from '@/lib/api'
+import { bootstrapRemoteSession, MultiAccountBlockedError } from '@/lib/api'
 import {
   isMiniAppAuthAvailable,
   restoreWebSession,
@@ -59,6 +59,10 @@ export function mapRemoteAccount(remote: UserAccount): UserAccount {
     claimedLevelRewards: Array.isArray(remote.claimedLevelRewards)
       ? remote.claimedLevelRewards
       : [],
+    blocked: Boolean(remote.blocked),
+    blockReason: remote.blockReason ?? null,
+    blockedAt: remote.blockedAt ?? null,
+    antiAbuseBound: remote.antiAbuseBound,
   }
 }
 
@@ -110,7 +114,10 @@ export async function bootstrapSession(): Promise<UserAccount> {
           clearStoredStartParam()
         }
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof MultiAccountBlockedError) {
+        throw error
+      }
       // Keep local snapshot + stored start_param if API is unavailable inside Telegram.
     }
 

@@ -224,6 +224,6 @@ test('clearing max floors auto-cashes out', async () => {
 
 test('store version includes towerGames', () => {
   const store = createEmptyStore()
-  assert.equal(store.version, 14)
+  assert.equal(store.version, 15)
   assert.ok(store.towerGames)
 })

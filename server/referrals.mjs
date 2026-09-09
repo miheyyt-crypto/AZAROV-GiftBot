@@ -1,4 +1,5 @@
 import { getReferralActivationReward, REFERRAL_CASE_EVERY } from './constants.mjs'
+import { enforceAntiAbuseOnStore } from './anti-abuse.mjs'
 import { addCoins, hasEvent, sumTransactions, TX_TYPE } from './wallet.mjs'
 import {
   buildReferralLink,
@@ -403,6 +404,21 @@ export function activateReferralOnStore(store, userId) {
  * Bind from start_param (if any). Confirm + reward only if Kick is already linked.
  */
 export function applyReferralAndReward(store, invitee, startParam) {
+  if (invitee?.blocked || !invitee?.antiAbuseBound) {
+    return {
+      referral: {
+        applied: false,
+        reason: invitee?.blocked ? 'blocked' : 'registration_incomplete',
+        message: invitee?.blocked
+          ? 'Аккаунт заблокирован'
+          : 'Завершите вход в приложение.',
+      },
+      activation: {
+        rewarded: false,
+        reason: invitee?.blocked ? 'blocked' : 'registration_incomplete',
+      },
+    }
+  }
   const referral = processReferral(store, invitee, startParam)
   const activation = activateReferralOnStore(store, invitee.telegramId)
   return { referral, activation }
@@ -437,6 +453,80 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
   return withStore((store) => {
     migrateAllReferrals(store)
     const user = ensureUser(store, telegramUser)
+
+    if (user.blocked) {
+      return {
+        referral: { applied: false, reason: 'blocked' },
+        activation: { rewarded: false, reason: 'blocked' },
+        me: getReferralMe(store, user),
+        levelRewards: { granted: [], totalAmount: 0, level: 0 },
+        antiAbuse: {
+          allowed: false,
+          code: 'MULTI_ACCOUNT_BLOCKED',
+          message: 'Аккаунт заблокирован',
+        },
+        blocked: true,
+      }
+    }
+
+    let antiAbuse = { allowed: true, code: null, message: null }
+
+    if (!user.antiAbuseBound) {
+      if (options.enforceAntiAbuse) {
+        antiAbuse = enforceAntiAbuseOnStore(store, user, {
+          deviceId: options.deviceId,
+          ip: options.ip,
+        })
+        if (!antiAbuse.allowed) {
+          return {
+            referral: {
+              applied: false,
+              reason:
+                antiAbuse.code === 'MULTI_ACCOUNT_BLOCKED' ? 'blocked' : 'registration_incomplete',
+            },
+            activation: {
+              rewarded: false,
+              reason:
+                antiAbuse.code === 'MULTI_ACCOUNT_BLOCKED' ? 'blocked' : 'registration_incomplete',
+            },
+            me: getReferralMe(store, user),
+            levelRewards: { granted: [], totalAmount: 0, level: 0 },
+            antiAbuse,
+            blocked: Boolean(user.blocked),
+          }
+        }
+      } else {
+        // Other endpoints must not bind without device/IP; also skip rewards/referrals.
+        return {
+          referral: { applied: false, reason: 'registration_incomplete' },
+          activation: { rewarded: false, reason: 'registration_incomplete' },
+          me: getReferralMe(store, user),
+          levelRewards: { granted: [], totalAmount: 0, level: 0 },
+          antiAbuse: {
+            allowed: false,
+            code: 'REGISTRATION_INCOMPLETE',
+            message: 'Завершите вход в приложение.',
+          },
+          blocked: false,
+        }
+      }
+    } else if (options.deviceId || options.ip) {
+      antiAbuse = enforceAntiAbuseOnStore(store, user, {
+        deviceId: options.deviceId,
+        ip: options.ip,
+      })
+      if (!antiAbuse.allowed) {
+        return {
+          referral: { applied: false, reason: 'blocked' },
+          activation: { rewarded: false, reason: 'blocked' },
+          me: getReferralMe(store, user),
+          levelRewards: { granted: [], totalAmount: 0, level: 0 },
+          antiAbuse,
+          blocked: true,
+        }
+      }
+    }
+
     const clientStartParam = String(options.clientStartParam || '').trim()
     const resolved = resolveReferralStartParam({
       signed: startParam,
@@ -455,7 +545,6 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
     const { referral, activation } = applyReferralAndReward(store, user, resolved.value)
 
     if (user.pendingStartParam) {
-      // Clear pending only after we attempted with a usable payload (or pending was consumed).
       if (resolved.value || resolved.source === 'pending') {
         user.pendingStartParam = null
       }
@@ -463,7 +552,14 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
 
     maybeGrantInviteFriendsTask(store, user)
     const levelRewards = grantPendingLevelRewardsOnStore(store, user)
-    return { referral, activation, me: getReferralMe(store, user), levelRewards }
+    return {
+      referral,
+      activation,
+      me: getReferralMe(store, user),
+      levelRewards,
+      antiAbuse,
+      blocked: Boolean(user.blocked),
+    }
   })
 }
 

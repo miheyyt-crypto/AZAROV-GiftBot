@@ -11,7 +11,7 @@ export interface TelegramLoginWidgetUser {
   hash: string
 }
 
-export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
+export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'blocked'
 
 export interface AuthState {
   status: AuthStatus

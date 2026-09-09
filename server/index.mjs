@@ -142,7 +142,13 @@ import {
   parseRequestId,
   sanitizePurchaseMetadata,
 } from './validate.mjs'
-import { clientIp, createRateLimiter, timingSafeEqualString } from './rate-limit.mjs'
+import { clientIp, createRateLimiter, sessionAuthLimiter, timingSafeEqualString } from './rate-limit.mjs'
+import {
+  buildAdminAntiAbuseView,
+  MULTI_ACCOUNT_USER_MESSAGE,
+  parseDeviceId,
+  userCanUseAppEconomy,
+} from './anti-abuse.mjs'
 import {
   clearWebSessionCookie,
   createWebSession,
@@ -160,6 +166,8 @@ const PORT = Number(process.env.PORT || 3001)
 const HOST = String(process.env.HOST || '0.0.0.0').trim() || '0.0.0.0'
 const IS_PRODUCTION = process.env.NODE_ENV === 'production'
 const app = express()
+// Railway (and most reverse proxies) append the client IP in X-Forwarded-For.
+app.set('trust proxy', 1)
 const distDir = path.resolve(rootDir, 'dist')
 
 function assertProductionEnv() {
@@ -416,6 +424,21 @@ function withUser(handler) {
     if (!telegramUser) {
       return
     }
+
+    const stored = getUser(telegramUser.id)
+    if (stored?.blocked) {
+      res.status(403).json({
+        success: false,
+        code: 'MULTI_ACCOUNT_BLOCKED',
+        message: MULTI_ACCOUNT_USER_MESSAGE.title,
+        title: MULTI_ACCOUNT_USER_MESSAGE.title,
+        detail: MULTI_ACCOUNT_USER_MESSAGE.detail,
+        description: MULTI_ACCOUNT_USER_MESSAGE.message,
+        user: toPublicUser(stored),
+      })
+      return
+    }
+
     await handler(req, res, telegramUser)
   })
 }
@@ -426,6 +449,31 @@ function withUser(handler) {
  */
 function withEconomicUser(handler) {
   return withUser(async (req, res, telegramUser) => {
+    const stored = getUser(telegramUser.id)
+    const economy = userCanUseAppEconomy(stored)
+    if (!economy.ok) {
+      const status = economy.code === 'MULTI_ACCOUNT_BLOCKED' ? 403 : 403
+      res.status(status).json({
+        success: false,
+        code: economy.code,
+        message: economy.message,
+        title:
+          economy.code === 'MULTI_ACCOUNT_BLOCKED'
+            ? MULTI_ACCOUNT_USER_MESSAGE.title
+            : undefined,
+        description:
+          economy.code === 'MULTI_ACCOUNT_BLOCKED'
+            ? MULTI_ACCOUNT_USER_MESSAGE.message
+            : undefined,
+        detail:
+          economy.code === 'MULTI_ACCOUNT_BLOCKED'
+            ? MULTI_ACCOUNT_USER_MESSAGE.detail
+            : undefined,
+        user: stored ? toPublicUser(stored) : undefined,
+      })
+      return
+    }
+
     const limit = economicMutationLimiter.check(`econ:${telegramUser.id}`)
     if (!limit.allowed) {
       res.setHeader('Retry-After', String(Math.ceil(limit.retryAfterMs / 1000) || 1))
@@ -642,12 +690,40 @@ app.post(
 
     purgeExpiredWebSessions()
 
-    const result = bootstrapUser(verified.user, '')
+    const deviceId = parseDeviceId(req.body?.deviceId)
+    const result = bootstrapUser(verified.user, '', {
+      enforceAntiAbuse: true,
+      deviceId,
+      ip,
+    })
     const user = getUser(verified.user.id)
     if (!user) {
       res.status(500).json({
         success: false,
         message: 'Не удалось создать пользователя.',
+      })
+      return
+    }
+
+    if (result.blocked || user.blocked || result.antiAbuse?.code === 'MULTI_ACCOUNT_BLOCKED') {
+      res.status(403).json({
+        success: false,
+        code: 'MULTI_ACCOUNT_BLOCKED',
+        message: MULTI_ACCOUNT_USER_MESSAGE.title,
+        title: MULTI_ACCOUNT_USER_MESSAGE.title,
+        description: MULTI_ACCOUNT_USER_MESSAGE.message,
+        detail: MULTI_ACCOUNT_USER_MESSAGE.detail,
+        user: toPublicUser(user),
+      })
+      return
+    }
+
+    if (result.antiAbuse && !result.antiAbuse.allowed) {
+      res.status(403).json({
+        success: false,
+        code: result.antiAbuse.code || 'REGISTRATION_INCOMPLETE',
+        message: result.antiAbuse.message || 'Не удалось завершить регистрацию.',
+        user: toPublicUser(user),
       })
       return
     }
@@ -701,6 +777,19 @@ app.post(
   '/api/session',
   asyncHandler(async (req, res) => {
     assertNoClientFinancialOverrides(req.body)
+
+    const ip = clientIp(req)
+    const sessionLimit = sessionAuthLimiter.check(`session:${ip}`)
+    if (!sessionLimit.allowed) {
+      res.setHeader('Retry-After', String(Math.ceil(sessionLimit.retryAfterMs / 1000) || 1))
+      res.status(429).json({
+        success: false,
+        code: 'RATE_LIMITED',
+        message: 'Слишком много запросов. Подожди немного и попробуй снова.',
+      })
+      return
+    }
+
     const auth = requireTelegramAuth(req, res)
     if (!auth) {
       return
@@ -712,6 +801,7 @@ app.post(
     const signedStartParam = auth.startParam || ''
     const clientStartParam =
       typeof req.body?.startParam === 'string' ? req.body.startParam.trim().slice(0, 64) : ''
+    const deviceId = parseDeviceId(req.body?.deviceId)
 
     console.info('[referral] session_start_param', {
       telegramId: auth.user.id,
@@ -721,7 +811,12 @@ app.post(
       clientCode: extractReferralCode(clientStartParam),
     })
 
-    const result = bootstrapUser(auth.user, signedStartParam, { clientStartParam })
+    const result = bootstrapUser(auth.user, signedStartParam, {
+      clientStartParam,
+      enforceAntiAbuse: true,
+      deviceId,
+      ip,
+    })
     const user = getUser(auth.user.id)
 
     console.info('[referral] session_result', {
@@ -731,7 +826,32 @@ app.post(
       activationReason: result.activation?.reason || null,
       activationRewarded: Boolean(result.activation?.rewarded),
       referredByUserId: user?.referredByUserId || null,
+      antiAbuseCode: result.antiAbuse?.code || null,
+      blocked: Boolean(user?.blocked),
     })
+
+    if (result.blocked || user?.blocked || result.antiAbuse?.code === 'MULTI_ACCOUNT_BLOCKED') {
+      res.status(403).json({
+        success: false,
+        code: 'MULTI_ACCOUNT_BLOCKED',
+        message: MULTI_ACCOUNT_USER_MESSAGE.title,
+        title: MULTI_ACCOUNT_USER_MESSAGE.title,
+        description: MULTI_ACCOUNT_USER_MESSAGE.message,
+        detail: MULTI_ACCOUNT_USER_MESSAGE.detail,
+        user: toPublicUser(user),
+      })
+      return
+    }
+
+    if (result.antiAbuse && !result.antiAbuse.allowed) {
+      res.status(403).json({
+        success: false,
+        code: result.antiAbuse.code || 'REGISTRATION_INCOMPLETE',
+        message: result.antiAbuse.message || 'Не удалось завершить регистрацию.',
+        user: toPublicUser(user),
+      })
+      return
+    }
 
     res.json({
       success: true,
@@ -1093,6 +1213,46 @@ app.get(
     const status = typeof req.query.status === 'string' ? req.query.status : ''
     const result = listAdminCommunityAccess(status)
     res.json(result)
+  }),
+)
+
+app.get(
+  '/api/admin/users/:telegramId',
+  withAdmin(async (req, res) => {
+    const telegramId = Number(req.params.telegramId)
+    if (!Number.isInteger(telegramId) || telegramId <= 0) {
+      res.status(400).json({
+        success: false,
+        code: 'INVALID_ID',
+        message: 'Некорректный Telegram ID.',
+      })
+      return
+    }
+
+    const snapshot = withStore((store) => {
+      const user = store.users[String(telegramId)]
+      if (!user) {
+        return null
+      }
+      return {
+        user: toPublicUser(user, store),
+        antiAbuse: buildAdminAntiAbuseView(store, user),
+      }
+    })
+
+    if (!snapshot) {
+      res.status(404).json({
+        success: false,
+        code: 'NOT_FOUND',
+        message: 'Пользователь не найден.',
+      })
+      return
+    }
+
+    res.json({
+      success: true,
+      ...snapshot,
+    })
   }),
 )
 

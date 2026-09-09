@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 
+import { hydrateAntiAbuseUserFields } from './anti-abuse.mjs'
 import { REFERRAL_CASE_EVERY, REFERRAL_CODE_LENGTH, REFERRAL_CODE_PREFIX, TELEGRAM_BOT_USERNAME } from './constants.mjs'
 import { buildUserLevelSnapshot } from './level.mjs'
 import { nextLevelRewardAmount } from './level-rewards.mjs'
@@ -163,8 +164,17 @@ export function createUser(store, telegramUser) {
     isPremium: Boolean(telegramUser.is_premium),
     claimedLevelRewards: [],
     levelRewardsSeeded: true,
+    createdAt: new Date().toISOString(),
+    blocked: false,
+    blockReason: null,
+    blockedAt: null,
+    primaryDeviceId: null,
+    primaryIpHash: null,
+    // Must pass device+IP binding on first Mini App / web session.
+    antiAbuseBound: false,
   }
 
+  hydrateAntiAbuseUserFields(user, { isNew: true })
   store.users[String(user.telegramId)] = user
   indexReferralCode(store, user)
   return user
@@ -275,6 +285,7 @@ export function ensureUser(store, telegramUser) {
   if (existing.pendingStartParam === undefined) {
     existing.pendingStartParam = null
   }
+  hydrateAntiAbuseUserFields(existing, { isNew: false })
 
   // Referral code is permanent: create once, never rotate (except one-time Telegram-ID legacy codes).
   if (!existing.referralCode) {
@@ -392,5 +403,9 @@ export function toPublicUser(user, store = null) {
     claimedLevelRewards: Array.isArray(user.claimedLevelRewards)
       ? user.claimedLevelRewards.map((value) => Math.floor(Number(value) || 0)).filter((value) => value >= 1)
       : [],
+    blocked: Boolean(user.blocked),
+    blockReason: user.blockReason || null,
+    blockedAt: user.blockedAt || null,
+    antiAbuseBound: Boolean(user.antiAbuseBound),
   }
 }

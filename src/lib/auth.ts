@@ -7,6 +7,7 @@ import {
   fetchAuthMe,
   loginWithTelegramWeb,
   logoutWebSession,
+  MultiAccountBlockedError,
 } from '@/lib/api'
 import { hydrateBalanceFromAccount } from '@/lib/balance'
 import type { TelegramLoginWidgetUser } from '@/types/auth'
@@ -109,13 +110,24 @@ export function isMiniAppAuthAvailable(): boolean {
 export async function restoreWebSession(): Promise<TelegramUser | null> {
   try {
     const response = await fetchAuthMe()
+    if (response.code === 'MULTI_ACCOUNT_BLOCKED' || response.user?.blocked) {
+      throw new MultiAccountBlockedError({
+        title: response.title,
+        description: response.description,
+        detail: response.detail,
+        message: response.message,
+      })
+    }
     if (!response.success || !response.user) {
       clearWebAuthState()
       return null
     }
 
     return applyAuthenticatedAccount(response.user)
-  } catch {
+  } catch (error) {
+    if (error instanceof MultiAccountBlockedError) {
+      throw error
+    }
     clearWebAuthState()
     return null
   }
@@ -136,6 +148,15 @@ export async function completeTelegramWebLogin(
     auth_date: payload.auth_date,
     hash: payload.hash,
   })
+
+  if (response.code === 'MULTI_ACCOUNT_BLOCKED' || response.user?.blocked) {
+    throw new MultiAccountBlockedError({
+      title: response.title,
+      description: response.description,
+      detail: response.detail,
+      message: response.message,
+    })
+  }
 
   if (!response.success || !response.user) {
     throw new Error(response.message || 'Не удалось войти через Telegram.')

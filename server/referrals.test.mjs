@@ -25,7 +25,9 @@ function makeStore() {
 }
 
 function makeUser(store, id, name) {
-  return createUser(store, { id, first_name: name, username: name.toLowerCase() })
+  const user = createUser(store, { id, first_name: name, username: name.toLowerCase() })
+  user.antiAbuseBound = true
+  return user
 }
 
 function linkKick(store, user, kickUserId = String(9000 + Number(user.telegramId))) {

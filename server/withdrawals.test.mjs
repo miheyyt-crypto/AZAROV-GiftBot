@@ -211,7 +211,7 @@ test('pending blocks double request; reject restores; approve withdraws', async 
 
 test('store version includes withdrawals', () => {
   const store = createEmptyStore()
-  assert.equal(store.version, 14)
+  assert.equal(store.version, 15)
   assert.ok(store.withdrawals)
 })
 

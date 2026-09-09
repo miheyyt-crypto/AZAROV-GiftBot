@@ -1,4 +1,5 @@
 import { getTelegramInitData } from '@/lib/telegram'
+import { getOrCreateDeviceId } from '@/lib/device-id'
 import type { UserAccount } from '@/types/account'
 import type { CaseOpening } from '@/types/case'
 import type { PartnerSubmission } from '@/types/partner'
@@ -8,6 +9,9 @@ export interface ApiUserResponse {
   success: boolean
   message?: string
   code?: string
+  title?: string
+  description?: string
+  detail?: string
   user?: UserAccount
   order?: ShopOrder
   orders?: ShopOrder[]
@@ -59,6 +63,29 @@ export interface ApiUserResponse {
   } | null
 }
 
+export class MultiAccountBlockedError extends Error {
+  readonly code = 'MULTI_ACCOUNT_BLOCKED'
+  readonly title: string
+  readonly description: string
+  readonly detail: string
+
+  constructor(payload?: {
+    title?: string
+    description?: string
+    detail?: string
+    message?: string
+  }) {
+    super(payload?.message || payload?.title || 'Аккаунт заблокирован')
+    this.name = 'MultiAccountBlockedError'
+    this.title = payload?.title || 'Аккаунт заблокирован'
+    this.description =
+      payload?.description ||
+      'Обнаружена регистрация с устройства или сети, которая уже использовалась другим аккаунтом.'
+    this.detail =
+      payload?.detail || 'Если это ошибка, обратитесь в техническую поддержку.'
+  }
+}
+
 function apiUrl(path: string): string {
   const base = import.meta.env.VITE_API_URL ?? ''
   return `${base}${path}`
@@ -85,13 +112,29 @@ async function request(path: string, init: RequestInit = {}): Promise<ApiUserRes
     throw new Error('bad_response')
   }
 
+  if (
+    payload.code === 'MULTI_ACCOUNT_BLOCKED' ||
+    payload.user?.blocked ||
+    (response.status === 403 && payload.code === 'MULTI_ACCOUNT_BLOCKED')
+  ) {
+    throw new MultiAccountBlockedError({
+      title: payload.title,
+      description: payload.description,
+      detail: payload.detail,
+      message: payload.message,
+    })
+  }
+
   return payload
 }
 
 export function bootstrapRemoteSession(startParam: string): Promise<ApiUserResponse> {
   return request('/api/session', {
     method: 'POST',
-    body: JSON.stringify({ startParam }),
+    body: JSON.stringify({
+      startParam,
+      deviceId: getOrCreateDeviceId(),
+    }),
   })
 }
 
@@ -236,7 +279,10 @@ export function loginWithTelegramWeb(payload: {
 }): Promise<ApiUserResponse> {
   return request('/api/auth/telegram-web', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      deviceId: getOrCreateDeviceId(),
+    }),
   })
 }
 
