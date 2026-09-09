@@ -8,6 +8,7 @@ export const ROUTES = {
   profile: '/profile',
   operations: '/profile/operations',
   orders: '/orders',
+  giveaways: '/giveaways',
 } as const
 
 export const TELEGRAM_BOT_USERNAME = 'AZAROV_GiftBot'

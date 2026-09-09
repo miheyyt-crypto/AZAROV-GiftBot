@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 
+import { GiveawaysSection } from '@/components/GiveawaysSection'
 import { HomeBannerSlider } from '@/components/HomeBannerSlider'
 import { HomeUserHeader } from '@/components/HomeUserHeader'
 import { LeaderboardPodium } from '@/components/LeaderboardPodium'
@@ -18,6 +19,10 @@ export function Home() {
 
       <div className="mt-6">
         <StreamStreakCard />
+      </div>
+
+      <div className="mt-6">
+        <GiveawaysSection />
       </div>
 
       <div className="mt-6">
