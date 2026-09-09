@@ -18,10 +18,6 @@ export function Home() {
 
       <HomeBannerSlider banners={banners} />
 
-      <div className="mt-4">
-        <CommunityAccessBanner />
-      </div>
-
       <div className="mt-6">
         <StreamStreakCard />
       </div>
@@ -35,6 +31,10 @@ export function Home() {
       </div>
 
       <RecentDropsFeed />
+
+      <div className="mt-6">
+        <CommunityAccessBanner />
+      </div>
     </div>
   )
 }
