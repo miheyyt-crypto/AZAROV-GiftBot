@@ -15,6 +15,15 @@ import {
   handleShopModerationCallback,
   handleShopRejectReasonMessage,
 } from './shop-admin.mjs'
+import {
+  answerGiveawayCallback,
+  buildGiveawayStartAdminKeyboard,
+  handleGiveawayAdminCallback,
+  handleGiveawayAdminCommand,
+  handleGiveawayCancelCommand,
+  handleGiveawayWizardMessage,
+} from './giveaway-admin.mjs'
+import { isAdminTelegramUser } from './telegram-notify.mjs'
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 loadEnv({ path: path.join(rootDir, '.env') })
@@ -132,9 +141,38 @@ export function createBot() {
           `${text}\n\n⚠ Mini App временно недоступен: WEBAPP_URL не настроен на сервере.`,
         )
       }
+
+      if (isAdminTelegramUser(telegramUser.id)) {
+        await ctx.reply('🛠 Админ-меню', {
+          reply_markup: buildGiveawayStartAdminKeyboard(),
+        })
+      }
     } catch (error) {
       console.error('[Telegram Bot] Failed to reply to /start', {
         telegramId: telegramUser.id,
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+    }
+  })
+
+  bot.command('admin', async (ctx) => {
+    try {
+      await handleGiveawayAdminCommand(ctx)
+    } catch (error) {
+      console.error('[Telegram Bot] /admin failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+    }
+  })
+
+  bot.command('cancel', async (ctx) => {
+    try {
+      const handled = await handleGiveawayCancelCommand(ctx)
+      if (!handled && isAdminTelegramUser(ctx.from?.id)) {
+        await ctx.reply('Нечего отменять.')
+      }
+    } catch (error) {
+      console.error('[Telegram Bot] /cancel failed', {
         message: error instanceof Error ? error.message : 'unknown_error',
       })
     }
@@ -190,19 +228,44 @@ export function createBot() {
     await answerShopCallback(ctx)
   })
 
+  async function onGiveawayAdminAction(ctx) {
+    try {
+      console.info('[Telegram Bot] giveaway admin action', {
+        data: ctx.callbackQuery?.data || null,
+        fromId: ctx.from?.id != null ? String(ctx.from.id) : null,
+      })
+      const handled = await handleGiveawayAdminCallback(ctx)
+      if (!handled) {
+        await answerGiveawayCallback(ctx)
+      }
+    } catch (error) {
+      console.error('[Telegram Bot] giveaway admin action failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+      await answerGiveawayCallback(ctx, 'Ошибка обработки', true)
+    }
+  }
+
+  bot.action(/^gw:/i, onGiveawayAdminAction)
+
   bot.on('text', async (ctx) => {
-    // Ignore /commands — only consume plain text as rejection reasons.
-    if (String(ctx.message?.text || '').startsWith('/')) {
+    const raw = String(ctx.message?.text || '')
+    // Ignore /commands — only consume plain text as wizard / rejection reasons.
+    if (raw.startsWith('/')) {
       return
     }
     try {
+      const giveawayHandled = await handleGiveawayWizardMessage(ctx)
+      if (giveawayHandled) {
+        return
+      }
       const shopHandled = await handleShopRejectReasonMessage(ctx)
       if (shopHandled) {
         return
       }
       await handlePartnerRejectReasonMessage(ctx)
     } catch (error) {
-      console.error('[Telegram Bot] reject-reason text failed', {
+      console.error('[Telegram Bot] text handler failed', {
         message: error instanceof Error ? error.message : 'unknown_error',
       })
     }
