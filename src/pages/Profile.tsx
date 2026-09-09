@@ -128,6 +128,7 @@ export function Profile() {
             xp={profile.xp}
             nextLevelXp={profile.nextLevelXp}
             currentLevelXp={profile.currentLevelXp}
+            nextLevelReward={profile.nextLevelReward}
           />
         </div>
 

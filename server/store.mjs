@@ -15,6 +15,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { ensureStreakFreezeInventoryMigration } from './inventory.mjs'
+import { computeLevelProgress, computeXpFromStats } from './level.mjs'
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url))
 const defaultDataDir = path.join(moduleDir, 'data')
@@ -88,7 +89,7 @@ export function isPersistentStoreDir(dir = getDataDir()) {
 
 export function createEmptyStore() {
   return {
-    version: 10,
+    version: 11,
     users: {},
     referralIndex: {},
     referrals: {},
@@ -179,6 +180,33 @@ function migrateStore(store) {
   if (Number(store.version) < 10) {
     store.minesGames = store.minesGames || {}
     store.version = 10
+  }
+
+  // v11: level-up coin rewards — seed claimed levels for existing users (no backfill).
+  if (Number(store.version) < 11) {
+    for (const user of Object.values(store.users || {})) {
+      if (!user || user.levelRewardsSeeded) {
+        continue
+      }
+      const watchSeconds = Math.max(
+        0,
+        Math.floor(
+          Number(
+            store.kickWatchStats?.[String(user.telegramId)]?.totalWatchSeconds ?? user.watchSeconds,
+          ) || 0,
+        ),
+      )
+      const xp = computeXpFromStats({
+        chatMessages: user.chatMessages,
+        watchSeconds,
+      })
+      const computed = computeLevelProgress(xp).level
+      const through = Math.max(1, Math.max(Number(user.peakLevel) || 0, computed))
+      user.peakLevel = through
+      user.claimedLevelRewards = Array.from({ length: through }, (_, index) => index + 1)
+      user.levelRewardsSeeded = true
+    }
+    store.version = 11
   }
 
   return store

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { subscribeAccount } from '@/lib/account'
 import { subscribeAuth } from '@/lib/auth'
 import { useTelegramWebApp } from '@/hooks/useTelegramWebApp'
 import {
@@ -15,8 +16,9 @@ export function useUserProfile() {
   const [version, setVersion] = useState(0)
 
   useEffect(() => subscribeAuth(() => setVersion((value) => value + 1)), [])
+  useEffect(() => subscribeAccount(() => setVersion((value) => value + 1)), [])
 
-  // Re-read when Telegram WebApp readiness or web auth user changes.
+  // Re-read when Telegram WebApp readiness, web auth, or account snapshot changes.
   void version
   void isAvailable
 

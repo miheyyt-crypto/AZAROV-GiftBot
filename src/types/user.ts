@@ -21,6 +21,7 @@ export interface UserProfile {
   xp: number
   nextLevelXp: number
   currentLevelXp?: number
+  nextLevelReward?: number
 }
 
 export interface UserStats {

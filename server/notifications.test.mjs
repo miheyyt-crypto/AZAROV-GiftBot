@@ -343,8 +343,11 @@ test('HTTP: notifications require auth; scoped to authenticated user; no client 
       assert.equal(noAuth.status, 401)
 
       withStore((store) => {
-        createUser(store, { id: 930, first_name: 'Auth', username: 'auth930' })
-        createUser(store, { id: 931, first_name: 'Other', username: 'auth931' })
+        const a = createUser(store, { id: 930, first_name: 'Auth', username: 'auth930' })
+        const b = createUser(store, { id: 931, first_name: 'Other', username: 'auth931' })
+        // Avoid LEVEL_UP side-effect from bootstrapUser during /api/notifications.
+        a.claimedLevelRewards = [1]
+        b.claimedLevelRewards = [1]
         createNotificationOnStore(store, {
           userId: 930,
           type: NOTIFICATION_TYPE.SYSTEM,

@@ -15,6 +15,7 @@ import {
 } from './users.mjs'
 import { withStore } from './store.mjs'
 import { maybeGrantInviteFriendsTask } from './tasks.mjs'
+import { grantPendingLevelRewardsOnStore } from './level-rewards.mjs'
 
 export function migrateAllReferrals(store) {
   for (const user of Object.values(store.users || {})) {
@@ -461,7 +462,8 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
     }
 
     maybeGrantInviteFriendsTask(store, user)
-    return { referral, activation, me: getReferralMe(store, user) }
+    const levelRewards = grantPendingLevelRewardsOnStore(store, user)
+    return { referral, activation, me: getReferralMe(store, user), levelRewards }
   })
 }
 

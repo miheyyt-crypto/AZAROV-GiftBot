@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 
 import { REFERRAL_CASE_EVERY, REFERRAL_CODE_LENGTH, REFERRAL_CODE_PREFIX, TELEGRAM_BOT_USERNAME } from './constants.mjs'
 import { buildUserLevelSnapshot } from './level.mjs'
+import { nextLevelRewardAmount } from './level-rewards.mjs'
 import { loadStore } from './store.mjs'
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -160,6 +161,8 @@ export function createUser(store, telegramUser) {
     pendingStartParam: null,
     languageCode: telegramUser.language_code || '',
     isPremium: Boolean(telegramUser.is_premium),
+    claimedLevelRewards: [],
+    levelRewardsSeeded: true,
   }
 
   store.users[String(user.telegramId)] = user
@@ -385,5 +388,9 @@ export function toPublicUser(user, store = null) {
     xpForCurrentLevel: levelSnap.xpForCurrentLevel,
     xpForNextLevel: levelSnap.xpForNextLevel,
     xpProgress: levelSnap.progress,
+    nextLevelReward: nextLevelRewardAmount(levelSnap.level),
+    claimedLevelRewards: Array.isArray(user.claimedLevelRewards)
+      ? user.claimedLevelRewards.map((value) => Math.floor(Number(value) || 0)).filter((value) => value >= 1)
+      : [],
   }
 }

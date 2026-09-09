@@ -730,6 +730,13 @@ app.post(
       referral: result.referral,
       referralStats: result.me,
       activation: result.activation,
+      levelRewards: result.levelRewards?.granted?.length
+        ? {
+            granted: result.levelRewards.granted,
+            totalAmount: result.levelRewards.totalAmount,
+            level: result.levelRewards.level,
+          }
+        : null,
     })
   }),
 )
@@ -743,6 +750,13 @@ app.get(
       user: toPublicUser(getUser(telegramUser.id)),
       referral: result.referral,
       referralStats: result.me,
+      levelRewards: result.levelRewards?.granted?.length
+        ? {
+            granted: result.levelRewards.granted,
+            totalAmount: result.levelRewards.totalAmount,
+            level: result.levelRewards.level,
+          }
+        : null,
     })
   }),
 )

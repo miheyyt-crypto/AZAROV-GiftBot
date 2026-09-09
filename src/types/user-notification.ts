@@ -5,6 +5,9 @@ export type UserNotificationType =
   | 'ORDER_REJECTED'
   | 'COMMUNITY_ACCESS_APPROVED'
   | 'COMMUNITY_ACCESS_REJECTED'
+  | 'GIVEAWAY_WON'
+  | 'GIVEAWAY_COMPLETED'
+  | 'LEVEL_UP'
   | 'SYSTEM'
   | string
 

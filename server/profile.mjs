@@ -28,6 +28,7 @@ const TRANSACTION_LABELS = {
   streak_freeze: 'Заморозка стрика',
   achievement_reward: 'Награда за достижение',
   giveaway_reward: 'Победа в розыгрыше',
+  level_reward: 'Награда за уровень',
   mines_bet: 'Ставка в Mines',
   mines_win: 'Выигрыш в Mines',
   admin_adjustment: 'Корректировка баланса',
@@ -42,6 +43,7 @@ const REWARD_TYPES = new Set([
   'case_reward',
   'achievement_reward',
   'giveaway_reward',
+  'level_reward',
   'mines_win',
 ])
 

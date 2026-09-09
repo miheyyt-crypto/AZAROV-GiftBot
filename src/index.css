@@ -487,6 +487,30 @@ body {
   animation: mines-boom 420ms var(--press-ease);
 }
 
+@keyframes level-up-burst {
+  0% {
+    opacity: 0;
+    background:
+      radial-gradient(circle at 20% 30%, rgb(244 201 93 / 28%), transparent 28%),
+      radial-gradient(circle at 80% 25%, rgb(168 85 247 / 22%), transparent 26%),
+      radial-gradient(circle at 50% 70%, rgb(192 132 252 / 18%), transparent 32%);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.35;
+    background:
+      radial-gradient(circle at 25% 28%, rgb(244 201 93 / 10%), transparent 34%),
+      radial-gradient(circle at 75% 30%, rgb(168 85 247 / 8%), transparent 32%),
+      radial-gradient(circle at 48% 72%, rgb(192 132 252 / 6%), transparent 38%);
+  }
+}
+
+.level-up-burst {
+  animation: level-up-burst 900ms var(--press-ease) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .friends-panel {
     animation: none;
@@ -494,5 +518,10 @@ body {
 
   .mines-cell-boom {
     animation: none;
+  }
+
+  .level-up-burst {
+    animation: none;
+    opacity: 0.25;
   }
 }

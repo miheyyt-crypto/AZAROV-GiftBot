@@ -9,6 +9,8 @@ import {
   restoreWebSession,
 } from '@/lib/auth'
 import { hydrateBalanceFromAccount } from '@/lib/balance'
+import { emitLevelUpCelebration } from '@/lib/level-up-events'
+import { parseLevelRewardGrants } from '@/lib/level-rewards'
 import { clearStoredStartParam, getStartParam } from '@/lib/referral'
 import { captureStartParam } from '@/lib/startParam'
 import { initTelegramWebApp } from '@/lib/telegram'
@@ -53,6 +55,10 @@ export function mapRemoteAccount(remote: UserAccount): UserAccount {
     xpForCurrentLevel: remote.xpForCurrentLevel ?? 0,
     xpForNextLevel: remote.xpForNextLevel ?? 200,
     xpProgress: remote.xpProgress ?? 0,
+    nextLevelReward: remote.nextLevelReward ?? 0,
+    claimedLevelRewards: Array.isArray(remote.claimedLevelRewards)
+      ? remote.claimedLevelRewards
+      : [],
   }
 }
 
@@ -79,6 +85,15 @@ export async function bootstrapSession(): Promise<UserAccount> {
             referralLink: response.user.referralLink || response.referralStats?.referralLink || '',
           }),
         )
+      }
+
+      const granted = parseLevelRewardGrants(response.levelRewards?.granted)
+      const totalAmount = Math.max(
+        0,
+        Math.floor(Number(response.levelRewards?.totalAmount) || 0),
+      )
+      if (granted.length > 0 && totalAmount > 0) {
+        emitLevelUpCelebration({ rewards: granted, totalAmount })
       }
 
       const reason = response.referral?.reason

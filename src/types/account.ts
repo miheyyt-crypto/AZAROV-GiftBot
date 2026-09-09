@@ -35,6 +35,8 @@ export interface UserAccount {
   xpForCurrentLevel?: number
   xpForNextLevel?: number
   xpProgress?: number
+  nextLevelReward?: number
+  claimedLevelRewards?: number[]
 }
 
 export interface AppStoreData {

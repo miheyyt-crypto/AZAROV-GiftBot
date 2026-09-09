@@ -1,6 +1,7 @@
 import { getBalance } from '@/lib/balance'
 import { getWebAuthUser } from '@/lib/auth'
 import { getCurrentAccount } from '@/lib/account'
+import { nextLevelRewardAmount } from '@/lib/level-rewards'
 import {
   getTelegramUserUnsafe,
   isTelegramEnvironment,
@@ -61,13 +62,18 @@ export function getTelegramUser(): TelegramUser {
 
 export function getUserProfile(): UserProfile {
   const account = getCurrentAccount()
+  const level = Math.max(1, Number(account.level) || 1)
   return {
     user: getTelegramUser(),
     balance: getBalance(),
-    level: Math.max(1, Number(account.level) || 1),
+    level,
     xp: Math.max(0, Number(account.xp) || 0),
     nextLevelXp: Math.max(1, Number(account.xpForNextLevel) || 200),
     currentLevelXp: Math.max(0, Number(account.xpForCurrentLevel) || 0),
+    nextLevelReward:
+      typeof account.nextLevelReward === 'number' && account.nextLevelReward > 0
+        ? account.nextLevelReward
+        : nextLevelRewardAmount(level),
   }
 }
 

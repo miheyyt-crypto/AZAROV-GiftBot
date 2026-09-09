@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { LevelUpCelebration } from '@/components/LevelUpCelebration'
 import { NotificationsSheet } from '@/components/NotificationsSheet'
 import { ServerNotificationToast } from '@/components/ServerNotificationToast'
 import { emitNotificationsUpdated } from '@/lib/notification-events'
@@ -13,6 +14,12 @@ import {
   ingestPolledNotifications,
   shiftToastQueue,
 } from '@/lib/notification-toast-logic'
+import { parseLevelRewardGrants, type LevelRewardGrant } from '@/lib/level-rewards'
+import {
+  emitLevelUpCelebration,
+  subscribeLevelUpCelebration,
+} from '@/lib/level-up-events'
+import { bootstrapSession } from '@/lib/session'
 import type { UserNotification } from '@/types/user-notification'
 
 function prefersReducedMotion(): boolean {
@@ -22,9 +29,15 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
+interface LevelUpState {
+  rewards: LevelRewardGrant[]
+  totalAmount: number
+}
+
 /**
  * Polls GET /api/notifications and shows top toasts for notifications
  * that appear after the session baseline. Does not mark notifications read.
+ * LEVEL_UP opens a single celebration modal (no toast spam).
  */
 export function ServerNotificationToasts() {
   const sessionRef = useRef(createServerToastSession())
@@ -35,11 +48,13 @@ export function ServerNotificationToasts() {
   const pausedByHoverRef = useRef(false)
   const remainingMsRef = useRef(SERVER_TOAST_DURATION_MS)
   const shownAtRef = useRef(0)
+  const seenLevelUpKeysRef = useRef(new Set<string>())
 
   const [current, setCurrent] = useState<UserNotification | null>(null)
   const [sheetFocusId, setSheetFocusId] = useState<string | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [reducedMotion, setReducedMotion] = useState(false)
+  const [levelUp, setLevelUp] = useState<LevelUpState | null>(null)
 
   const clearDismissTimer = useCallback(() => {
     if (dismissTimerRef.current != null) {
@@ -74,9 +89,21 @@ export function ServerNotificationToasts() {
     [clearDismissTimer],
   )
 
+  const openLevelUp = useCallback((detail: LevelUpState) => {
+    const key = detail.rewards.map((item) => `${item.level}:${item.amount}`).join('|')
+    if (!key || seenLevelUpKeysRef.current.has(key)) {
+      return
+    }
+    seenLevelUpKeysRef.current.add(key)
+    setLevelUp(detail)
+    void bootstrapSession()
+  }, [])
+
   useEffect(() => {
     setReducedMotion(prefersReducedMotion())
   }, [])
+
+  useEffect(() => subscribeLevelUpCelebration(openLevelUp), [openLevelUp])
 
   // When current clears, pull next queued toast (one at a time).
   useEffect(() => {
@@ -92,23 +119,41 @@ export function ServerNotificationToasts() {
     return undefined
   }, [current, scheduleDismiss, clearDismissTimer, showNextFromQueue])
 
-  const enqueueNew = useCallback(
-    (incoming: UserNotification[]) => {
-      if (!incoming.length) {
-        return
-      }
-      queueRef.current = appendToastQueue(queueRef.current, incoming)
-      setCurrent((prev) => {
-        if (prev) {
-          return prev
+  const enqueueNew = useCallback((incoming: UserNotification[]) => {
+    if (!incoming.length) {
+      return
+    }
+
+    const toasts: UserNotification[] = []
+    for (const row of incoming) {
+      if (String(row.type) === 'LEVEL_UP') {
+        const rewards = parseLevelRewardGrants(row.metadata?.rewards)
+        const totalAmount = Math.max(
+          0,
+          Math.floor(Number(row.metadata?.totalAmount ?? row.metadata?.reward) || 0),
+        )
+        if (rewards.length > 0 && totalAmount > 0) {
+          emitLevelUpCelebration({ rewards, totalAmount })
         }
-        const { next, remaining } = shiftToastQueue(queueRef.current)
-        queueRef.current = remaining
-        return next
-      })
-    },
-    [],
-  )
+        continue
+      }
+      toasts.push(row)
+    }
+
+    if (!toasts.length) {
+      return
+    }
+
+    queueRef.current = appendToastQueue(queueRef.current, toasts)
+    setCurrent((prev) => {
+      if (prev) {
+        return prev
+      }
+      const { next, remaining } = shiftToastQueue(queueRef.current)
+      queueRef.current = remaining
+      return next
+    })
+  }, [])
 
   const pollOnce = useCallback(async () => {
     if (inFlightRef.current) {
@@ -230,6 +275,14 @@ export function ServerNotificationToasts() {
             />
           </div>
         </div>
+      ) : null}
+
+      {levelUp ? (
+        <LevelUpCelebration
+          rewards={levelUp.rewards}
+          totalAmount={levelUp.totalAmount}
+          onClose={() => setLevelUp(null)}
+        />
       ) : null}
 
       {sheetOpen ? (

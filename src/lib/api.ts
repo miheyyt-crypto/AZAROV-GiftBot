@@ -52,6 +52,11 @@ export interface ApiUserResponse {
     caseTarget?: number
     availableReferralCases?: number
   }
+  levelRewards?: {
+    granted: Array<{ level: number; amount: number }>
+    totalAmount: number
+    level: number
+  } | null
 }
 
 function apiUrl(path: string): string {

@@ -46,6 +46,7 @@ export const OPERATION_REWARD_TYPES: ReadonlySet<string> = new Set([
   'case_reward',
   'giveaway_reward',
   'achievement_reward',
+  'level_reward',
   'mines_win',
 ])
 
@@ -68,6 +69,8 @@ export function iconForOperationType(type: string, income: boolean): string {
       return '🎮'
     case 'giveaway_reward':
       return '🎁'
+    case 'level_reward':
+      return '⬆️'
     case 'case_reward':
       return '🎉'
     case 'case_purchase':

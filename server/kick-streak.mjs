@@ -12,14 +12,24 @@ import {
   recordChatMessageOnStore,
 } from './kick-stats.mjs'
 import { withStore, withStoreRead } from './store.mjs'
+import { grantPendingLevelRewardsOnStore } from './level-rewards.mjs'
 
 const WEBHOOK_EVENT_TTL_MS = 7 * 24 * 60 * 60 * 1000
 /** Fresh livestream.status.updated / API snapshot window (ms). */
 export const LIVE_STATE_STALE_MS = 2 * 60 * 1000
 
+function maybeGrantLevelRewardsAfterXp(store, telegramId) {
+  const user = store.users?.[String(telegramId)]
+  if (!user) {
+    return null
+  }
+  return grantPendingLevelRewardsOnStore(store, user)
+}
+
 function logKickStreak(event, details = {}) {
   console.info(`[kick-streak] ${event}`, details)
 }
+
 
 /**
  * Calendar date YYYY-MM-DD in the project streak timezone (UTC).
@@ -494,6 +504,7 @@ export async function processChatMessageSent(payload, { messageId, options = {} 
       const telegramIdOffline = findTelegramIdForKickUser(store, senderKickUserId)
       if (telegramIdOffline) {
         recordChatMessageOnStore(store, telegramIdOffline)
+        maybeGrantLevelRewardsAfterXp(store, telegramIdOffline)
       }
       markChatEventProcessed(store, keys, {
         type: 'chat.message.sent',
@@ -539,6 +550,7 @@ export async function processChatMessageSent(payload, { messageId, options = {} 
       streamId,
       isLiveConfirmed: true,
     })
+    maybeGrantLevelRewardsAfterXp(store, telegramId)
 
     store.kickStreamStreaks = store.kickStreamStreaks || {}
     const streakKey = String(telegramId)

@@ -16,6 +16,7 @@ export const TOASTABLE_NOTIFICATION_TYPES = [
   'ORDER_REJECTED',
   'COMMUNITY_ACCESS_APPROVED',
   'COMMUNITY_ACCESS_REJECTED',
+  'LEVEL_UP',
   'SYSTEM',
 ] as const
 
@@ -97,6 +98,22 @@ export function buildServerToastCopy(
         title: 'Заказ отклонён',
         message: 'Нажмите, чтобы узнать причину',
       }
+    case 'LEVEL_UP': {
+      const total =
+        typeof meta.totalAmount === 'number' && Number.isFinite(meta.totalAmount)
+          ? Math.floor(meta.totalAmount)
+          : reward
+      return {
+        tone: 'success',
+        title: String(notification?.title || 'Новый уровень!').slice(0, 80),
+        message:
+          total != null
+            ? `+${total.toLocaleString('ru-RU')} монет`
+            : String(notification?.message || '')
+                .split('\n')[0]
+                .slice(0, 120) || undefined,
+      }
+    }
     case 'SYSTEM':
       return {
         tone: 'info',

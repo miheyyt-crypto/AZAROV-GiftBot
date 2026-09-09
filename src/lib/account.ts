@@ -47,6 +47,8 @@ export function createAccount(telegramId: number): UserAccount {
     xpForCurrentLevel: 0,
     xpForNextLevel: 200,
     xpProgress: 0,
+    nextLevelReward: 100,
+    claimedLevelRewards: [],
   }
 }
 
@@ -81,6 +83,10 @@ function normalizeAccount(account: UserAccount, telegramId: number): UserAccount
     xpForCurrentLevel: Math.max(0, merged.xpForCurrentLevel ?? 0),
     xpForNextLevel: Math.max(1, merged.xpForNextLevel ?? 200),
     xpProgress: Math.max(0, merged.xpProgress ?? 0),
+    nextLevelReward: Math.max(0, merged.nextLevelReward ?? 0),
+    claimedLevelRewards: Array.isArray(merged.claimedLevelRewards)
+      ? merged.claimedLevelRewards
+      : [],
   }
 }
 
