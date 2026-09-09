@@ -10,7 +10,6 @@ import {
   getTowerMultiplier,
   pickTowerCellOnStore,
   startTowerGameOnStore,
-  TOWER_HOUSE_EDGE_BPS,
   TOWER_MAX_FLOORS,
   TOWER_MIN_BET,
   towerMultiplierBps,
@@ -43,15 +42,18 @@ function seedUser(store, telegramId, balance = 10_000) {
   return store.users[String(telegramId)]
 }
 
-test('tower multiplier uses 5% house edge over fair 3× step', () => {
+test('tower multipliers match reference table (no exponential blow-up)', () => {
+  const expected = [1.0, 1.44, 2.16, 3.24, 4.86, 7.29, 10.93, 16.4, 24.6, 36.91, 55.36]
   assert.equal(towerMultiplierBps(0), 10_000)
-  assert.equal(towerMultiplierBps(1), 3 * TOWER_HOUSE_EDGE_BPS)
-  assert.equal(getTowerMultiplier(1), 2.85)
-  assert.ok(towerMultiplierBps(2) > towerMultiplierBps(1))
-  assert.equal(towerPotentialWin(100, 1), 285)
-  // Player RTP after one forced success path of k floors ≈ (0.95)^k of stake * fair,
-  // overall EV per independent floor pick is 95% of stake when cashing after each — house edge ~5%.
-  assert.equal(TOWER_HOUSE_EDGE_BPS, 9500)
+  for (let floor = 1; floor <= expected.length; floor += 1) {
+    assert.equal(getTowerMultiplier(floor), expected[floor - 1])
+  }
+  assert.equal(getTowerMultiplier(11), 55.36)
+  assert.ok(getTowerMultiplier(11) < 100)
+  assert.equal(towerPotentialWin(100, 1), 100)
+  assert.equal(towerPotentialWin(100, 5), 486)
+  assert.equal(towerPotentialWin(1000, 5), 4860)
+  assert.equal(towerPotentialWin(100, 11), 5536)
 })
 
 test('start rejects bet below minimum and insufficient funds', async () => {
@@ -152,7 +154,8 @@ test('safe pick advances floor; danger ends game; cashout pays once', async () =
     assert.equal(ok.game.floorsCleared, 1)
     assert.equal(ok.game.currentFloor, 2)
     assert.equal(ok.game.canCashout, true)
-    assert.equal(ok.game.potentialWin, 285)
+    assert.equal(ok.game.potentialWin, 100)
+    assert.equal(ok.game.multiplier, 1.0)
 
     const wrongFloor = withStore((store) =>
       pickTowerCellOnStore(store, 5, {
@@ -170,14 +173,14 @@ test('safe pick advances floor; danger ends game; cashout pays once', async () =
     )
     assert.equal(cash1.success, true)
     assert.equal(cash1.game.status, 'won')
-    assert.equal(cash1.game.payout, 285)
-    assert.equal(withStore((store) => store.users['5'].balance), 5185)
+    assert.equal(cash1.game.payout, 100)
+    assert.equal(withStore((store) => store.users['5'].balance), 5000)
 
     const cash2 = withStore((store) =>
       cashoutTowerOnStore(store, 5, { gameId, requestId: 'cash-2' }),
     )
     assert.equal(cash2.alreadyProcessed, true)
-    assert.equal(withStore((store) => store.users['5'].balance), 5185)
+    assert.equal(withStore((store) => store.users['5'].balance), 5000)
 
     const wins = withStore((store) =>
       listUserTransactions(store, 5).filter((tx) => tx.type === TX_TYPE.TOWER_WIN),
@@ -214,7 +217,8 @@ test('clearing max floors auto-cashes out', async () => {
     }
     assert.equal(last.game.status, 'won')
     assert.equal(last.game.floorsCleared, TOWER_MAX_FLOORS)
-    assert.ok(last.game.payout > 100)
+    assert.equal(last.game.payout, 5536)
+    assert.equal(last.game.multiplier, 55.36)
   })
 })
 

@@ -448,7 +448,7 @@ export function TowerPage() {
           ))}
         </div>
         <p className="mt-3 text-[10px] leading-relaxed text-[#6f6884]">
-          3 клетки · 1 безопасная · house edge 5% · fair step 3.00× → 2.85× за этаж
+          3 клетки · 1 безопасная · макс. 55.36× на 11 этаже
         </p>
       </section>
 

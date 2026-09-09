@@ -7,8 +7,19 @@ export const TOWER_MIN_BET = 100
 export const TOWER_CELLS_PER_FLOOR = 3
 export const TOWER_SAFE_PER_FLOOR = 1
 export const TOWER_MAX_FLOORS = 11
-/** Fair step × this / 10000 (9500 ≈ 5% house edge). */
-export const TOWER_HOUSE_EDGE_BPS = 9500
+
+/**
+ * Fixed reference multipliers (×) for floors 1..11.
+ * Same for every player — never derived from exponential fair-odds formula.
+ */
+export const TOWER_MULTIPLIERS = Object.freeze([
+  1.0, 1.44, 2.16, 3.24, 4.86, 7.29, 10.93, 16.4, 24.6, 36.91, 55.36,
+])
+
+/** Integer basis points (10000 = 1.00×) — mirrors TOWER_MULTIPLIERS exactly. */
+export const TOWER_MULTIPLIER_BPS = Object.freeze([
+  10_000, 14_400, 21_600, 32_400, 48_600, 72_900, 109_300, 164_000, 246_000, 369_100, 553_600,
+])
 
 function ensureMaps(store) {
   store.towerGames = store.towerGames || {}
@@ -25,37 +36,25 @@ function createGameId() {
 
 /**
  * Multiplier in basis points after `floorsCleared` successful floors.
- * 10000 = 1.00×. At 0 clears → 10000 (cashout blocked until ≥1).
- * Each step: × (cells/safe) × (houseEdgeBps/10000)
+ * floorsCleared 0 → 1.00× (cashout blocked until ≥1)
+ * floorsCleared N → TOWER_MULTIPLIER_BPS[N-1] (floor N in the reference table)
  */
-export function towerMultiplierBps(
-  floorsCleared,
-  cellsPerFloor = TOWER_CELLS_PER_FLOOR,
-  safePerFloor = TOWER_SAFE_PER_FLOOR,
-  houseEdgeBps = TOWER_HOUSE_EDGE_BPS,
-) {
+export function towerMultiplierBps(floorsCleared) {
   const k = Math.max(0, Math.floor(Number(floorsCleared) || 0))
-  const cells = Math.max(1, Math.floor(Number(cellsPerFloor) || TOWER_CELLS_PER_FLOOR))
-  const safe = Math.max(1, Math.floor(Number(safePerFloor) || TOWER_SAFE_PER_FLOOR))
-  if (safe >= cells) {
-    return 10_000
-  }
   if (k <= 0) {
-    return 10_000
+    return TOWER_MULTIPLIER_BPS[0]
   }
-
-  let bps = 10_000n
-  const cellsB = BigInt(cells)
-  const safeB = BigInt(safe)
-  const edge = BigInt(Math.max(1, Math.floor(houseEdgeBps)))
-  for (let i = 0; i < k; i += 1) {
-    bps = (bps * cellsB * edge) / (safeB * 10_000n)
-  }
-  return Number(bps)
+  const index = Math.min(k, TOWER_MULTIPLIER_BPS.length) - 1
+  return TOWER_MULTIPLIER_BPS[index]
 }
 
 export function getTowerMultiplier(floorsCleared) {
-  return Number((towerMultiplierBps(floorsCleared) / 10_000).toFixed(4))
+  const k = Math.max(0, Math.floor(Number(floorsCleared) || 0))
+  if (k <= 0) {
+    return TOWER_MULTIPLIERS[0]
+  }
+  const index = Math.min(k, TOWER_MULTIPLIERS.length) - 1
+  return TOWER_MULTIPLIERS[index]
 }
 
 export function towerPotentialWin(bet, floorsCleared) {
@@ -68,14 +67,16 @@ export function towerPotentialWin(bet, floorsCleared) {
 }
 
 export function buildTowerMultiplierTable(maxFloors = TOWER_MAX_FLOORS) {
-  const floors = Math.max(1, Math.floor(Number(maxFloors) || TOWER_MAX_FLOORS))
+  const floors = Math.min(
+    TOWER_MULTIPLIERS.length,
+    Math.max(1, Math.floor(Number(maxFloors) || TOWER_MAX_FLOORS)),
+  )
   return Array.from({ length: floors }, (_, index) => {
     const floor = index + 1
-    const bps = towerMultiplierBps(floor)
     return {
       floor,
-      multiplierBps: bps,
-      multiplier: Number((bps / 10_000).toFixed(4)),
+      multiplierBps: TOWER_MULTIPLIER_BPS[index],
+      multiplier: TOWER_MULTIPLIERS[index],
     }
   })
 }
@@ -112,7 +113,7 @@ function publicGame(game, { includeSafe = false } = {}) {
     floorsCleared,
     picks,
     multiplierBps,
-    multiplier: Number((multiplierBps / 10_000).toFixed(4)),
+    multiplier: getTowerMultiplier(floorsCleared),
     potentialWin: game.status === 'won' ? Number(game.payout) || potentialWin : potentialWin,
     payout: game.payout == null ? null : Number(game.payout),
     canCashout: game.status === 'playing' && floorsCleared >= 1,
