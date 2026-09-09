@@ -107,7 +107,7 @@ export const partners: PartnerConfig[] = [
     rewardSuffix: '+',
     theme: 'dragonmoney',
     image: welvuraCookie,
-    tasks: createPartnerTasks('dragonmoney', 'Welvura', 'https://welvura.com'),
+    tasks: createPartnerTasks('dragonmoney', 'Welvura', 'https://welvar.link/?i=1485419'),
   },
 ]
 
