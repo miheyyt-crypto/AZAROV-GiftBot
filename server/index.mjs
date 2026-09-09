@@ -426,7 +426,15 @@ function withUser(handler) {
     }
 
     const stored = getUser(telegramUser.id)
-    if (stored?.blocked) {
+    if (!stored) {
+      res.status(401).json({
+        success: false,
+        code: 'REGISTRATION_INCOMPLETE',
+        message: 'Сначала откройте приложение через /start и мини-приложение.',
+      })
+      return
+    }
+    if (stored.blocked) {
       res.status(403).json({
         success: false,
         code: 'MULTI_ACCOUNT_BLOCKED',
@@ -434,6 +442,15 @@ function withUser(handler) {
         title: MULTI_ACCOUNT_USER_MESSAGE.title,
         detail: MULTI_ACCOUNT_USER_MESSAGE.detail,
         description: MULTI_ACCOUNT_USER_MESSAGE.message,
+        user: toPublicUser(stored),
+      })
+      return
+    }
+    if (stored.antiAbuseBound === false) {
+      res.status(403).json({
+        success: false,
+        code: 'REGISTRATION_INCOMPLETE',
+        message: 'Завершите вход в приложение.',
         user: toPublicUser(stored),
       })
       return
@@ -1045,6 +1062,26 @@ app.post(
       return
     }
 
+    const stored = getUser(telegramUser.id)
+    const economy = userCanUseAppEconomy(stored)
+    if (!economy.ok) {
+      res.status(403).json({
+        success: false,
+        code: economy.code,
+        message: economy.message,
+        title:
+          economy.code === 'MULTI_ACCOUNT_BLOCKED' ? MULTI_ACCOUNT_USER_MESSAGE.title : undefined,
+        description:
+          economy.code === 'MULTI_ACCOUNT_BLOCKED'
+            ? MULTI_ACCOUNT_USER_MESSAGE.message
+            : undefined,
+        detail:
+          economy.code === 'MULTI_ACCOUNT_BLOCKED' ? MULTI_ACCOUNT_USER_MESSAGE.detail : undefined,
+        user: stored ? toPublicUser(stored) : undefined,
+      })
+      return
+    }
+
     const limit = partnerUploadLimiter.check(`upload:${telegramUser.id}`)
     if (!limit.allowed) {
       res.setHeader('Retry-After', String(Math.ceil(limit.retryAfterMs / 1000) || 1))
@@ -1144,6 +1181,26 @@ app.post(
   asyncHandler(async (req, res, next) => {
     const telegramUser = requireTelegramUser(req, res)
     if (!telegramUser) {
+      return
+    }
+
+    const stored = getUser(telegramUser.id)
+    const economy = userCanUseAppEconomy(stored)
+    if (!economy.ok) {
+      res.status(403).json({
+        success: false,
+        code: economy.code,
+        message: economy.message,
+        title:
+          economy.code === 'MULTI_ACCOUNT_BLOCKED' ? MULTI_ACCOUNT_USER_MESSAGE.title : undefined,
+        description:
+          economy.code === 'MULTI_ACCOUNT_BLOCKED'
+            ? MULTI_ACCOUNT_USER_MESSAGE.message
+            : undefined,
+        detail:
+          economy.code === 'MULTI_ACCOUNT_BLOCKED' ? MULTI_ACCOUNT_USER_MESSAGE.detail : undefined,
+        user: stored ? toPublicUser(stored) : undefined,
+      })
       return
     }
 

@@ -19,6 +19,10 @@ import { applyReferralAndReward } from './referrals.mjs'
 const DEVICE_A = '11111111-1111-4111-8111-111111111111'
 const DEVICE_B = '22222222-2222-4222-8222-222222222222'
 
+function newUnbound(store, id, name = 'U') {
+  return createUser(store, { id, first_name: name }, { unbound: true })
+}
+
 async function withTempStore(fn) {
   const dir = mkdtempSync(path.join(tmpdir(), 'azarov-anti-abuse-'))
   const prev = process.env.AZAROV_STORE_DIR
@@ -53,7 +57,7 @@ test('hashIp is stable and maskIp hides middle octets', () => {
 test('TEST 1: new telegram + new device + new IP → CREATE', async () => {
   await withTempStore(async () => {
     const result = withStore((store) => {
-      const user = createUser(store, { id: 1001, first_name: 'A' })
+      const user = newUnbound(store, 1001, 'A')
       const gate = enforceAntiAbuseOnStore(store, user, {
         deviceId: DEVICE_A,
         ip: '1.1.1.1',
@@ -71,7 +75,7 @@ test('TEST 1: new telegram + new device + new IP → CREATE', async () => {
 test('TEST 2: existing telegram same device/IP → LOGIN', async () => {
   await withTempStore(async () => {
     withStore((store) => {
-      const user = createUser(store, { id: 1002, first_name: 'A' })
+      const user = newUnbound(store, 1002, 'A')
       enforceAntiAbuseOnStore(store, user, { deviceId: DEVICE_A, ip: '2.2.2.2' })
     })
     const again = withStore((store) => {
@@ -85,11 +89,11 @@ test('TEST 2: existing telegram same device/IP → LOGIN', async () => {
 test('TEST 3: new telegram same device new IP → BLOCK', async () => {
   await withTempStore(async () => {
     withStore((store) => {
-      const user = createUser(store, { id: 1101, first_name: 'A' })
+      const user = newUnbound(store, 1101, 'A')
       enforceAntiAbuseOnStore(store, user, { deviceId: DEVICE_A, ip: '3.3.3.3' })
     })
     const blocked = withStore((store) => {
-      const user = createUser(store, { id: 1102, first_name: 'B' })
+      const user = newUnbound(store, 1102, 'B')
       return {
         gate: enforceAntiAbuseOnStore(store, user, { deviceId: DEVICE_A, ip: '4.4.4.4' }),
         user,
@@ -105,11 +109,11 @@ test('TEST 3: new telegram same device new IP → BLOCK', async () => {
 test('TEST 4: new telegram new device same IP → BLOCK', async () => {
   await withTempStore(async () => {
     withStore((store) => {
-      const user = createUser(store, { id: 1201, first_name: 'A' })
+      const user = newUnbound(store, 1201, 'A')
       enforceAntiAbuseOnStore(store, user, { deviceId: DEVICE_A, ip: '5.5.5.5' })
     })
     const blocked = withStore((store) => {
-      const user = createUser(store, { id: 1202, first_name: 'B' })
+      const user = newUnbound(store, 1202, 'B')
       return enforceAntiAbuseOnStore(store, user, { deviceId: DEVICE_B, ip: '5.5.5.5' })
     })
     assert.equal(blocked.allowed, false)
@@ -120,11 +124,11 @@ test('TEST 4: new telegram new device same IP → BLOCK', async () => {
 test('TEST 5: new telegram same device same IP → BLOCK', async () => {
   await withTempStore(async () => {
     withStore((store) => {
-      const user = createUser(store, { id: 1301, first_name: 'A' })
+      const user = newUnbound(store, 1301, 'A')
       enforceAntiAbuseOnStore(store, user, { deviceId: DEVICE_A, ip: '6.6.6.6' })
     })
     const blocked = withStore((store) => {
-      const user = createUser(store, { id: 1302, first_name: 'B' })
+      const user = newUnbound(store, 1302, 'B')
       return enforceAntiAbuseOnStore(store, user, { deviceId: DEVICE_A, ip: '6.6.6.6' })
     })
     assert.equal(blocked.allowed, false)
@@ -134,7 +138,7 @@ test('TEST 5: new telegram same device same IP → BLOCK', async () => {
 test('TEST 6/7: existing telegram new device/IP/VPN → LOGIN', async () => {
   await withTempStore(async () => {
     withStore((store) => {
-      const user = createUser(store, { id: 1401, first_name: 'A' })
+      const user = newUnbound(store, 1401, 'A')
       enforceAntiAbuseOnStore(store, user, { deviceId: DEVICE_A, ip: '7.7.7.7' })
     })
     const login = withStore((store) => {
@@ -148,11 +152,11 @@ test('TEST 6/7: existing telegram new device/IP/VPN → LOGIN', async () => {
 test('TEST 8/9: delete localStorage (new device) same IP → BLOCK', async () => {
   await withTempStore(async () => {
     withStore((store) => {
-      const user = createUser(store, { id: 1501, first_name: 'A' })
+      const user = newUnbound(store, 1501, 'A')
       enforceAntiAbuseOnStore(store, user, { deviceId: DEVICE_A, ip: '9.9.9.9' })
     })
     const blocked = withStore((store) => {
-      const user = createUser(store, { id: 1502, first_name: 'B' })
+      const user = newUnbound(store, 1502, 'B')
       return enforceAntiAbuseOnStore(store, user, { deviceId: DEVICE_B, ip: '9.9.9.9' })
     })
     assert.equal(blocked.allowed, false)
@@ -162,11 +166,11 @@ test('TEST 8/9: delete localStorage (new device) same IP → BLOCK', async () =>
 test('TEST 10: same device new IP → BLOCK', async () => {
   await withTempStore(async () => {
     withStore((store) => {
-      const user = createUser(store, { id: 1601, first_name: 'A' })
+      const user = newUnbound(store, 1601, 'A')
       enforceAntiAbuseOnStore(store, user, { deviceId: DEVICE_A, ip: '10.0.0.1' })
     })
     const blocked = withStore((store) => {
-      const user = createUser(store, { id: 1602, first_name: 'B' })
+      const user = newUnbound(store, 1602, 'B')
       return enforceAntiAbuseOnStore(store, user, { deviceId: DEVICE_A, ip: '10.0.0.2' })
     })
     assert.equal(blocked.allowed, false)
@@ -176,8 +180,8 @@ test('TEST 10: same device new IP → BLOCK', async () => {
 test('TEST 11: concurrent same IP/device — only one association owner', async () => {
   await withTempStore(async () => {
     const outcome = withStore((store) => {
-      const a = createUser(store, { id: 1701, first_name: 'A' })
-      const b = createUser(store, { id: 1702, first_name: 'B' })
+      const a = newUnbound(store, 1701, 'A')
+      const b = newUnbound(store, 1702, 'B')
       const first = enforceAntiAbuseOnStore(store, a, { deviceId: DEVICE_A, ip: '11.11.11.11' })
       const second = enforceAntiAbuseOnStore(store, b, { deviceId: DEVICE_A, ip: '11.11.11.11' })
       return { first, second, b }

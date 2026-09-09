@@ -55,15 +55,20 @@ export function timingSafeEqualString(a, b) {
 }
 
 export function clientIp(req) {
-  // Prefer Express-resolved IP when `trust proxy` is enabled (Railway).
+  const isProduction = process.env.NODE_ENV === 'production'
+  // With trust proxy enabled, Express derives req.ip from the trusted proxy hop.
+  // In production never fall back to raw client-controlled XFF/X-Real-IP.
   const expressed = normalizeIpCandidate(req.ip)
   if (expressed) {
     return expressed
   }
 
+  if (isProduction) {
+    return normalizeIpCandidate(req.socket?.remoteAddress) || 'unknown'
+  }
+
   const forwarded = req.headers['x-forwarded-for']
   if (typeof forwarded === 'string' && forwarded.trim()) {
-    // Railway appends the real client as the left-most entry when proxying.
     return normalizeIpCandidate(forwarded.split(',')[0]) || 'unknown'
   }
 

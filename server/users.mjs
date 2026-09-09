@@ -125,8 +125,9 @@ export function indexReferralCode(store, user) {
   store.referralIndex[code] = user.telegramId
 }
 
-export function createUser(store, telegramUser) {
+export function createUser(store, telegramUser, options = {}) {
   const referralCode = generateReferralCode(store)
+  const unbound = options.unbound === true
   const user = {
     telegramId: telegramUser.id,
     username: telegramUser.username || '',
@@ -170,11 +171,12 @@ export function createUser(store, telegramUser) {
     blockedAt: null,
     primaryDeviceId: null,
     primaryIpHash: null,
-    // Must pass device+IP binding on first Mini App / web session.
-    antiAbuseBound: false,
+    // Production registration uses unbound:true then bind via enforceAntiAbuse.
+    // Unit tests create bound users by default so ledger helpers keep working.
+    antiAbuseBound: !unbound,
   }
 
-  hydrateAntiAbuseUserFields(user, { isNew: true })
+  hydrateAntiAbuseUserFields(user, { isNew: unbound })
   store.users[String(user.telegramId)] = user
   indexReferralCode(store, user)
   return user
@@ -247,7 +249,8 @@ export function ensureUser(store, telegramUser) {
   const existing = store.users[String(telegramUser.id)]
 
   if (!existing) {
-    return createUser(store, telegramUser)
+    // Fail closed: new Telegram IDs must register via bootstrapUser + anti-abuse.
+    throw new Error('user_not_registered')
   }
 
   existing.username = telegramUser.username || existing.username || ''

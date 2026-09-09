@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import net from 'node:net'
 
 export const BLOCK_REASON_MULTI_ACCOUNT = 'MULTI_ACCOUNT'
 export const AUDIT_MULTI_ACCOUNT_BLOCK = 'MULTI_ACCOUNT_BLOCK'
@@ -10,6 +11,7 @@ export function ensureAntiAbuseMaps(store) {
   store.deviceIndex = store.deviceIndex || {}
   store.ipHashIndex = store.ipHashIndex || {}
   store.antiAbuseAudit = store.antiAbuseAudit || {}
+  store.pendingBotStarts = store.pendingBotStarts || {}
 }
 
 export function getAntiAbuseHmacSecret() {
@@ -24,27 +26,85 @@ export function getAntiAbuseHmacSecret() {
   return 'anti-abuse-dev-secret'
 }
 
+/**
+ * Canonical IP for hashing. Maps ::ffff:IPv4 → IPv4, strips zone/brackets,
+ * normalizes IPv4 octets and expands IPv6 so string variants collide.
+ */
 export function normalizeClientIp(raw) {
   let ip = String(raw || '')
     .trim()
     .toLowerCase()
-  if (!ip) {
+  if (!ip || ip === 'unknown') {
     return ''
+  }
+  if (ip.startsWith('[') && ip.endsWith(']')) {
+    ip = ip.slice(1, -1)
+  }
+  const zone = ip.indexOf('%')
+  if (zone >= 0) {
+    ip = ip.slice(0, zone)
   }
   if (ip.startsWith('::ffff:')) {
     ip = ip.slice(7)
   }
-  return ip
+
+  if (net.isIPv4(ip) || /^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) {
+    const parts = ip.split('.').map((part) => Number(part))
+    if (
+      parts.length === 4 &&
+      parts.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)
+    ) {
+      return parts.join('.')
+    }
+    return ''
+  }
+
+  if (net.isIPv6(ip) || ip.includes(':')) {
+    return expandIPv6(ip)
+  }
+
+  return ''
+}
+
+function expandIPv6(ip) {
+  const raw = String(ip || '')
+    .trim()
+    .toLowerCase()
+  if (!raw.includes(':')) {
+    return ''
+  }
+
+  let head = raw
+  let tail = ''
+  if (raw.includes('::')) {
+    const parts = raw.split('::')
+    if (parts.length !== 2) {
+      return raw
+    }
+    head = parts[0]
+    tail = parts[1]
+  }
+
+  const headParts = head ? head.split(':').filter(Boolean) : []
+  const tailParts = tail ? tail.split(':').filter(Boolean) : []
+  const missing = 8 - headParts.length - tailParts.length
+  if (missing < 0 || missing > 8) {
+    return raw
+  }
+  const full = [...headParts, ...Array.from({ length: missing }, () => '0'), ...tailParts]
+  if (full.length !== 8) {
+    return raw
+  }
+  return full.map((part) => part.replace(/^0+/, '') || '0').join(':')
 }
 
 export function isUsableClientIp(raw) {
-  const ip = normalizeClientIp(raw)
-  return Boolean(ip) && ip !== 'unknown'
+  return Boolean(normalizeClientIp(raw))
 }
 
 export function hashIp(ip, secret = getAntiAbuseHmacSecret()) {
   const normalized = normalizeClientIp(ip)
-  if (!normalized || normalized === 'unknown') {
+  if (!normalized) {
     return null
   }
   return crypto.createHmac('sha256', secret).update(normalized).digest('hex')
@@ -150,6 +210,64 @@ export function blockUserMultiAccount(store, user, meta = {}) {
   })
 
   return { user }
+}
+
+/**
+ * Pre-create check: does not mutate store. Used so NEW telegram IDs are not
+ * persisted before anti-abuse ALLOW (except intentional blocked shells).
+ */
+export function peekRegistrationSignals(store, { deviceId: rawDeviceId = null, ip = null } = {}) {
+  ensureAntiAbuseMaps(store)
+  const deviceId = parseDeviceId(rawDeviceId)
+  const ipHash = hashIp(ip)
+
+  if (!deviceId) {
+    return {
+      ok: false,
+      code: 'DEVICE_REQUIRED',
+      message: 'Не удалось определить устройство. Обновите приложение и попробуйте снова.',
+      deviceId: null,
+      ipHash: null,
+      deviceUsed: false,
+      ipUsed: false,
+    }
+  }
+
+  if (!ipHash || !isUsableClientIp(ip)) {
+    return {
+      ok: false,
+      code: 'IP_REQUIRED',
+      message: 'Не удалось проверить сеть. Попробуйте позже.',
+      deviceId,
+      ipHash: null,
+      deviceUsed: false,
+      ipUsed: false,
+    }
+  }
+
+  const deviceUsed = Boolean(store.deviceIndex[deviceId])
+  const ipUsed = Boolean(store.ipHashIndex[ipHash])
+  if (deviceUsed || ipUsed) {
+    return {
+      ok: false,
+      code: 'MULTI_ACCOUNT_BLOCKED',
+      message: 'Аккаунт заблокирован',
+      deviceId,
+      ipHash,
+      deviceUsed,
+      ipUsed,
+    }
+  }
+
+  return {
+    ok: true,
+    code: null,
+    message: null,
+    deviceId,
+    ipHash,
+    deviceUsed: false,
+    ipUsed: false,
+  }
 }
 
 function tryClaimFreeAssociations(store, user, deviceId, ipHash) {
@@ -300,16 +418,7 @@ export function userCanEarnRewards(user) {
       message: 'Аккаунт заблокирован',
     }
   }
-  return { ok: true }
-}
-
-/** Full gate for mutation APIs: blocked OR unfinished anti-abuse registration. */
-export function userCanUseAppEconomy(user) {
-  const base = userCanEarnRewards(user)
-  if (!base.ok) {
-    return base
-  }
-  if (user && user.antiAbuseBound === false) {
+  if (user.antiAbuseBound === false) {
     return {
       ok: false,
       code: 'REGISTRATION_INCOMPLETE',
@@ -317,6 +426,27 @@ export function userCanUseAppEconomy(user) {
     }
   }
   return { ok: true }
+}
+
+/** Full gate for mutation APIs — same fail-closed rule as rewards. */
+export function userCanUseAppEconomy(user) {
+  return userCanEarnRewards(user)
+}
+
+export function emptyReferralMe() {
+  return {
+    referralCode: '',
+    referralLink: '',
+    invitedCount: 0,
+    activeCount: 0,
+    pendingCount: 0,
+    earnedCoins: 0,
+    caseProgress: 0,
+    caseTarget: 5,
+    availableReferralCases: 0,
+    earnedReferralCases: 0,
+    openedReferralCases: 0,
+  }
 }
 
 export function buildAdminAntiAbuseView(store, user) {

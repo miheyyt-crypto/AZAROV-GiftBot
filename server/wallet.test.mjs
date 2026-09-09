@@ -12,7 +12,9 @@ import {
 } from './wallet.mjs'
 
 function makeUser(store, id = 42) {
-  return createUser(store, { id, first_name: 'U', username: 'u' })
+  const user = createUser(store, { id, first_name: 'U', username: 'u' })
+  user.antiAbuseBound = true
+  return user
 }
 
 test('addCoins writes balanceAfter and is idempotent', () => {

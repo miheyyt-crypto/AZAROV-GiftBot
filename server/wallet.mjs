@@ -1,4 +1,4 @@
-import { userCanEarnRewards } from './anti-abuse.mjs'
+import { userCanUseAppEconomy } from './anti-abuse.mjs'
 
 /** Canonical ledger types (server-authoritative). */
 export const TX_TYPE = {
@@ -136,16 +136,14 @@ export function applyBalanceChange(store, user, amount, type, eventId, meta = {}
     throw new Error('invalid_tx_type')
   }
 
-  // Hard deny credits for blocked multi-accounts.
-  if (delta > 0) {
-    const gate = userCanEarnRewards(user)
-    if (!gate.ok) {
-      return {
-        applied: false,
-        reason: 'blocked',
-        user,
-        transaction: null,
-      }
+  // Fail closed: blocked OR unbound accounts cannot change balance.
+  const gate = userCanUseAppEconomy(user)
+  if (!gate.ok) {
+    return {
+      applied: false,
+      reason: gate.code === 'MULTI_ACCOUNT_BLOCKED' ? 'blocked' : 'registration_incomplete',
+      user,
+      transaction: null,
     }
   }
 

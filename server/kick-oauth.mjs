@@ -9,6 +9,7 @@ import {
   KICK_OAUTH_STATE_TTL_MS,
   KICK_OAUTH_TOKEN_URL,
 } from './constants.mjs'
+import { userCanUseAppEconomy } from './anti-abuse.mjs'
 import { activateReferralOnStore } from './referrals.mjs'
 import { withStore, withStoreRead } from './store.mjs'
 import { addCoins, hasEvent, TX_TYPE } from './wallet.mjs'
@@ -171,6 +172,15 @@ export function linkKickAccountOnStore(store, telegramUserId, kickProfile, token
     }
   }
 
+  const economy = userCanUseAppEconomy(user)
+  if (!economy.ok) {
+    return {
+      ok: false,
+      code: economy.code || 'FORBIDDEN',
+      message: economy.message || 'Аккаунт недоступен.',
+    }
+  }
+
   const tgKey = String(telegramUserId)
   const kickKey = String(kickProfile.kickUserId)
   const existingKickForTg = store.kickByTelegram[tgKey]
@@ -296,6 +306,16 @@ export function createKickOAuthStart(telegramUserId) {
   }
 
   return withStore((store) => {
+    const user = store.users[String(telegramUserId)]
+    const economy = userCanUseAppEconomy(user)
+    if (!economy.ok) {
+      return {
+        success: false,
+        code: economy.code || 'FORBIDDEN',
+        message: economy.message || 'Аккаунт недоступен для привязки Kick.',
+      }
+    }
+
     const connection = getKickConnectionForUser(store, telegramUserId)
     if (connection.connected) {
       return {

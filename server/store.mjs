@@ -121,6 +121,7 @@ export function createEmptyStore() {
     deviceIndex: {},
     ipHashIndex: {},
     antiAbuseAudit: {},
+    pendingBotStarts: {},
   }
 }
 
@@ -158,6 +159,7 @@ function migrateStore(store) {
   store.deviceIndex = store.deviceIndex || {}
   store.ipHashIndex = store.ipHashIndex || {}
   store.antiAbuseAudit = store.antiAbuseAudit || {}
+  store.pendingBotStarts = store.pendingBotStarts || {}
 
   // One-shot upgrade: pending streak-freeze orders → inventory (strategy B).
   if (Number(store.version) < 5) {
@@ -248,6 +250,7 @@ function migrateStore(store) {
     store.deviceIndex = store.deviceIndex || {}
     store.ipHashIndex = store.ipHashIndex || {}
     store.antiAbuseAudit = store.antiAbuseAudit || {}
+    store.pendingBotStarts = store.pendingBotStarts || {}
     const now = new Date().toISOString()
     for (const user of Object.values(store.users || {})) {
       if (!user || typeof user !== 'object') {
