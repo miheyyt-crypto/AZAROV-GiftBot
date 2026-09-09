@@ -1,4 +1,5 @@
 import { config as loadEnv } from 'dotenv'
+import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { Markup, Telegraf } from 'telegraf'
@@ -79,14 +80,19 @@ function mapTelegramUser(from) {
   }
 }
 
-function buildWelcomeText(firstName) {
-  const name = String(firstName || '').trim() || 'друг'
+const WELCOME_PHOTO_PATH = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  'assets',
+  'welcome-start.jpg',
+)
+
+function buildWelcomeText() {
   return [
-    `Привет, ${name}! 👋`,
+    '✨Добро пожаловать в AZAROV GIFTBOX!',
     '',
-    'Добро пожаловать в AZAROV GiftBot.',
+    'Смотри эфиры AZAROV на KICK, выполняй задания и копи монеты. Обменивай их в магазине на приветы, активности в эфире, подписки, пополнения и ценные призы.',
     '',
-    'Здесь ты можешь выполнять задания, получать монеты, приглашать друзей, открывать кейсы и обменивать монеты на награды.',
+    'Не пропускай стримы, сохраняй серию и забирай ежедневные бонусы. Погнали фармить! 🎁',
   ].join('\n')
 }
 
@@ -142,7 +148,7 @@ export function createBot() {
       })
     }
 
-    const text = buildWelcomeText(ctx.from?.first_name)
+    const text = buildWelcomeText()
     let openUrl = webappUrl
     if (webappUrl && extractReferralCode(startPayload)) {
       const separator = webappUrl.includes('?') ? '&' : '?'
@@ -150,12 +156,31 @@ export function createBot() {
     }
 
     const keyboard = openUrl
-      ? Markup.inlineKeyboard([Markup.button.webApp('🎁 Открыть GiftBot', openUrl)])
+      ? Markup.inlineKeyboard([Markup.button.webApp('ЗАПУСТИТЬ', openUrl)])
       : undefined
 
     try {
-      if (keyboard) {
+      const hasWelcomePhoto = existsSync(WELCOME_PHOTO_PATH)
+      if (keyboard && hasWelcomePhoto) {
+        await ctx.replyWithPhoto(
+          { source: WELCOME_PHOTO_PATH },
+          {
+            caption: text,
+            ...keyboard,
+          },
+        )
+      } else if (keyboard) {
+        console.warn('[Telegram Bot] Welcome photo missing, falling back to text /start', {
+          path: WELCOME_PHOTO_PATH,
+        })
         await ctx.reply(text, keyboard)
+      } else if (hasWelcomePhoto) {
+        await ctx.replyWithPhoto(
+          { source: WELCOME_PHOTO_PATH },
+          {
+            caption: `${text}\n\n⚠ Mini App временно недоступен: WEBAPP_URL не настроен на сервере.`,
+          },
+        )
       } else {
         await ctx.reply(
           `${text}\n\n⚠ Mini App временно недоступен: WEBAPP_URL не настроен на сервере.`,
