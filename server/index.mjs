@@ -45,6 +45,20 @@ import {
   notifyUserPartnerDecision,
 } from './partner-admin.mjs'
 import {
+  approveCommunityAccess,
+  createCommunityAccessRequest,
+  getAdminCommunityRequest,
+  getCommunityAccessStatus,
+  getCommunityScreenshot,
+  listAdminCommunityAccess,
+  parseCommunityRequestId,
+  rejectCommunityAccess,
+} from './community-access.mjs'
+import {
+  notifyAdminsNewCommunityAccess,
+  notifyUserCommunityDecision,
+} from './community-admin.mjs'
+import {
   notifyAdminsNewShopOrder,
   notifyUserShopDecision,
 } from './shop-admin.mjs'
@@ -959,6 +973,153 @@ app.get(
     res.setHeader('Cache-Control', 'private, no-store')
     res.setHeader('Content-Disposition', 'inline')
     res.sendFile(result.absolutePath)
+  }),
+)
+
+app.get(
+  '/api/community-access/status',
+  withUser(async (_req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const result = getCommunityAccessStatus(telegramUser.id)
+    res.json({
+      success: true,
+      request: result.request || null,
+      canSubmit: Boolean(result.canSubmit),
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/community-access/request',
+  asyncHandler(async (req, res, next) => {
+    const telegramUser = requireTelegramUser(req, res)
+    if (!telegramUser) {
+      return
+    }
+
+    const limit = partnerUploadLimiter.check(`community-upload:${telegramUser.id}`)
+    if (!limit.allowed) {
+      res.setHeader('Retry-After', String(Math.ceil(limit.retryAfterMs / 1000) || 1))
+      res.status(429).json({
+        success: false,
+        message: 'Слишком много загрузок. Подожди немного.',
+      })
+      return
+    }
+
+    const econLimit = economicMutationLimiter.check(`econ:${telegramUser.id}`)
+    if (!econLimit.allowed) {
+      res.setHeader('Retry-After', String(Math.ceil(econLimit.retryAfterMs / 1000) || 1))
+      res.status(429).json({
+        success: false,
+        code: 'RATE_LIMITED',
+        message: 'Слишком много запросов. Подожди немного и попробуй снова.',
+      })
+      return
+    }
+
+    req.telegramUser = telegramUser
+    next()
+  }),
+  partnerScreenshotUpload,
+  asyncHandler(async (req, res) => {
+    const telegramUser = req.telegramUser
+    assertNoClientFinancialOverrides(req.body)
+    bootstrapUser(telegramUser, '')
+
+    const result = createCommunityAccessRequest(
+      telegramUser,
+      {
+        username: req.body?.username,
+        requestId: req.body?.requestId,
+      },
+      req.file,
+    )
+
+    if (result.success && result.request?.status === 'pending' && !result.alreadyExists) {
+      void notifyAdminsNewCommunityAccess(result.request, {
+        absolutePath: result._absoluteScreenshotPath || null,
+      }).catch((error) => {
+        console.error('[community-admin] notify failed', {
+          requestId: result.request?.id,
+          message: error instanceof Error ? error.message : 'unknown_error',
+        })
+      })
+    }
+
+    const { _absoluteScreenshotPath: _omit, ...safeResult } = result
+    void _omit
+    res.json({
+      ...safeResult,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.get(
+  '/api/admin/community-access',
+  withAdmin(async (req, res) => {
+    const status = typeof req.query.status === 'string' ? req.query.status : ''
+    const result = listAdminCommunityAccess(status)
+    res.json(result)
+  }),
+)
+
+app.get(
+  '/api/admin/community-access/:requestId',
+  withAdmin(async (req, res) => {
+    const result = getAdminCommunityRequest(req.params.requestId)
+    const status = result.success ? 200 : 404
+    res.status(status).json(result)
+  }),
+)
+
+app.get(
+  '/api/admin/community-access/:requestId/screenshot',
+  withAdmin(async (req, res) => {
+    const result = getCommunityScreenshot(String(req.params.requestId || ''), { isAdmin: true })
+    if (!result.success) {
+      res.status(404).json(result)
+      return
+    }
+    res.setHeader('Content-Type', result.mime)
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('Cache-Control', 'private, no-store')
+    res.setHeader('Content-Disposition', 'inline')
+    res.sendFile(result.absolutePath)
+  }),
+)
+
+app.post(
+  '/api/admin/community-access/:requestId/approve',
+  withAdmin(async (req, res) => {
+    const id = parseCommunityRequestId(req.params.requestId)
+    if (!id) {
+      res.status(400).json({ success: false, message: 'Некорректный id заявки.' })
+      return
+    }
+    const result = approveCommunityAccess(id, 'admin-key')
+    if (result.success && !result.alreadyReviewed) {
+      void notifyUserCommunityDecision(result.request)
+    }
+    res.status(result.success ? 200 : result.code === 'NOT_FOUND' ? 404 : 400).json(result)
+  }),
+)
+
+app.post(
+  '/api/admin/community-access/:requestId/reject',
+  withAdmin(async (req, res) => {
+    const id = parseCommunityRequestId(req.params.requestId)
+    if (!id) {
+      res.status(400).json({ success: false, message: 'Некорректный id заявки.' })
+      return
+    }
+    const result = rejectCommunityAccess(id, 'admin-key', req.body?.reason)
+    if (result.success && !result.alreadyReviewed) {
+      void notifyUserCommunityDecision(result.request)
+    }
+    res.status(result.success ? 200 : result.code === 'NOT_FOUND' ? 404 : 400).json(result)
   }),
 )
 

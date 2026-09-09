@@ -10,6 +10,8 @@ export const NOTIFICATION_TYPE = {
   ORDER_REJECTED: 'ORDER_REJECTED',
   GIVEAWAY_WON: 'GIVEAWAY_WON',
   GIVEAWAY_COMPLETED: 'GIVEAWAY_COMPLETED',
+  COMMUNITY_ACCESS_APPROVED: 'COMMUNITY_ACCESS_APPROVED',
+  COMMUNITY_ACCESS_REJECTED: 'COMMUNITY_ACCESS_REJECTED',
   SYSTEM: 'SYSTEM',
 }
 
@@ -259,6 +261,39 @@ export function notifyPartnerSubmissionRejectedOnStore(store, submission) {
       partnerName,
       taskId: submission.taskId || null,
       taskTitle,
+      rejectionReason: reason,
+    },
+  })
+}
+
+export function notifyCommunityAccessApprovedOnStore(store, request) {
+  return createNotificationOnStore(store, {
+    userId: request.telegramId,
+    type: NOTIFICATION_TYPE.COMMUNITY_ACCESS_APPROVED,
+    title: 'Доступ одобрен',
+    message: 'Ваша заявка в закрытое сообщество подтверждена.',
+    eventKey: `community_access:${request.id}:approved`,
+    relatedEntityType: 'community_access',
+    relatedEntityId: request.id,
+    metadata: {
+      requestId: request.id,
+      username: request.username || null,
+    },
+  })
+}
+
+export function notifyCommunityAccessRejectedOnStore(store, request) {
+  const reason = String(request.rejectionReason || '').trim() || 'Заявка отклонена.'
+  return createNotificationOnStore(store, {
+    userId: request.telegramId,
+    type: NOTIFICATION_TYPE.COMMUNITY_ACCESS_REJECTED,
+    title: 'Заявка отклонена',
+    message: `Заявка в закрытое сообщество отклонена.\n\nПричина:\n${reason}`,
+    eventKey: `community_access:${request.id}:rejected`,
+    relatedEntityType: 'community_access',
+    relatedEntityId: request.id,
+    metadata: {
+      requestId: request.id,
       rejectionReason: reason,
     },
   })

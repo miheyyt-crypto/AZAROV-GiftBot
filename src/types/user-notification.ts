@@ -3,6 +3,8 @@ export type UserNotificationType =
   | 'PARTNER_SUBMISSION_REJECTED'
   | 'ORDER_APPROVED'
   | 'ORDER_REJECTED'
+  | 'COMMUNITY_ACCESS_APPROVED'
+  | 'COMMUNITY_ACCESS_REJECTED'
   | 'SYSTEM'
   | string
 

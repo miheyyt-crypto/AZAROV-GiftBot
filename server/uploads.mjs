@@ -12,6 +12,7 @@ const uploadsBase = process.env.AZAROV_UPLOADS_DIR
   ? path.resolve(process.env.AZAROV_UPLOADS_DIR)
   : path.resolve(rootDir, 'uploads')
 export const UPLOADS_ROOT = path.resolve(uploadsBase, 'partner-submissions')
+export const COMMUNITY_UPLOADS_ROOT = path.resolve(uploadsBase, 'community-access')
 
 export const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024
 
@@ -29,9 +30,20 @@ const SUBMISSION_ID_RE =
 const FORBIDDEN_NAME_RE =
   /\.(svg|html?|xhtml|js|mjs|cjs|ts|tsx|jsx|exe|bat|cmd|ps1|sh|bash|php|asp|aspx|cgi|jar|war|zip|rar|7z|gz|bz2|xz|dll|so|dylib|msi|scr|com|vbs|wsf|apk|dmg)$/i
 
+const UPLOAD_CATEGORIES = {
+  'partner-submissions': UPLOADS_ROOT,
+  'community-access': COMMUNITY_UPLOADS_ROOT,
+}
+
 export function ensureUploadDir() {
   if (!existsSync(UPLOADS_ROOT)) {
     mkdirSync(UPLOADS_ROOT, { recursive: true })
+  }
+}
+
+export function ensureCommunityUploadDir() {
+  if (!existsSync(COMMUNITY_UPLOADS_ROOT)) {
+    mkdirSync(COMMUNITY_UPLOADS_ROOT, { recursive: true })
   }
 }
 
@@ -146,11 +158,15 @@ export function assertSafeScreenshot(buffer, claimedMime = '', originalName = ''
   return { ok: true, type: detected }
 }
 
-function isPathInsideUploads(absolutePath) {
+function isPathInsideRoot(absolutePath, root) {
   const resolved = path.resolve(absolutePath)
-  const root = path.resolve(UPLOADS_ROOT)
-  const relative = path.relative(root, resolved)
+  const base = path.resolve(root)
+  const relative = path.relative(base, resolved)
   return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative)
+}
+
+function isPathInsideUploads(absolutePath) {
+  return isPathInsideRoot(absolutePath, UPLOADS_ROOT)
 }
 
 /**
@@ -184,10 +200,49 @@ export function saveSubmissionScreenshot(submissionId, buffer, ext) {
 }
 
 /**
+ * Store community-access screenshot as <id>.<ext> under community-access/.
+ */
+export function saveCommunityScreenshot(requestId, buffer, ext) {
+  if (!isSafeSubmissionId(requestId)) {
+    throw new Error('invalid_submission_id')
+  }
+
+  const safeExt = String(ext || '').toLowerCase()
+  if (!ALLOWED_EXT.has(safeExt)) {
+    throw new Error('invalid_extension')
+  }
+
+  ensureCommunityUploadDir()
+  const fileName = `${requestId.trim()}.${safeExt}`
+  const absolutePath = path.resolve(COMMUNITY_UPLOADS_ROOT, fileName)
+
+  if (!isPathInsideRoot(absolutePath, COMMUNITY_UPLOADS_ROOT)) {
+    throw new Error('invalid_upload_path')
+  }
+
+  writeFileSync(absolutePath, buffer)
+
+  return {
+    fileName,
+    relativePath: `community-access/${fileName}`,
+    absolutePath,
+  }
+}
+
+/**
  * Resolve a stored relative path safely (blocks path traversal / encoded dots).
  */
 export function resolveSubmissionScreenshotPath(relativePath) {
-  if (!relativePath || typeof relativePath !== 'string') {
+  return resolveCategoryScreenshotPath(relativePath, 'partner-submissions')
+}
+
+export function resolveCommunityScreenshotPath(relativePath) {
+  return resolveCategoryScreenshotPath(relativePath, 'community-access')
+}
+
+function resolveCategoryScreenshotPath(relativePath, category) {
+  const root = UPLOAD_CATEGORIES[category]
+  if (!root || !relativePath || typeof relativePath !== 'string') {
     return null
   }
 
@@ -198,7 +253,6 @@ export function resolveSubmissionScreenshotPath(relativePath) {
     return null
   }
 
-  // Normalize separators and reject traversal / absolute / null bytes.
   const normalized = decoded.replace(/\\/g, '/').replace(/\0/g, '')
   if (
     !normalized ||
@@ -207,13 +261,13 @@ export function resolveSubmissionScreenshotPath(relativePath) {
     normalized.includes('%2E') ||
     normalized.startsWith('/') ||
     normalized.includes(':') ||
-    !normalized.startsWith('partner-submissions/')
+    !normalized.startsWith(`${category}/`)
   ) {
     return null
   }
 
   const parts = normalized.split('/').filter(Boolean)
-  if (parts.length !== 2 || parts[0] !== 'partner-submissions') {
+  if (parts.length !== 2 || parts[0] !== category) {
     return null
   }
 
@@ -223,16 +277,13 @@ export function resolveSubmissionScreenshotPath(relativePath) {
     return null
   }
 
-  // Always rebuild from basename — never join untrusted segments.
-  const absolutePath = path.resolve(UPLOADS_ROOT, `${match[1].toLowerCase()}.${match[2].toLowerCase()}`)
-  // UUID may be mixed case in storage — try exact basename from match
   const candidates = [
-    path.resolve(UPLOADS_ROOT, `${match[1]}.${match[2].toLowerCase()}`),
-    absolutePath,
+    path.resolve(root, `${match[1]}.${match[2].toLowerCase()}`),
+    path.resolve(root, `${match[1].toLowerCase()}.${match[2].toLowerCase()}`),
   ]
 
   for (const candidate of candidates) {
-    if (isPathInsideUploads(candidate) && existsSync(candidate)) {
+    if (isPathInsideRoot(candidate, root) && existsSync(candidate)) {
       return candidate
     }
   }
@@ -242,6 +293,20 @@ export function resolveSubmissionScreenshotPath(relativePath) {
 
 export function deleteSubmissionScreenshot(relativePath) {
   const absolutePath = resolveSubmissionScreenshotPath(relativePath)
+  if (!absolutePath) {
+    return false
+  }
+
+  try {
+    unlinkSync(absolutePath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function deleteCommunityScreenshot(relativePath) {
+  const absolutePath = resolveCommunityScreenshotPath(relativePath)
   if (!absolutePath) {
     return false
   }

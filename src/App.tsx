@@ -6,6 +6,7 @@ import { useAppSession } from '@/hooks/useAppSession'
 import { AppLayout } from '@/layouts/AppLayout'
 import { ROUTES } from '@/lib/constants'
 import {
+  CommunityAccessPage,
   FriendsPage,
   GiveawayDetailPage,
   GiveawaysPage,
@@ -35,6 +36,7 @@ export default function App() {
           <Route path={ROUTES.orders} element={<OrdersPage />} />
           <Route path={ROUTES.giveaways} element={<GiveawaysPage />} />
           <Route path={`${ROUTES.giveaways}/:giveawayId`} element={<GiveawayDetailPage />} />
+          <Route path={ROUTES.communityAccess} element={<CommunityAccessPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

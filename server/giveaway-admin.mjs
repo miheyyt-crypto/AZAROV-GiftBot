@@ -6,6 +6,7 @@ import {
   notifyGiveawayTelegramJobs,
   parseGiveawayId,
 } from './giveaways.mjs'
+import { sendAdminRootMenu } from './community-admin.mjs'
 import {
   answerTelegramCallback,
   isAdminTelegramUser,
@@ -252,7 +253,7 @@ export function buildGiveawayAdminMenuKeyboard() {
       [{ text: '➕ Создать розыгрыш', callback_data: 'gw:create' }],
       [{ text: '📋 Активные розыгрыши', callback_data: 'gw:active' }],
       [{ text: '📜 История розыгрышей', callback_data: 'gw:history' }],
-      [{ text: '◀️ Назад', callback_data: 'gw:back' }],
+      [{ text: '◀️ Назад', callback_data: 'admin:root' }],
     ],
   }
 }
@@ -311,7 +312,10 @@ export function buildGiveawayActiveKeyboard() {
 
 export function buildGiveawayStartAdminKeyboard() {
   return {
-    inline_keyboard: [[{ text: '🎁 Розыгрыши', callback_data: 'gw:menu' }]],
+    inline_keyboard: [
+      [{ text: '🎁 Розыгрыши', callback_data: 'gw:menu' }],
+      [{ text: '🔒 Заявки на доступ', callback_data: 'ca:menu' }],
+    ],
   }
 }
 
@@ -687,7 +691,7 @@ export async function handleGiveawayAdminCallback(ctx) {
     clearPendingGiveawayWizard(adminId)
     await answerGiveawayCallback(ctx, data === 'gw:cancel' ? 'Отменено' : undefined)
     if (data === 'gw:back') {
-      await replyHtml(ctx, 'Готово. Откройте /admin чтобы вернуться в меню розыгрышей.')
+      await sendAdminRootMenu(ctx)
     } else {
       await replyHtml(ctx, '❌ Создание розыгрыша отменено.', {
         reply_markup: buildGiveawayAdminMenuKeyboard(),

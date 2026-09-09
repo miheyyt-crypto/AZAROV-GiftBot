@@ -19,12 +19,17 @@ import {
   answerGiveawayCallback,
   buildGiveawayStartAdminKeyboard,
   handleGiveawayAdminCallback,
-  handleGiveawayAdminCommand,
   handleGiveawayCancelCommand,
   handleGiveawayWizardMessage,
   handleGiveawayWizardNonPhotoMedia,
   handleGiveawayWizardPhoto,
 } from './giveaway-admin.mjs'
+import {
+  answerCommunityCallback,
+  handleCommunityAdminCallback,
+  handleCommunityAdminCommand,
+  handleCommunityRejectReasonMessage,
+} from './community-admin.mjs'
 import { isAdminTelegramUser } from './telegram-notify.mjs'
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -159,7 +164,7 @@ export function createBot() {
 
   bot.command('admin', async (ctx) => {
     try {
-      await handleGiveawayAdminCommand(ctx)
+      await handleCommunityAdminCommand(ctx)
     } catch (error) {
       console.error('[Telegram Bot] /admin failed', {
         message: error instanceof Error ? error.message : 'unknown_error',
@@ -230,6 +235,23 @@ export function createBot() {
     await answerShopCallback(ctx)
   })
 
+  async function onCommunityAdminAction(ctx) {
+    try {
+      const handled = await handleCommunityAdminCallback(ctx)
+      if (!handled) {
+        await answerCommunityCallback(ctx)
+      }
+    } catch (error) {
+      console.error('[Telegram Bot] community admin action failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+      await answerCommunityCallback(ctx, 'Ошибка обработки', true)
+    }
+  }
+
+  bot.action(/^ca:/i, onCommunityAdminAction)
+  bot.action('admin:root', onCommunityAdminAction)
+
   async function onGiveawayAdminAction(ctx) {
     try {
       console.info('[Telegram Bot] giveaway admin action', {
@@ -259,6 +281,10 @@ export function createBot() {
     try {
       const giveawayHandled = await handleGiveawayWizardMessage(ctx)
       if (giveawayHandled) {
+        return
+      }
+      const communityRejectHandled = await handleCommunityRejectReasonMessage(ctx)
+      if (communityRejectHandled) {
         return
       }
       const shopHandled = await handleShopRejectReasonMessage(ctx)

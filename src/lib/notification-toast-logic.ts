@@ -14,6 +14,8 @@ export const TOASTABLE_NOTIFICATION_TYPES = [
   'PARTNER_SUBMISSION_REJECTED',
   'ORDER_APPROVED',
   'ORDER_REJECTED',
+  'COMMUNITY_ACCESS_APPROVED',
+  'COMMUNITY_ACCESS_REJECTED',
   'SYSTEM',
 ] as const
 
@@ -66,6 +68,18 @@ export function buildServerToastCopy(
       return {
         tone: 'error',
         title: 'Задание отклонено',
+        message: 'Нажмите, чтобы узнать причину',
+      }
+    case 'COMMUNITY_ACCESS_APPROVED':
+      return {
+        tone: 'success',
+        title: 'Доступ одобрен',
+        message: 'Заявка в закрытое сообщество подтверждена',
+      }
+    case 'COMMUNITY_ACCESS_REJECTED':
+      return {
+        tone: 'error',
+        title: 'Заявка отклонена',
         message: 'Нажмите, чтобы узнать причину',
       }
     case 'ORDER_APPROVED':
