@@ -300,13 +300,13 @@ export function buildGiveawayImageKeyboard() {
 
 export function buildGiveawayEligibilityKeyboard() {
   const all = getEligibilityConfig('all')
-  const kick = getEligibilityConfig('kick')
-  const welvura = getEligibilityConfig('welvura_verified')
+  const referral = getEligibilityConfig('referral')
+  const depositor = getEligibilityConfig('depositor')
   return {
     inline_keyboard: [
       [{ text: all.adminButton, callback_data: 'gw:elig:all' }],
-      [{ text: kick.adminButton, callback_data: 'gw:elig:kick' }],
-      [{ text: welvura.adminButton, callback_data: 'gw:elig:welvura_verified' }],
+      [{ text: referral.adminButton, callback_data: 'gw:elig:referral' }],
+      [{ text: depositor.adminButton, callback_data: 'gw:elig:depositor' }],
       [{ text: '❌ Отмена', callback_data: 'gw:cancel' }],
     ],
   }
@@ -389,11 +389,11 @@ function formatEligibilityLine(giveawayOrWizard) {
   if (id === 'all') {
     return `Участники: 👥 ${config.historyLabel}`
   }
-  if (id === 'kick') {
-    return `Участники: 🎮 Kick`
+  if (id === 'referral') {
+    return `Участники: 👤 Рефералы`
   }
-  if (id === 'welvura_verified') {
-    return `Участники: 🎁 Welvura`
+  if (id === 'depositor') {
+    return `Участники: 💰 Деперы`
   }
   return `Участники: ${config.historyLabel}`
 }
@@ -506,12 +506,17 @@ async function askEligibility(ctx, adminId) {
   setPendingGiveawayWizard(adminId, {
     step: 'await_eligibility',
   })
+  const all = getEligibilityConfig('all')
+  const referral = getEligibilityConfig('referral')
+  const depositor = getEligibilityConfig('depositor')
   await replyHtml(
     ctx,
     [
       '👥 <b>Кто может участвовать?</b>',
       '',
-      'Выберите ограничение доступа к розыгрышу:',
+      `👥 Для всех — ${all.adminDescription}`,
+      `👤 Для рефералов — ${referral.adminDescription}`,
+      `💰 Для деперов — ${depositor.adminDescription}`,
     ].join('\n'),
     { reply_markup: buildGiveawayEligibilityKeyboard() },
   )
@@ -858,7 +863,7 @@ export async function handleGiveawayAdminCallback(ctx) {
     return true
   }
 
-  const eligMatch = /^gw:elig:(all|kick|welvura_verified)$/i.exec(data)
+  const eligMatch = /^gw:elig:(all|referral|depositor)$/i.exec(data)
   if (eligMatch) {
     const wizard = getPendingGiveawayWizard(adminId)
     if (!wizard || wizard.step !== 'await_eligibility') {

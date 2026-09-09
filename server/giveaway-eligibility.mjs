@@ -1,23 +1,24 @@
-import {
-  KICK_CONNECT_TASK_ID,
-  KICK_FOLLOW_TASK_ID,
-} from './constants.mjs'
-
 /** Canonical Welvura partner task IDs (see server/partners.mjs). */
 export const WELVURA_TASK_1_ID = 'dragonmoney-task-1'
 export const WELVURA_TASK_2_ID = 'dragonmoney-task-2'
 
-/** Technical eligibility enum values. */
+/** Technical eligibility enum values (new giveaways only). */
 export const GIVEAWAY_ELIGIBILITY = {
   ALL: 'all',
-  KICK: 'kick',
-  WELVURA_VERIFIED: 'welvura_verified',
+  REFERRAL: 'referral',
+  DEPOSITOR: 'depositor',
 }
 
-/** Legacy values written by the first eligibility release. */
+/**
+ * Legacy storage values → canonical eligibility for safe read/check.
+ * Kick must never gate participation; old kick-based rows open as `all`.
+ * Old Welvura-gated rows map to `depositor` (task-2 completed).
+ */
 const LEGACY_ELIGIBILITY_MAP = {
-  category_a: GIVEAWAY_ELIGIBILITY.KICK,
-  category_b: GIVEAWAY_ELIGIBILITY.WELVURA_VERIFIED,
+  category_a: GIVEAWAY_ELIGIBILITY.ALL,
+  category_b: GIVEAWAY_ELIGIBILITY.DEPOSITOR,
+  kick: GIVEAWAY_ELIGIBILITY.ALL,
+  welvura_verified: GIVEAWAY_ELIGIBILITY.DEPOSITOR,
 }
 
 /**
@@ -27,53 +28,86 @@ export const GIVEAWAY_ELIGIBILITY_CONFIG = {
   [GIVEAWAY_ELIGIBILITY.ALL]: {
     id: GIVEAWAY_ELIGIBILITY.ALL,
     adminLabel: 'Для всех',
-    adminButton: '👥 Все',
+    adminButton: '👥 Для всех',
     publicLabel: '👥 Для всех',
     historyLabel: 'Все',
+    adminDescription: 'Участвовать может любой пользователь.',
     denyTitle: '🔒 Участие недоступно',
     denyDescription: 'Участвовать может любой пользователь.',
     denyMessage: 'Участвовать может любой пользователь.',
     actionLabel: 'К заданиям',
     navigation: { type: 'tasks' },
+    requiredTaskId: null,
   },
-  [GIVEAWAY_ELIGIBILITY.KICK]: {
-    id: GIVEAWAY_ELIGIBILITY.KICK,
-    adminLabel: 'Kick — привязка + подписка',
-    adminButton: '🎮 Kick — привязка Kick + подписка на канал',
-    publicLabel: '🎮 Требуется Kick',
-    historyLabel: 'Kick',
+  [GIVEAWAY_ELIGIBILITY.REFERRAL]: {
+    id: GIVEAWAY_ELIGIBILITY.REFERRAL,
+    adminLabel: 'Для рефералов',
+    adminButton: '👤 Для рефералов',
+    publicLabel: '👤 Для рефералов',
+    historyLabel: 'Рефералы',
+    adminDescription: 'Для пользователей, выполнивших первое задание Welvura.',
     denyTitle: '🔒 Участие недоступно',
     denyDescription:
-      'Для участия нужно привязать Kick и выполнить задание подписки на канал.',
+      'Чтобы участвовать в этом розыгрыше, нужно выполнить первое задание Welvura.',
     denyMessage:
-      'Чтобы участвовать, привяжите Kick и выполните задание подписки на канал.',
-    actionLabel: '📋 Выполнить задания',
-    navigation: { type: 'task', taskId: KICK_CONNECT_TASK_ID },
-    requiredTaskIds: [KICK_CONNECT_TASK_ID, KICK_FOLLOW_TASK_ID],
-  },
-  [GIVEAWAY_ELIGIBILITY.WELVURA_VERIFIED]: {
-    id: GIVEAWAY_ELIGIBILITY.WELVURA_VERIFIED,
-    adminLabel: 'Welvura — задания + подтверждение',
-    adminButton: '🎁 Welvura — выполнены оба задания + подтверждение',
-    publicLabel: '🎁 Требуется Welvura',
-    historyLabel: 'Welvura',
-    denyTitle: '🔒 Участие недоступно',
-    denyDescription:
-      'Для участия нужно выполнить оба задания Welvura и пройти подтверждение.',
-    denyMessage:
-      'Чтобы участвовать, выполните оба задания Welvura и пройдите подтверждение.',
-    actionLabel: '📋 Выполнить задания',
+      'Чтобы участвовать в этом розыгрыше, нужно выполнить первое задание Welvura.',
+    actionLabel: '📋 Выполнить задание',
     navigation: { type: 'partner', partnerId: 'dragonmoney' },
-    requiredTaskIds: [WELVURA_TASK_1_ID, WELVURA_TASK_2_ID],
-    requiresWelvuraVerified: true,
+    requiredTaskId: WELVURA_TASK_1_ID,
+  },
+  [GIVEAWAY_ELIGIBILITY.DEPOSITOR]: {
+    id: GIVEAWAY_ELIGIBILITY.DEPOSITOR,
+    adminLabel: 'Для деперов',
+    adminButton: '💰 Для деперов',
+    publicLabel: '💰 Для деперов',
+    historyLabel: 'Деперы',
+    adminDescription: 'Для пользователей, выполнивших второе задание Welvura.',
+    denyTitle: '🔒 Участие недоступно',
+    denyDescription:
+      'Чтобы участвовать в этом розыгрыше, нужно выполнить второе задание Welvura.',
+    denyMessage:
+      'Чтобы участвовать в этом розыгрыше, нужно выполнить второе задание Welvura.',
+    actionLabel: '📋 Выполнить задание',
+    navigation: { type: 'partner', partnerId: 'dragonmoney' },
+    requiredTaskId: WELVURA_TASK_2_ID,
   },
 }
 
 /**
- * Normalize raw eligibility for create/API.
- * Empty → all. Legacy category_* → new values. Unknown → null.
+ * Normalize for create/API write. Only canonical values.
+ * Empty → all. Legacy/unknown → null (reject on create).
  */
 export function normalizeGiveawayEligibility(raw) {
+  const value = String(raw || '')
+    .trim()
+    .toLowerCase()
+  if (!value) {
+    return GIVEAWAY_ELIGIBILITY.ALL
+  }
+  if (Object.prototype.hasOwnProperty.call(GIVEAWAY_ELIGIBILITY_CONFIG, value)) {
+    return value
+  }
+  return null
+}
+
+/**
+ * Resolve eligibility for a giveaway row / raw string (read path).
+ * Missing → all. Legacy mapped. Unknown → null (do not treat as all for join).
+ */
+export function resolveGiveawayEligibility(giveawayOrRaw) {
+  if (giveawayOrRaw == null) {
+    return GIVEAWAY_ELIGIBILITY.ALL
+  }
+
+  let raw
+  if (typeof giveawayOrRaw === 'string') {
+    raw = giveawayOrRaw
+  } else if (giveawayOrRaw.eligibility == null || giveawayOrRaw.eligibility === '') {
+    return GIVEAWAY_ELIGIBILITY.ALL
+  } else {
+    raw = giveawayOrRaw.eligibility
+  }
+
   const value = String(raw || '')
     .trim()
     .toLowerCase()
@@ -87,23 +121,6 @@ export function normalizeGiveawayEligibility(raw) {
     return value
   }
   return null
-}
-
-/**
- * Resolve eligibility for a giveaway row / raw string.
- * Missing field → all. Legacy mapped. Unknown → null (do not treat as all).
- */
-export function resolveGiveawayEligibility(giveawayOrRaw) {
-  if (giveawayOrRaw == null) {
-    return GIVEAWAY_ELIGIBILITY.ALL
-  }
-  if (typeof giveawayOrRaw === 'string') {
-    return normalizeGiveawayEligibility(giveawayOrRaw)
-  }
-  if (giveawayOrRaw.eligibility == null || giveawayOrRaw.eligibility === '') {
-    return GIVEAWAY_ELIGIBILITY.ALL
-  }
-  return normalizeGiveawayEligibility(giveawayOrRaw.eligibility)
 }
 
 /** Public DTO: unknown corrupt values fall back to all for display only. */
@@ -124,14 +141,10 @@ function userHasCompletedTask(user, taskId) {
   return list.includes(taskId)
 }
 
-/** Server-side Welvura verification flag only — never trust the client. */
-export function isUserWelvuraVerified(user) {
-  return user?.welvuraVerified === true
-}
-
 /**
  * Backend eligibility gate. Never trust the client.
- * @returns {{ eligible: true, eligibility: string } | { eligible: false, eligibility: string, requirement: string, missing: string[], message: string }}
+ * Uses completedTasks (set only after server-side partner task approval).
+ * Kick tasks / welvuraVerified are intentionally ignored.
  */
 export function checkGiveawayEligibility(user, giveaway) {
   const eligibility = resolveGiveawayEligibility(giveaway)
@@ -161,28 +174,8 @@ export function checkGiveawayEligibility(user, giveaway) {
     }
   }
 
-  const missing = []
-
-  if (eligibility === GIVEAWAY_ELIGIBILITY.KICK) {
-    if (!userHasCompletedTask(user, KICK_CONNECT_TASK_ID)) {
-      missing.push(KICK_CONNECT_TASK_ID)
-    }
-    if (!userHasCompletedTask(user, KICK_FOLLOW_TASK_ID)) {
-      missing.push(KICK_FOLLOW_TASK_ID)
-    }
-  } else if (eligibility === GIVEAWAY_ELIGIBILITY.WELVURA_VERIFIED) {
-    if (!userHasCompletedTask(user, WELVURA_TASK_1_ID)) {
-      missing.push(WELVURA_TASK_1_ID)
-    }
-    if (!userHasCompletedTask(user, WELVURA_TASK_2_ID)) {
-      missing.push(WELVURA_TASK_2_ID)
-    }
-    if (!isUserWelvuraVerified(user)) {
-      missing.push('welvura_verified')
-    }
-  }
-
-  if (missing.length === 0) {
+  const requiredTaskId = config.requiredTaskId
+  if (!requiredTaskId || userHasCompletedTask(user, requiredTaskId)) {
     return { eligible: true, eligibility }
   }
 
@@ -190,7 +183,7 @@ export function checkGiveawayEligibility(user, giveaway) {
     eligible: false,
     eligibility,
     requirement: eligibility,
-    missing,
+    missing: [requiredTaskId],
     message: config.denyMessage || config.denyDescription,
   }
 }

@@ -8,7 +8,7 @@ export type GiveawayEligibilityUiConfig = {
   denyTitle: string
   denyDescription: string
   actionLabel: string
-  /** Path for «Выполнить задания» — opens Tasks with optional deep-link. */
+  /** Path for «Выполнить задание» — opens Tasks with optional deep-link. */
   actionPath: string
 }
 
@@ -26,41 +26,48 @@ export const GIVEAWAY_ELIGIBILITY_UI: Record<GiveawayEligibility, GiveawayEligib
     actionLabel: 'К заданиям',
     actionPath: ROUTES.tasks,
   },
-  kick: {
-    id: 'kick',
-    publicLabel: '🎮 Требуется Kick',
-    lockedHint: '🔒 Требуется Kick',
+  referral: {
+    id: 'referral',
+    publicLabel: '👤 Для рефералов',
+    lockedHint: '🔒 Для рефералов',
     denyTitle: '🔒 Участие недоступно',
     denyDescription:
-      'Для участия нужно привязать Kick и выполнить задание подписки на канал.',
-    actionLabel: '📋 Выполнить задания',
-    actionPath: `${ROUTES.tasks}?task=kick-connect`,
+      'Чтобы участвовать в этом розыгрыше, нужно выполнить первое задание Welvura.',
+    actionLabel: '📋 Выполнить задание',
+    actionPath: `${ROUTES.tasks}?partner=dragonmoney`,
   },
-  welvura_verified: {
-    id: 'welvura_verified',
-    publicLabel: '🎁 Требуется Welvura',
-    lockedHint: '🔒 Требуется Welvura',
+  depositor: {
+    id: 'depositor',
+    publicLabel: '💰 Для деперов',
+    lockedHint: '🔒 Для деперов',
     denyTitle: '🔒 Участие недоступно',
     denyDescription:
-      'Для участия нужно выполнить оба задания Welvura и пройти подтверждение.',
-    actionLabel: '📋 Выполнить задания',
+      'Чтобы участвовать в этом розыгрыше, нужно выполнить второе задание Welvura.',
+    actionLabel: '📋 Выполнить задание',
     actionPath: `${ROUTES.tasks}?partner=dragonmoney`,
   },
 }
 
-/** Legacy category_* → new values. Unknown → all for safe UI display. */
+/**
+ * Normalize for UI. Legacy kick/category_* → safe display values.
+ * Unknown → all.
+ */
 export function normalizeGiveawayEligibility(raw: unknown): GiveawayEligibility {
   const value = String(raw || '')
     .trim()
     .toLowerCase()
-  if (!value || value === 'all') {
+  if (!value || value === 'all' || value === 'category_a' || value === 'kick') {
     return 'all'
   }
-  if (value === 'category_a' || value === 'kick') {
-    return 'kick'
+  if (value === 'referral') {
+    return 'referral'
   }
-  if (value === 'category_b' || value === 'welvura_verified') {
-    return 'welvura_verified'
+  if (
+    value === 'depositor' ||
+    value === 'category_b' ||
+    value === 'welvura_verified'
+  ) {
+    return 'depositor'
   }
   return 'all'
 }

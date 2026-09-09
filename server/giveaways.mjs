@@ -1,6 +1,5 @@
 import crypto from 'node:crypto'
 
-import { syncWelvuraVerifiedFromCommunityAccess } from './community-access.mjs'
 import {
   checkGiveawayEligibility,
   normalizeGiveawayEligibility,
@@ -244,7 +243,7 @@ export function validateGiveawayCreateInput(body) {
       return {
         ok: false,
         code: 'INVALID_ELIGIBILITY',
-        message: 'eligibility должен быть all, kick или welvura_verified.',
+        message: 'eligibility должен быть all, referral или depositor.',
       }
     }
     eligibility = normalized
@@ -989,7 +988,6 @@ export function participateOnStore(store, giveawayId, userId, { nowIso = utcNow(
   }
 
   const user = store.users[String(uid)]
-  syncWelvuraVerifiedFromCommunityAccess(store, user)
   const eligibilityCheck = checkGiveawayEligibility(user, giveaway)
   if (!eligibilityCheck.eligible) {
     return {

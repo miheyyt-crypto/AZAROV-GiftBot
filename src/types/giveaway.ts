@@ -4,7 +4,7 @@ export type GiveawayTab = GiveawayStatus
 
 export type GiveawayPrizeType = 'coins' | 'custom' | 'text'
 
-export type GiveawayEligibility = 'all' | 'kick' | 'welvura_verified'
+export type GiveawayEligibility = 'all' | 'referral' | 'depositor'
 
 export type GiveawayWinner = {
   userId: number
