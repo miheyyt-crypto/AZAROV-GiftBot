@@ -156,7 +156,7 @@ test('store migration v11 seeds existing users without paying', () => {
     })
 
     withStore((store) => {
-      assert.equal(store.version, 12)
+      assert.equal(store.version, 13)
       const user = store.users['9106']
       assert.equal(user.levelRewardsSeeded, true)
       assert.ok(user.claimedLevelRewards.includes(10))

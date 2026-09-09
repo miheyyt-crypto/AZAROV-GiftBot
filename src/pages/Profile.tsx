@@ -12,6 +12,7 @@ import { NotificationsSheet } from '@/components/NotificationsSheet'
 import { PartnerTaskModal } from '@/components/PartnerTaskModal'
 import { ProfileMenu } from '@/components/ProfileMenu'
 import { ProfileWelvuraBanner } from '@/components/ProfileWelvuraBanner'
+import { PromoCodeCard } from '@/components/PromoCodeCard'
 import { StatCard } from '@/components/StatCard'
 import { UserAvatar } from '@/components/UserAvatar'
 import { XPProgress } from '@/components/XPProgress'
@@ -145,6 +146,10 @@ export function Profile() {
           />
         </div>
       </section>
+
+      <div className="mb-4">
+        <PromoCodeCard />
+      </div>
 
       <div className="mb-4">
         <KickConnectCard />

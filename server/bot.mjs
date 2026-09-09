@@ -25,6 +25,15 @@ import {
   handleGiveawayWizardPhoto,
 } from './giveaway-admin.mjs'
 import {
+  answerPromoCallback,
+  handlePromoAdminCallback,
+  handlePromoCancelCommand,
+  handlePromoDeactivateCommand,
+  handlePromoListCommand,
+  handlePromoWizardMessage,
+  startPromoCreateWizard,
+} from './promo-admin.mjs'
+import {
   answerCommunityCallback,
   handleCommunityAdminCallback,
   handleCommunityAdminCommand,
@@ -174,12 +183,56 @@ export function createBot() {
 
   bot.command('cancel', async (ctx) => {
     try {
+      const promoCancelled = await handlePromoCancelCommand(ctx)
+      if (promoCancelled) {
+        return
+      }
       const handled = await handleGiveawayCancelCommand(ctx)
       if (!handled && isAdminTelegramUser(ctx.from?.id)) {
         await ctx.reply('Нечего отменять.')
       }
     } catch (error) {
       console.error('[Telegram Bot] /cancel failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+    }
+  })
+
+  // Promo create (Cyrillic command + Latin aliases).
+  async function onPromoCreateCommand(ctx) {
+    try {
+      await startPromoCreateWizard(ctx)
+    } catch (error) {
+      console.error('[Telegram Bot] promo create failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+    }
+  }
+
+  bot.command('promo', onPromoCreateCommand)
+  bot.command('promocode', onPromoCreateCommand)
+  bot.hears(/^\/промокод(?:@\w+)?(?:\s|$)/i, onPromoCreateCommand)
+
+  async function onPromoListCommand(ctx) {
+    try {
+      await handlePromoListCommand(ctx)
+    } catch (error) {
+      console.error('[Telegram Bot] promo list failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+    }
+  }
+
+  bot.command('promocodes', onPromoListCommand)
+  bot.hears(/^\/промокоды(?:@\w+)?(?:\s|$)/i, onPromoListCommand)
+
+  bot.command('deactivate_promo', async (ctx) => {
+    try {
+      const raw = String(ctx.message?.text || '')
+      const arg = raw.replace(/^\/deactivate_promo(?:@\w+)?/i, '').trim()
+      await handlePromoDeactivateCommand(ctx, arg)
+    } catch (error) {
+      console.error('[Telegram Bot] deactivate_promo failed', {
         message: error instanceof Error ? error.message : 'unknown_error',
       })
     }
@@ -291,6 +344,22 @@ export function createBot() {
 
   bot.action(/^gw:/i, onGiveawayAdminAction)
 
+  async function onPromoAdminAction(ctx) {
+    try {
+      const handled = await handlePromoAdminCallback(ctx)
+      if (!handled) {
+        await answerPromoCallback(ctx)
+      }
+    } catch (error) {
+      console.error('[Telegram Bot] promo admin action failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+      await answerPromoCallback(ctx, 'Ошибка обработки', true)
+    }
+  }
+
+  bot.action(/^promo:/i, onPromoAdminAction)
+
   bot.on('text', async (ctx) => {
     const raw = String(ctx.message?.text || '')
     // Ignore /commands — only consume plain text as wizard / rejection reasons.
@@ -298,6 +367,10 @@ export function createBot() {
       return
     }
     try {
+      const promoHandled = await handlePromoWizardMessage(ctx)
+      if (promoHandled) {
+        return
+      }
       const giveawayHandled = await handleGiveawayWizardMessage(ctx)
       if (giveawayHandled) {
         return

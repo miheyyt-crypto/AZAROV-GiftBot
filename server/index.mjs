@@ -88,6 +88,7 @@ import {
   pickTowerCell,
   startTowerGame,
 } from './tower.mjs'
+import { redeemPromoCode } from './promo.mjs'
 import {
   getUnreadNotificationsCount,
   listNotificationsForUser,
@@ -1973,6 +1974,18 @@ app.post(
       gameId: req.body?.gameId,
       requestId,
     })
+    res.status(result.success ? 200 : 400).json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/promo/redeem',
+  withEconomicUser(async (req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const result = redeemPromoCode(telegramUser.id, req.body?.code)
     res.status(result.success ? 200 : 400).json({
       ...result,
       user: toPublicUser(getUser(telegramUser.id)),

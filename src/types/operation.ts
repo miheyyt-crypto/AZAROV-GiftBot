@@ -12,6 +12,7 @@ export type OperationType =
   | 'mines_win'
   | 'tower_bet'
   | 'tower_win'
+  | 'promo_reward'
   | 'admin_adjustment'
   | 'refund'
   | string
@@ -52,6 +53,7 @@ export const OPERATION_REWARD_TYPES: ReadonlySet<string> = new Set([
   'level_reward',
   'mines_win',
   'tower_win',
+  'promo_reward',
 ])
 
 /** Ledger amounts are already signed. */
@@ -89,6 +91,8 @@ export function iconForOperationType(type: string, income: boolean): string {
       return '🏗️'
     case 'tower_win':
       return '🏰'
+    case 'promo_reward':
+      return '🎁'
     case 'refund':
       return '♻️'
     case 'admin_adjustment':
