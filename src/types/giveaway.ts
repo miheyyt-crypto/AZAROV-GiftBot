@@ -16,6 +16,8 @@ export type Giveaway = {
   title: string
   description?: string
   image: string
+  /** Telegram file_id; Mini App loads via /api/giveaways/:id/image when set. */
+  imageFileId?: string | null
   status: GiveawayStatus
   prizeType?: GiveawayPrizeType
   prizeAmount?: number | null

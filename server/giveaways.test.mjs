@@ -489,3 +489,57 @@ test('coin giveaway marks delivery as delivered and grants coins', async () => {
     assert.equal(withStore((store) => Number(store.users['931'].balance)), 5000)
   })
 })
+
+test('create giveaway without imageFileId stores null', async () => {
+  await withTempStore(async () => {
+    const created = withStore((store) => createGiveawayOnStore(store, validCreateBody()))
+    assert.equal(created.success, true)
+    assert.equal(created.giveaway.imageFileId, null)
+    const row = withStore((store) => store.giveaways[created.giveaway.id])
+    assert.equal(row.imageFileId, null)
+  })
+})
+
+test('create giveaway with imageFileId persists and survives finalize', async () => {
+  await withTempStore(async () => {
+    const fileId = 'AgACAgIAAxkBAAITestFileId1234567890'
+    const giveawayId = withStore((store) => {
+      seedUser(store, 941)
+      const created = createGiveawayOnStore(
+        store,
+        validCreateBody({ imageFileId: fileId, winnersCount: 1 }),
+      )
+      assert.equal(created.success, true)
+      assert.equal(created.giveaway.imageFileId, fileId)
+      participateOnStore(store, created.giveaway.id, 941)
+      store.giveaways[created.giveaway.id].endAt = pastIso(0.01)
+      return created.giveaway.id
+    })
+
+    const finalized = withStore((store) => finalizeGiveawayOnStore(store, giveawayId))
+    assert.equal(finalized.success, true)
+    assert.equal(finalized.giveaway.imageFileId, fileId)
+    const row = withStore((store) => store.giveaways[giveawayId])
+    assert.equal(row.imageFileId, fileId)
+  })
+})
+
+test('legacy giveaway without imageFileId field reads as null in public API', async () => {
+  await withTempStore(async () => {
+    const publicRow = withStore((store) => {
+      const created = createGiveawayOnStore(store, validCreateBody())
+      delete store.giveaways[created.giveaway.id].imageFileId
+      return listPublicGiveawaysOnStore(store).find((g) => g.id === created.giveaway.id)
+    })
+    assert.ok(publicRow)
+    assert.equal(publicRow.imageFileId, null)
+  })
+})
+
+test('validateGiveawayCreateInput rejects oversized imageFileId', () => {
+  const result = validateGiveawayCreateInput(
+    validCreateBody({ imageFileId: 'x'.repeat(600) }),
+  )
+  assert.equal(result.ok, false)
+  assert.equal(result.code, 'INVALID_IMAGE_FILE_ID')
+})

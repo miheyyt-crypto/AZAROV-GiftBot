@@ -22,6 +22,8 @@ import {
   handleGiveawayAdminCommand,
   handleGiveawayCancelCommand,
   handleGiveawayWizardMessage,
+  handleGiveawayWizardNonPhotoMedia,
+  handleGiveawayWizardPhoto,
 } from './giveaway-admin.mjs'
 import { isAdminTelegramUser } from './telegram-notify.mjs'
 
@@ -266,6 +268,26 @@ export function createBot() {
       await handlePartnerRejectReasonMessage(ctx)
     } catch (error) {
       console.error('[Telegram Bot] text handler failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+    }
+  })
+
+  bot.on('photo', async (ctx) => {
+    try {
+      await handleGiveawayWizardPhoto(ctx)
+    } catch (error) {
+      console.error('[Telegram Bot] photo handler failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+    }
+  })
+
+  bot.on(['document', 'sticker', 'animation', 'video', 'audio', 'voice'], async (ctx) => {
+    try {
+      await handleGiveawayWizardNonPhotoMedia(ctx)
+    } catch (error) {
+      console.error('[Telegram Bot] media handler failed', {
         message: error instanceof Error ? error.message : 'unknown_error',
       })
     }

@@ -9,6 +9,7 @@ import {
   formatWinnersLabel,
   getGiveaway,
   participateGiveaway,
+  resolveGiveawayImageSrc,
 } from '@/lib/giveaways'
 import { ROUTES } from '@/lib/constants'
 import type { Giveaway } from '@/types/giveaway'
@@ -142,7 +143,11 @@ export function GiveawayDetail() {
 
       <article className="overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#141218]/95">
         <div className="aspect-[16/10] w-full overflow-hidden bg-black/40">
-          <img src={giveaway.image} alt="" className="size-full object-cover" />
+          <img
+            src={resolveGiveawayImageSrc(giveaway)}
+            alt=""
+            className="size-full object-cover"
+          />
         </div>
 
         <div className="space-y-4 p-4">

@@ -6,6 +6,7 @@ import test from 'node:test'
 
 import {
   clearPendingGiveawayWizards,
+  extractLargestPhotoFileId,
   getPendingGiveawayWizard,
   parseDurationInput,
   parsePrizeAmountInput,
@@ -87,4 +88,65 @@ test('parseCustomPrizeInput accepts free-form prize text', async () => {
   const { parseCustomPrizeInput } = await import('./giveaway-admin.mjs')
   assert.equal(parseCustomPrizeInput('5 000 рублей').ok, true)
   assert.equal(parseCustomPrizeInput('').ok, false)
+})
+
+test('extractLargestPhotoFileId picks last Telegram size', () => {
+  assert.equal(extractLargestPhotoFileId(null), null)
+  assert.equal(extractLargestPhotoFileId({ photo: [] }), null)
+  assert.equal(
+    extractLargestPhotoFileId({
+      photo: [
+        { file_id: 'small', width: 90 },
+        { file_id: 'large', width: 800 },
+      ],
+    }),
+    'large',
+  )
+})
+
+test('createGiveaway stores optional imageFileId from bot payload', async () => {
+  await withTempStore(async () => {
+    const now = Date.now()
+    const created = createGiveaway(
+      {
+        title: 'Розыгрыш с фото',
+        description: 'test',
+        image: 'https://example.com/g.png',
+        imageFileId: 'AgACAgIAAxkBAAI_bot_photo_id',
+        prizeType: 'coins',
+        prizeAmount: 100,
+        winnersCount: 1,
+        startAt: new Date(now).toISOString(),
+        endAt: new Date(now + 120_000).toISOString(),
+      },
+      { createdBy: 'tg:42' },
+    )
+    assert.equal(created.success, true)
+    const row = peekGiveaway(created.giveaway.id)
+    assert.equal(row.imageFileId, 'AgACAgIAAxkBAAI_bot_photo_id')
+    assert.equal(created.giveaway.imageFileId, 'AgACAgIAAxkBAAI_bot_photo_id')
+  })
+})
+
+test('peekGiveaway without image returns no file id for image endpoint 404 path', async () => {
+  await withTempStore(async () => {
+    const now = Date.now()
+    const created = createGiveaway(
+      {
+        title: 'Без фото',
+        description: 'test',
+        image: 'https://example.com/g.png',
+        prizeType: 'coins',
+        prizeAmount: 50,
+        winnersCount: 1,
+        startAt: new Date(now).toISOString(),
+        endAt: new Date(now + 60_000).toISOString(),
+      },
+      { createdBy: 'tg:42' },
+    )
+    const row = peekGiveaway(created.giveaway.id)
+    assert.ok(row)
+    assert.equal(row.imageFileId, null)
+    assert.equal(peekGiveaway('missing-id-xxxxxxxxxxxx'), null)
+  })
 })

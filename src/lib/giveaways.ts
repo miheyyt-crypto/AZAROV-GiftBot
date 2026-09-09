@@ -13,6 +13,14 @@ function apiUrl(path: string): string {
   return `${base}${path}`
 }
 
+/** Prefer custom Telegram image proxy when imageFileId is present. */
+export function resolveGiveawayImageSrc(giveaway: Pick<Giveaway, 'id' | 'image' | 'imageFileId'>): string {
+  if (giveaway.imageFileId) {
+    return apiUrl(`/api/giveaways/${encodeURIComponent(giveaway.id)}/image`)
+  }
+  return giveaway.image
+}
+
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<{ ok: boolean; status: number; data: T | null }> {
   const initData = getTelegramInitData()
   const headers = new Headers(init.headers)
@@ -50,6 +58,10 @@ function normalizeGiveaway(raw: Partial<Giveaway> & { id?: string | number }): G
     title,
     description: raw.description ? String(raw.description) : '',
     image,
+    imageFileId:
+      raw.imageFileId != null && String(raw.imageFileId).trim()
+        ? String(raw.imageFileId).trim()
+        : null,
     status,
     prizeType:
       raw.prizeType === 'coins' || raw.prizeType === 'custom' || raw.prizeType === 'text'

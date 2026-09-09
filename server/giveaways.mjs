@@ -9,6 +9,8 @@ const GIVEAWAY_ID_RE = /^[a-zA-Z0-9_-]{8,64}$/
 const TITLE_MAX = 160
 const DESCRIPTION_MAX = 2000
 const IMAGE_MAX = 500
+/** Telegram file_id length; keep generous — IDs vary by file type. */
+const IMAGE_FILE_ID_MAX = 512
 const WINNERS_MIN = 1
 const WINNERS_MAX = 1000
 const DEFAULT_SCHEDULER_MS = 45_000
@@ -136,6 +138,19 @@ export function validateGiveawayCreateInput(body) {
     }
   }
 
+  let imageFileId = null
+  if (body.imageFileId != null && String(body.imageFileId).trim() !== '') {
+    const rawId = String(body.imageFileId).trim()
+    if (rawId.length > IMAGE_FILE_ID_MAX) {
+      return {
+        ok: false,
+        code: 'INVALID_IMAGE_FILE_ID',
+        message: `imageFileId: максимум ${IMAGE_FILE_ID_MAX} символов.`,
+      }
+    }
+    imageFileId = rawId
+  }
+
   const prizeTypeRaw = String(body.prizeType || '').trim()
   const prizeType = normalizePrizeType(prizeTypeRaw)
   if (!prizeType) {
@@ -210,6 +225,7 @@ export function validateGiveawayCreateInput(body) {
       title,
       description,
       image,
+      imageFileId,
       prizeType,
       prizeAmount,
       prizeText,
@@ -271,6 +287,22 @@ export function validateGiveawayPatchInput(body, existing) {
       return { ok: false, code: 'INVALID_IMAGE', message: `Изображение: 1–${IMAGE_MAX} символов.` }
     }
     next.image = image
+  }
+
+  if (body.imageFileId !== undefined) {
+    if (body.imageFileId == null || String(body.imageFileId).trim() === '') {
+      next.imageFileId = null
+    } else {
+      const rawId = String(body.imageFileId).trim()
+      if (rawId.length > IMAGE_FILE_ID_MAX) {
+        return {
+          ok: false,
+          code: 'INVALID_IMAGE_FILE_ID',
+          message: `imageFileId: максимум ${IMAGE_FILE_ID_MAX} символов.`,
+        }
+      }
+      next.imageFileId = rawId
+    }
   }
 
   if (body.winnersCount !== undefined) {
@@ -462,11 +494,17 @@ export function toPublicGiveaway(store, giveaway, { userId = null, includeWinner
 
   const prizeType = normalizePrizeType(giveaway.prizeType) || giveaway.prizeType
 
+  const imageFileId =
+    giveaway.imageFileId != null && String(giveaway.imageFileId).trim()
+      ? String(giveaway.imageFileId).trim()
+      : null
+
   const base = {
     id: giveaway.id,
     title: giveaway.title,
     description: giveaway.description || '',
     image: giveaway.image,
+    imageFileId,
     status: giveaway.status,
     prizeType,
     prizeAmount: giveaway.prizeAmount,
@@ -549,6 +587,7 @@ export function createGiveawayOnStore(store, input, { createdBy = null, nowIso =
     title: data.title,
     description: data.description,
     image: data.image,
+    imageFileId: data.imageFileId || null,
     status,
     prizeType: data.prizeType,
     prizeAmount: data.prizeAmount,
@@ -589,6 +628,7 @@ export function updateGiveawayOnStore(store, giveawayId, body) {
     title: next.title,
     description: next.description,
     image: next.image,
+    imageFileId: next.imageFileId !== undefined ? next.imageFileId : existing.imageFileId || null,
     prizeType: next.prizeType,
     prizeAmount: next.prizeAmount,
     prizeText: next.prizeText,

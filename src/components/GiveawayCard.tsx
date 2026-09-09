@@ -1,7 +1,7 @@
 import { Trophy } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-import { formatWinnersLabel } from '@/lib/giveaways'
+import { formatWinnersLabel, resolveGiveawayImageSrc } from '@/lib/giveaways'
 import { ROUTES } from '@/lib/constants'
 import type { Giveaway } from '@/types/giveaway'
 
@@ -17,7 +17,7 @@ export function GiveawayCard({ giveaway }: GiveawayCardProps) {
     >
       <div className="aspect-[5/4] w-full shrink-0 overflow-hidden bg-black/40">
         <img
-          src={giveaway.image}
+          src={resolveGiveawayImageSrc(giveaway)}
           alt=""
           className="size-full object-cover"
           loading="lazy"

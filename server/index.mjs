@@ -78,9 +78,11 @@ import {
   notifyGiveawayTelegramJobs,
   participateGiveaway,
   parseGiveawayId,
+  peekGiveaway,
   startGiveawayScheduler,
   updateGiveaway,
 } from './giveaways.mjs'
+import { fetchTelegramFileById } from './telegram-files.mjs'
 import { getLeaderboard, getRecentCaseDrops } from './home.mjs'
 import {
   getAchievementsProgress,
@@ -1460,6 +1462,59 @@ app.get(
       giveaway: result.giveaway,
       user: toPublicUser(getUser(telegramUser.id)),
     })
+  }),
+)
+
+/**
+ * Public image proxy for giveaway custom photos (Telegram file_id).
+ * No BOT_TOKEN in response. Auth not required so <img src> works in Mini App.
+ */
+app.get(
+  '/api/giveaways/:giveawayId/image',
+  asyncHandler(async (req, res) => {
+    const giveawayId = parseGiveawayId(req.params.giveawayId)
+    if (!giveawayId) {
+      res.status(400).json({
+        success: false,
+        code: 'INVALID_ID',
+        message: 'Некорректный id розыгрыша.',
+      })
+      return
+    }
+
+    const row = peekGiveaway(giveawayId)
+    if (!row) {
+      res.status(404).json({
+        success: false,
+        code: 'NOT_FOUND',
+        message: 'Розыгрыш не найден.',
+      })
+      return
+    }
+
+    const fileId = row.imageFileId != null ? String(row.imageFileId).trim() : ''
+    if (!fileId) {
+      res.status(404).json({
+        success: false,
+        code: 'NO_IMAGE',
+        message: 'У розыгрыша нет изображения.',
+      })
+      return
+    }
+
+    const file = await fetchTelegramFileById(fileId)
+    if (!file.ok || !file.buffer) {
+      res.status(502).json({
+        success: false,
+        code: 'TELEGRAM_FILE_ERROR',
+        message: 'Не удалось загрузить изображение.',
+      })
+      return
+    }
+
+    res.setHeader('Content-Type', file.contentType || 'image/jpeg')
+    res.setHeader('Cache-Control', 'public, max-age=3600, immutable')
+    res.send(file.buffer)
   }),
 )
 
