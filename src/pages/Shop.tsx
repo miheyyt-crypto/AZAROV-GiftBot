@@ -48,7 +48,7 @@ export function Shop() {
           <button
             type="button"
             onClick={() => navigate(ROUTES.mines)}
-            className="mb-4 flex min-h-[72px] w-full items-center justify-between overflow-hidden rounded-[20px] border border-[rgb(139_61_255/35%)] bg-[linear-gradient(110deg,#1a1230_0%,#12101c_55%,#0e1620_100%)] px-4 py-3.5 text-left shadow-[0_0_24px_rgb(139_61_255/15%)] transition active:scale-[0.99]"
+            className="mb-3 flex min-h-[72px] w-full items-center justify-between overflow-hidden rounded-[20px] border border-[rgb(139_61_255/35%)] bg-[linear-gradient(110deg,#1a1230_0%,#12101c_55%,#0e1620_100%)] px-4 py-3.5 text-left shadow-[0_0_24px_rgb(139_61_255/15%)] transition active:scale-[0.99]"
           >
             <span className="min-w-0">
               <span className="block text-base font-bold text-white">💣 Mines</span>
@@ -57,6 +57,20 @@ export function Shop() {
               </span>
             </span>
             <ChevronRight size={18} className="shrink-0 text-neon-purple" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate(ROUTES.tower)}
+            className="mb-4 flex min-h-[72px] w-full items-center justify-between overflow-hidden rounded-[20px] border border-[rgb(244_201_93/30%)] bg-[linear-gradient(110deg,#1a1628_0%,#12141c_55%,#10141c_100%)] px-4 py-3.5 text-left shadow-[0_0_24px_rgb(244_201_93/12%)] transition active:scale-[0.99]"
+          >
+            <span className="min-w-0">
+              <span className="block text-base font-bold text-white">🏗️ Tower</span>
+              <span className="mt-0.5 block text-xs text-[#9b96ab]">
+                Этажи и коэффициенты · ставка от 100
+              </span>
+            </span>
+            <ChevronRight size={18} className="shrink-0 text-gold" />
           </button>
 
           <button

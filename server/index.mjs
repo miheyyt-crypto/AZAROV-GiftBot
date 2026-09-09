@@ -83,6 +83,12 @@ import {
   startMinesGame,
 } from './mines.mjs'
 import {
+  cashoutTower,
+  getActiveTowerGame,
+  pickTowerCell,
+  startTowerGame,
+} from './tower.mjs'
+import {
   getUnreadNotificationsCount,
   listNotificationsForUser,
   markAllNotificationsRead,
@@ -1902,6 +1908,68 @@ app.post(
     const requestId = parseRequestId(req.body?.requestId)
     bootstrapUser(telegramUser, '')
     const result = cashoutMines(telegramUser.id, {
+      gameId: req.body?.gameId,
+      requestId,
+    })
+    res.status(result.success ? 200 : 400).json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.get(
+  '/api/tower/active',
+  withEconomicUser(async (_req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const result = getActiveTowerGame(telegramUser.id)
+    res.json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/tower/start',
+  withEconomicUser(async (req, res, telegramUser) => {
+    const requestId = parseRequestId(req.body?.requestId)
+    bootstrapUser(telegramUser, '')
+    const result = startTowerGame(telegramUser.id, {
+      bet: req.body?.bet,
+      requestId,
+    })
+    res.status(result.success ? 200 : 400).json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/tower/pick',
+  withEconomicUser(async (req, res, telegramUser) => {
+    const requestId = parseRequestId(req.body?.requestId)
+    bootstrapUser(telegramUser, '')
+    const result = pickTowerCell(telegramUser.id, {
+      gameId: req.body?.gameId,
+      floor: req.body?.floor,
+      cellIndex: req.body?.cellIndex,
+      requestId,
+    })
+    res.status(result.success ? 200 : 400).json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/tower/cashout',
+  withEconomicUser(async (req, res, telegramUser) => {
+    const requestId = parseRequestId(req.body?.requestId)
+    bootstrapUser(telegramUser, '')
+    const result = cashoutTower(telegramUser.id, {
       gameId: req.body?.gameId,
       requestId,
     })

@@ -487,6 +487,23 @@ body {
   animation: mines-boom 420ms var(--press-ease);
 }
 
+@keyframes tower-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+
+.tower-cell-shake {
+  animation: tower-shake 360ms var(--press-ease);
+}
+
 @keyframes level-up-burst {
   0% {
     opacity: 0;
@@ -517,6 +534,10 @@ body {
   }
 
   .mines-cell-boom {
+    animation: none;
+  }
+
+  .tower-cell-shake {
     animation: none;
   }
 

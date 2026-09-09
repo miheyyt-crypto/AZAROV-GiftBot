@@ -89,7 +89,7 @@ export function isPersistentStoreDir(dir = getDataDir()) {
 
 export function createEmptyStore() {
   return {
-    version: 11,
+    version: 12,
     users: {},
     referralIndex: {},
     referrals: {},
@@ -99,6 +99,7 @@ export function createEmptyStore() {
     inventory: {},
     caseOpenings: {},
     minesGames: {},
+    towerGames: {},
     partnerSubmissions: {},
     partnerAccountBinds: {},
     webSessions: {},
@@ -144,6 +145,7 @@ function migrateStore(store) {
   store.giveawayParticipants = store.giveawayParticipants || {}
   store.communityAccessRequests = store.communityAccessRequests || {}
   store.minesGames = store.minesGames || {}
+  store.towerGames = store.towerGames || {}
 
   // One-shot upgrade: pending streak-freeze orders → inventory (strategy B).
   if (Number(store.version) < 5) {
@@ -207,6 +209,12 @@ function migrateStore(store) {
       user.levelRewardsSeeded = true
     }
     store.version = 11
+  }
+
+  // Additive v12: tower games.
+  if (Number(store.version) < 12) {
+    store.towerGames = store.towerGames || {}
+    store.version = 12
   }
 
   return store
