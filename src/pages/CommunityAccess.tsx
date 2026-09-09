@@ -1,7 +1,9 @@
 import { ArrowLeft, ImagePlus, Lock, Trash2, Upload } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { useNotifications } from '@/components/NotificationProvider'
+import { usePendingReviewPoll } from '@/hooks/usePendingReviewPoll'
 import { useUserAccount } from '@/hooks/useUserAccount'
 import {
   COMMUNITY_ACCESS_MAX_BYTES,
@@ -12,6 +14,7 @@ import {
   normalizeWelvuraIdInput,
   submitCommunityAccessRequest,
 } from '@/lib/community-access'
+import { ROUTES } from '@/lib/constants'
 import { getTelegramUserUnsafe } from '@/lib/telegram'
 import type { CommunityAccessRequest } from '@/types/community-access'
 
@@ -38,10 +41,12 @@ function statusCopy(request: CommunityAccessRequest) {
 
 export function CommunityAccess() {
   const navigate = useNavigate()
+  const { showNotification } = useNotifications()
   const account = useUserAccount()
   const tgUser = getTelegramUserUnsafe()
   const fileInputId = useId()
   const fileRef = useRef<HTMLInputElement>(null)
+  const closingRef = useRef(false)
 
   const telegramId = account.telegramId || tgUser?.id || 0
   const sessionUsername = tgUser?.username || account.username || ''
@@ -55,6 +60,50 @@ export function CommunityAccess() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  const leaveScreen = useCallback(() => {
+    if (closingRef.current) {
+      return
+    }
+    closingRef.current = true
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      navigate(-1)
+      return
+    }
+    navigate(ROUTES.home)
+  }, [navigate])
+
+  usePendingReviewPoll<CommunityAccessRequest>({
+    active: Boolean(request && request.status === 'pending' && !forceNewForm),
+    poll: async () => {
+      const result = await getCommunityAccessStatus()
+      if (!result.success || !result.request) {
+        return null
+      }
+      return { status: result.request.status, payload: result.request }
+    },
+    onResolved: (status, payload) => {
+      if (payload) {
+        setRequest(payload)
+      }
+      if (status === 'approved') {
+        showNotification({
+          type: 'success',
+          title: '✅ Заявка одобрена!',
+        })
+      } else {
+        const reason = payload?.rejectionReason?.trim()
+        showNotification({
+          type: 'error',
+          title: '❌ Заявка отклонена',
+          message: reason || undefined,
+        })
+      }
+      window.setTimeout(() => {
+        leaveScreen()
+      }, 700)
+    },
+  })
 
   useEffect(() => {
     let cancelled = false

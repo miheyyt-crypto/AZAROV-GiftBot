@@ -1,7 +1,9 @@
 import { X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { useNotifications } from '@/components/NotificationProvider'
 import { PartnerTaskItem } from '@/components/PartnerTaskItem'
+import { REVIEW_STATUS_POLL_MS } from '@/hooks/usePendingReviewPoll'
 import { useUserAccount } from '@/hooks/useUserAccount'
 import {
   getPartnerProgress,
@@ -10,6 +12,7 @@ import {
   startPartnerTaskAction,
   submitPartnerTaskAction,
 } from '@/lib/partners'
+import { bootstrapSession } from '@/lib/session'
 import { createPurchaseRequestId } from '@/lib/shop'
 import type { PartnerConfig, PartnerSubmission } from '@/types/partner'
 
@@ -27,6 +30,7 @@ const tipCardStyles = {
 
 export function PartnerTaskModal({ partner, onClose }: PartnerTaskModalProps) {
   const account = useUserAccount()
+  const { showNotification } = useNotifications()
   const [visible, setVisible] = useState(false)
   const [loadingTaskId, setLoadingTaskId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Record<string, string>>({})
@@ -35,6 +39,17 @@ export function PartnerTaskModal({ partner, onClose }: PartnerTaskModalProps) {
   )
   const inFlightIds = useRef(new Set<string>())
   const submitRequestIds = useRef(new Map<string, string>())
+  /** Submission IDs observed as pending while this modal session is open. */
+  const seenPendingIds = useRef(new Set<string>())
+  const resolvedHandledIds = useRef(new Set<string>())
+  const closingRef = useRef(false)
+  const onCloseRef = useRef(onClose)
+  const showNotificationRef = useRef(showNotification)
+  const partnerTasksRef = useRef(partner.tasks)
+
+  onCloseRef.current = onClose
+  showNotificationRef.current = showNotification
+  partnerTasksRef.current = partner.tasks
 
   const completedIds = account.claimedTaskIds
   const startedIds = account.startedPartnerTasks ?? []
@@ -62,32 +77,103 @@ export function PartnerTaskModal({ partner, onClose }: PartnerTaskModalProps) {
     partner.tasks.length,
   )
 
+  function closeModal() {
+    if (closingRef.current) {
+      return
+    }
+    closingRef.current = true
+    setVisible(false)
+    window.setTimeout(() => onCloseRef.current(), 200)
+  }
+
   useEffect(() => {
+    closingRef.current = false
+    seenPendingIds.current.clear()
+    resolvedHandledIds.current.clear()
+
     const frame = window.requestAnimationFrame(() => setVisible(true))
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
 
     let cancelled = false
+    let inFlight = false
 
-    async function refreshSubmissions() {
-      const map = await loadMyPartnerSubmissions()
-      if (cancelled) {
-        return
-      }
-      const scoped: Record<string, PartnerSubmission> = {}
-      for (const task of partner.tasks) {
-        if (map[task.id]) {
-          scoped[task.id] = map[task.id]
+    function notePendingAndMaybeResolve(scoped: Record<string, PartnerSubmission>) {
+      for (const submission of Object.values(scoped)) {
+        if (submission.status === 'pending' && submission.submissionId) {
+          seenPendingIds.current.add(submission.submissionId)
         }
       }
-      setSubmissionsByTask(scoped)
+
+      for (const submission of Object.values(scoped)) {
+        const id = submission.submissionId
+        if (!id || !seenPendingIds.current.has(id)) {
+          continue
+        }
+        if (submission.status !== 'approved' && submission.status !== 'rejected') {
+          continue
+        }
+        if (resolvedHandledIds.current.has(id)) {
+          continue
+        }
+        resolvedHandledIds.current.add(id)
+
+        if (submission.status === 'approved') {
+          showNotificationRef.current({
+            type: 'success',
+            title: '✅ Заявка одобрена!',
+          })
+          void bootstrapSession()
+        } else {
+          const reason = String(submission.rejectionReason || '').trim()
+          showNotificationRef.current({
+            type: 'error',
+            title: '❌ Заявка отклонена',
+            message: reason || undefined,
+          })
+        }
+
+        window.setTimeout(() => {
+          if (closingRef.current) {
+            return
+          }
+          closingRef.current = true
+          setVisible(false)
+          window.setTimeout(() => onCloseRef.current(), 200)
+        }, 700)
+        break
+      }
+    }
+
+    async function refreshSubmissions() {
+      if (inFlight || cancelled) {
+        return
+      }
+      inFlight = true
+      try {
+        const map = await loadMyPartnerSubmissions()
+        if (cancelled) {
+          return
+        }
+        const scoped: Record<string, PartnerSubmission> = {}
+        for (const task of partnerTasksRef.current) {
+          if (map[task.id]) {
+            scoped[task.id] = map[task.id]
+          }
+        }
+        setSubmissionsByTask(scoped)
+        notePendingAndMaybeResolve(scoped)
+      } catch {
+        // Keep polling on network errors.
+      } finally {
+        inFlight = false
+      }
     }
 
     void refreshSubmissions()
-    // Admin may reject in Telegram while this modal stays open — poll for status.
     const pollTimer = window.setInterval(() => {
       void refreshSubmissions()
-    }, 2500)
+    }, REVIEW_STATUS_POLL_MS)
 
     function onVisibility() {
       if (document.visibilityState === 'visible') {
@@ -103,12 +189,7 @@ export function PartnerTaskModal({ partner, onClose }: PartnerTaskModalProps) {
       document.removeEventListener('visibilitychange', onVisibility)
       document.body.style.overflow = previousOverflow
     }
-  }, [partner.id, partner.tasks])
-
-  function closeModal() {
-    setVisible(false)
-    window.setTimeout(onClose, 200)
-  }
+  }, [partner.id])
 
   async function handleOpen(taskId: string) {
     const task = partner.tasks.find((item) => item.id === taskId)
@@ -157,6 +238,9 @@ export function PartnerTaskModal({ partner, onClose }: PartnerTaskModalProps) {
 
     if (result.success && result.submission) {
       submitRequestIds.current.delete(taskId)
+      if (result.submission.submissionId && result.submission.status === 'pending') {
+        seenPendingIds.current.add(result.submission.submissionId)
+      }
       setSubmissionsByTask((current) => ({
         ...current,
         [taskId]: result.submission!,
