@@ -1,5 +1,7 @@
 import coinsImage from '@/assets/cases/reward-coins.png'
-import rubImage from '@/assets/cases/reward-rub.svg'
+import rub1000Image from '@/assets/cases/reward-rub-1000.png'
+import rub5000Image from '@/assets/cases/reward-rub-5000.png'
+import rubOtherImage from '@/assets/cases/reward-rub-other.png'
 import mediumImage from '@/assets/cases/medium.jpg'
 import poorImage from '@/assets/cases/poor.jpg'
 import referralImage from '@/assets/cases/referral.png'
@@ -7,8 +9,24 @@ import richImage from '@/assets/cases/rich.jpg'
 import dropTables from '@/data/case-drops.json'
 import type { CaseReward, CaseRewardCurrency, GiftCase } from '@/types/case'
 
+/** Cash prize art by denomination; coins keep the shared coin asset. */
+export function rewardImageForPrize(currency: CaseRewardCurrency, amount: number): string {
+  if (currency !== 'RUB') {
+    return coinsImage
+  }
+  const rub = Math.floor(Number(amount) || 0)
+  if (rub === 1000 || rub === 2000) {
+    return rub1000Image
+  }
+  if (rub === 5000) {
+    return rub5000Image
+  }
+  return rubOtherImage
+}
+
+/** @deprecated Prefer rewardImageForPrize(currency, amount). */
 export function rewardImageForCurrency(currency: CaseRewardCurrency): string {
-  return currency === 'RUB' ? rubImage : coinsImage
+  return rewardImageForPrize(currency, 0)
 }
 
 function attachRewardImages(
@@ -23,7 +41,7 @@ function attachRewardImages(
 ): CaseReward[] {
   return rewards.map((reward) => ({
     ...reward,
-    image: rewardImageForCurrency(reward.currency),
+    image: rewardImageForPrize(reward.currency, reward.amount),
   }))
 }
 
