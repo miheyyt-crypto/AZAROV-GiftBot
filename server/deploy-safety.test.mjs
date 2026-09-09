@@ -5,6 +5,7 @@ import { createRateLimiter } from './rate-limit.mjs'
 import {
   assertSingleReplicaDeployment,
   getDeploymentReplicaDiagnostics,
+  getUnsafeMultiProcessHints,
 } from './deploy-safety.mjs'
 
 test('createRateLimiter blocks after max hits in window', () => {
@@ -31,5 +32,17 @@ test('deploy diagnostics declare multi-replica unsafe', () => {
   } finally {
     if (previous === undefined) delete process.env.AZAROV_ALLOW_MULTI_REPLICA
     else process.env.AZAROV_ALLOW_MULTI_REPLICA = previous
+  }
+})
+
+test('getUnsafeMultiProcessHints reports WEB_CONCURRENCY>1', () => {
+  const previous = process.env.WEB_CONCURRENCY
+  try {
+    process.env.WEB_CONCURRENCY = '4'
+    const hints = getUnsafeMultiProcessHints()
+    assert.ok(hints.some((h) => h.startsWith('WEB_CONCURRENCY=')))
+  } finally {
+    if (previous === undefined) delete process.env.WEB_CONCURRENCY
+    else process.env.WEB_CONCURRENCY = previous
   }
 })

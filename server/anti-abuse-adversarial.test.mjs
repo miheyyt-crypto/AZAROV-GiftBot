@@ -135,9 +135,16 @@ test('ADV-6 spoofed XFF cannot bypass production clientIp', () => {
       'cf-connecting-ip': '1.2.3.4',
       'true-client-ip': '1.2.3.4',
     },
-    socket: { remoteAddress: '127.0.0.1' },
+    socket: { remoteAddress: '10.0.0.1' },
   }
   assert.equal(clientIp(req), '10.0.0.8')
+
+  const direct = {
+    ip: '1.2.3.4',
+    headers: { 'x-forwarded-for': '1.2.3.4' },
+    socket: { remoteAddress: '198.51.100.7' },
+  }
+  assert.equal(clientIp(direct), '198.51.100.7')
 })
 
 test('ADV-7 unbound → no economy', async () => {

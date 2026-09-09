@@ -27,6 +27,7 @@ const FORBIDDEN_CLIENT_KEYS = new Set([
   'amount',
   'telegramId',
   'userId',
+  'tgId',
   'id',
   'chance',
   'rewards',

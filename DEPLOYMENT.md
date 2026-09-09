@@ -190,7 +190,17 @@ Local API-only (no bot): `npm run server` or `npm run start:api`.
    - A Railway Volume also blocks horizontal scaling — do not raise replica count.
    - File lock protects concurrent requests **inside one process only**.
    - Do **not** set `AZAROV_ALLOW_MULTI_REPLICA=1` except for emergency diagnostics.
+   - Do **not** set `WEB_CONCURRENCY>1`, PM2 cluster, or Node cluster workers — boot exits in production.
+   - Railway replica count is **not** readable at runtime; `numReplicas=1` + Volume are mandatory ops controls.
 5. Redeploy, then open `GET /api/health` and confirm `store.persistent: true` and `store.singleReplicaRequired: true`.
+
+### Client IP / anti-abuse (Railway Edge)
+
+- Express `trust proxy` trusts **only private/loopback/CGNAT immediate peers** (typical Railway mesh hop).
+- Production `clientIp()` never reads raw `X-Forwarded-For` / `X-Real-IP` / `Forwarded`.
+- Direct public access to the container socket: client-controlled proxy headers are ignored; anti-abuse uses the TCP peer address.
+- Residual: an attacker on the **same private Railway network** who can reach the service could still present as a “trusted hop”. Keep the service private to Railway’s edge; do not expose the container port on the public internet besides Railway’s proxy.
+- Set a stable `ANTI_ABUSE_HMAC_SECRET` (≥32 chars). Never rotate it casually — IP hash indexes depend on it.
 
 Expected layout:
 

@@ -53,12 +53,12 @@ test('IPv6 compressed and expanded share hash', () => {
   assert.equal(hashIp('2001:db8::1'), hashIp('2001:0db8:0000:0000:0000:0000:0000:0001'))
 })
 
-test('production clientIp ignores spoofed X-Forwarded-For when req.ip set', () => {
+test('production clientIp ignores spoofed X-Forwarded-For when req.ip set behind trusted hop', () => {
   process.env.NODE_ENV = 'production'
   const req = {
     ip: '10.20.30.40',
     headers: { 'x-forwarded-for': '9.9.9.9, 10.20.30.40' },
-    socket: { remoteAddress: '127.0.0.1' },
+    socket: { remoteAddress: '10.0.0.2' },
   }
   assert.equal(clientIp(req), '10.20.30.40')
 })
@@ -71,6 +71,16 @@ test('production clientIp does not trust raw XFF when req.ip missing', () => {
     socket: { remoteAddress: '::ffff:127.0.0.1' },
   }
   assert.equal(clientIp(req), '127.0.0.1')
+})
+
+test('production clientIp ignores Express req.ip when peer is public (direct container)', () => {
+  process.env.NODE_ENV = 'production'
+  const req = {
+    ip: '8.8.8.8',
+    headers: { 'x-forwarded-for': '8.8.8.8' },
+    socket: { remoteAddress: '203.0.113.9' },
+  }
+  assert.equal(clientIp(req), '203.0.113.9')
 })
 
 test('registerBotStart does not create user for first-time visitor', async () => {

@@ -142,7 +142,7 @@ import {
   parseRequestId,
   sanitizePurchaseMetadata,
 } from './validate.mjs'
-import { clientIp, createRateLimiter, sessionAuthLimiter, timingSafeEqualString } from './rate-limit.mjs'
+import { clientIp, createRateLimiter, sessionAuthLimiter, timingSafeEqualString, trustProxyHop } from './rate-limit.mjs'
 import {
   buildAdminAntiAbuseView,
   MULTI_ACCOUNT_USER_MESSAGE,
@@ -166,8 +166,9 @@ const PORT = Number(process.env.PORT || 3001)
 const HOST = String(process.env.HOST || '0.0.0.0').trim() || '0.0.0.0'
 const IS_PRODUCTION = process.env.NODE_ENV === 'production'
 const app = express()
-// Railway (and most reverse proxies) append the client IP in X-Forwarded-For.
-app.set('trust proxy', 1)
+// Trust ONLY private/loopback immediate peers as reverse proxies (Railway Edge).
+// Public direct-to-container peers cannot spoof X-Forwarded-For into req.ip.
+app.set('trust proxy', trustProxyHop)
 const distDir = path.resolve(rootDir, 'dist')
 
 function assertProductionEnv() {
@@ -305,11 +306,14 @@ function readInitData(req) {
 /**
  * Resolve identity from Mini App initData (preferred) or HttpOnly web session cookie.
  * Mini App path is unchanged; web session is additive for website Login Widget.
+ * If BOTH are present they MUST refer to the same Telegram user — mismatch → 401.
  */
 function requireTelegramAuth(req, res) {
   const botToken = process.env.BOT_TOKEN || ''
   const initData = readInitData(req)
+  const sessionToken = readWebSessionToken(req)
 
+  let initAuth = null
   if (initData) {
     if (!botToken) {
       res.status(503).json({
@@ -320,7 +324,12 @@ function requireTelegramAuth(req, res) {
     }
 
     try {
-      return verifyTelegramInitData(initData, botToken)
+      const verified = verifyTelegramInitData(initData, botToken)
+      initAuth = {
+        user: verified.user,
+        startParam: verified.startParam || '',
+        authSource: 'init_data',
+      }
     } catch {
       res.status(401).json({
         success: false,
@@ -330,42 +339,67 @@ function requireTelegramAuth(req, res) {
     }
   }
 
-  const sessionToken = readWebSessionToken(req)
+  let sessionAuth = null
   if (sessionToken) {
     const session = resolveWebSession(sessionToken)
     if (!session) {
-      clearWebSessionCookie(res)
+      // Invalid/expired cookie: only fail hard when it is the sole auth source.
+      if (!initAuth) {
+        clearWebSessionCookie(res)
+        res.status(401).json({
+          success: false,
+          message: 'Сессия истекла. Войди через Telegram снова.',
+        })
+        return null
+      }
+    } else {
+      const stored = getUser(session.telegramUserId)
+      if (!stored) {
+        if (!initAuth) {
+          clearWebSessionCookie(res)
+          revokeWebSession(sessionToken)
+          res.status(401).json({
+            success: false,
+            message: 'Пользователь не найден. Войди через Telegram снова.',
+          })
+          return null
+        }
+      } else {
+        sessionAuth = {
+          user: {
+            id: Number(stored.telegramId),
+            first_name: stored.firstName || '',
+            last_name: stored.lastName || undefined,
+            username: stored.username || undefined,
+            photo_url: stored.photoUrl || undefined,
+            language_code: stored.languageCode || undefined,
+            is_premium: Boolean(stored.isPremium),
+          },
+          startParam: '',
+          authSource: 'web_session',
+        }
+      }
+    }
+  }
+
+  if (initAuth && sessionAuth) {
+    if (Number(initAuth.user.id) !== Number(sessionAuth.user.id)) {
       res.status(401).json({
         success: false,
-        message: 'Сессия истекла. Войди через Telegram снова.',
+        code: 'AUTH_IDENTITY_MISMATCH',
+        message: 'Конфликт авторизации. Обнови страницу и войди снова.',
       })
       return null
     }
+    return initAuth
+  }
 
-    const stored = getUser(session.telegramUserId)
-    if (!stored) {
-      clearWebSessionCookie(res)
-      revokeWebSession(sessionToken)
-      res.status(401).json({
-        success: false,
-        message: 'Пользователь не найден. Войди через Telegram снова.',
-      })
-      return null
-    }
+  if (initAuth) {
+    return initAuth
+  }
 
-    return {
-      user: {
-        id: Number(stored.telegramId),
-        first_name: stored.firstName || '',
-        last_name: stored.lastName || undefined,
-        username: stored.username || undefined,
-        photo_url: stored.photoUrl || undefined,
-        language_code: stored.languageCode || undefined,
-        is_premium: Boolean(stored.isPremium),
-      },
-      startParam: '',
-      authSource: 'web_session',
-    }
+  if (sessionAuth) {
+    return sessionAuth
   }
 
   res.status(401).json({

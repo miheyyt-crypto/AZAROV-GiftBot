@@ -1,3 +1,5 @@
+import cluster from 'node:cluster'
+
 /**
  * JSON file store + file lock are single-process / single-replica only.
  * Multiple Railway replicas can race and double-spend / double-grant.
@@ -20,10 +22,42 @@ export function getDeploymentReplicaDiagnostics() {
   }
 }
 
+function readPositiveIntEnv(name) {
+  const raw = String(process.env[name] || '').trim()
+  if (!raw) {
+    return 0
+  }
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+/**
+ * Detect process managers that would fork multiple writers against the JSON store.
+ * Railway replica count is NOT visible here — that residual risk is documented in DEPLOYMENT.md.
+ */
+export function getUnsafeMultiProcessHints() {
+  const hints = []
+  const webConcurrency = readPositiveIntEnv('WEB_CONCURRENCY')
+  if (webConcurrency > 1) {
+    hints.push(`WEB_CONCURRENCY=${webConcurrency}`)
+  }
+  const pm2Instances = readPositiveIntEnv('PM2_INSTANCES')
+  if (pm2Instances > 1) {
+    hints.push(`PM2_INSTANCES=${pm2Instances}`)
+  }
+  // PM2 cluster / node cluster worker
+  if (String(process.env.NODE_APP_INSTANCE || '').trim() !== '') {
+    hints.push('NODE_APP_INSTANCE set (cluster worker)')
+  }
+  if (cluster.isWorker) {
+    hints.push('node:cluster worker')
+  }
+  return hints
+}
+
 /**
  * Boot-time notice for production. Never pretends file lock spans replicas.
- * Exits only when AZAROV_ALLOW_MULTI_REPLICA=1 is missing AND an explicit
- * unsafe scale hint is set (ops override for emergency experiments).
+ * Exits when explicit multi-process hints are present (unless emergency override).
  */
 export function assertSingleReplicaDeployment({ isProduction = false } = {}) {
   const diag = getDeploymentReplicaDiagnostics()
@@ -39,10 +73,10 @@ export function assertSingleReplicaDeployment({ isProduction = false } = {}) {
     note: 'File lock does not protect across replicas. Keep numReplicas=1 (railway.toml) and one Volume.',
   })
 
-  const webConcurrency = Number(process.env.WEB_CONCURRENCY || 0)
-  if (Number.isFinite(webConcurrency) && webConcurrency > 1 && !diag.allowMultiReplica) {
+  const unsafe = getUnsafeMultiProcessHints()
+  if (unsafe.length && !diag.allowMultiReplica) {
     console.error(
-      `[deploy] WEB_CONCURRENCY=${webConcurrency} is incompatible with JSON file store. Keep a single process (or set AZAROV_ALLOW_MULTI_REPLICA=1 only for emergency diagnostics).`,
+      `[deploy] Multi-process hints incompatible with JSON file store: ${unsafe.join(', ')}. Keep a single process (or set AZAROV_ALLOW_MULTI_REPLICA=1 only for emergency diagnostics).`,
     )
     process.exit(1)
   }
