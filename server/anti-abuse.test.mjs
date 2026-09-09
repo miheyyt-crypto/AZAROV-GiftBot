@@ -224,7 +224,7 @@ test('TEST 13: blocked user referral denied', async () => {
   })
 })
 
-test('migration v15 grandfathers existing users without auto-block', async () => {
+test('migration v15→v16 grandfathers existing users without auto-block', async () => {
   await withTempStore(async () => {
     const storePath = path.join(process.env.AZAROV_STORE_DIR, 'store.json')
     writeFileSync(
@@ -246,18 +246,20 @@ test('migration v15 grandfathers existing users without auto-block', async () =>
       ipHashIndex: store.ipHashIndex,
     }))
 
-    assert.equal(snapshot.version, 15)
+    assert.equal(snapshot.version, 16)
     assert.equal(snapshot.u1.antiAbuseBound, true)
     assert.equal(snapshot.u2.antiAbuseBound, true)
+    assert.equal(snapshot.u1.antiAbuseLegacy, true)
+    assert.equal(snapshot.u2.antiAbuseLegacy, true)
     assert.equal(snapshot.u1.blocked, false)
     assert.ok(snapshot.deviceIndex)
     assert.ok(snapshot.ipHashIndex)
   })
 })
 
-test('createEmptyStore is v15 with anti-abuse maps', () => {
+test('createEmptyStore is v16 with anti-abuse maps', () => {
   const store = createEmptyStore()
-  assert.equal(store.version, 15)
+  assert.equal(store.version, 16)
   assert.deepEqual(store.deviceIndex, {})
   assert.deepEqual(store.ipHashIndex, {})
 })

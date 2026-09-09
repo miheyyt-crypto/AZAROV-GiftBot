@@ -19,9 +19,13 @@ export function getAntiAbuseHmacSecret() {
   if (dedicated) {
     return dedicated
   }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('ANTI_ABUSE_HMAC_SECRET_required')
+  }
+  // Dev/test only fallback — production boot refuses missing secret.
   const bot = String(process.env.BOT_TOKEN || '').trim()
   if (bot) {
-    return `anti-abuse:${bot}`
+    return `anti-abuse-dev:${bot}`
   }
   return 'anti-abuse-dev-secret'
 }
@@ -164,6 +168,9 @@ export function hydrateAntiAbuseUserFields(user, { isNew = false } = {}) {
   if (user.antiAbuseBound == null) {
     user.antiAbuseBound = !isNew
   }
+  if (user.antiAbuseLegacy == null) {
+    user.antiAbuseLegacy = false
+  }
   return user
 }
 
@@ -270,43 +277,97 @@ export function peekRegistrationSignals(store, { deviceId: rawDeviceId = null, i
   }
 }
 
+function createdAtMs(user) {
+  const ms = Date.parse(String(user?.createdAt || ''))
+  return Number.isFinite(ms) ? ms : 0
+}
+
+/**
+ * Bound/legacy users seed free IP/device indexes.
+ * If a NEWER non-legacy account already claimed this signal, treat them as a
+ * multi-account that slipped through the grandfather window: retro-BLOCK them
+ * and reclaim the signal for the older/current bound user.
+ * Two legacy users sharing Wi-Fi are never retro-blocked.
+ */
 function tryClaimFreeAssociations(store, user, deviceId, ipHash) {
   ensureAntiAbuseMaps(store)
   const now = new Date().toISOString()
 
-  if (deviceId) {
-    const existing = store.deviceIndex[deviceId]
+  function reclaimOrTouch(kind, key, indexMap, primaryField) {
+    if (!key) {
+      return
+    }
+    const existing = indexMap[key]
     if (!existing) {
-      store.deviceIndex[deviceId] = {
-        telegramId: Number(user.telegramId),
-        createdAt: now,
+      if (kind === 'device') {
+        indexMap[key] = { telegramId: Number(user.telegramId), createdAt: now }
+      } else {
+        indexMap[key] = {
+          telegramId: Number(user.telegramId),
+          firstSeenAt: now,
+          lastSeenAt: now,
+        }
       }
-      if (!user.primaryDeviceId) {
-        user.primaryDeviceId = deviceId
+      if (!user[primaryField]) {
+        user[primaryField] = key
       }
-    } else if (Number(existing.telegramId) === Number(user.telegramId) && !user.primaryDeviceId) {
-      user.primaryDeviceId = deviceId
+      return
+    }
+
+    if (Number(existing.telegramId) === Number(user.telegramId)) {
+      if (kind === 'ip') {
+        existing.lastSeenAt = now
+      }
+      if (!user[primaryField]) {
+        user[primaryField] = key
+      }
+      return
+    }
+
+    const other = store.users[String(existing.telegramId)]
+    if (!other) {
+      indexMap[key] =
+        kind === 'device'
+          ? { telegramId: Number(user.telegramId), createdAt: now }
+          : {
+              telegramId: Number(user.telegramId),
+              firstSeenAt: existing.firstSeenAt || now,
+              lastSeenAt: now,
+            }
+      user[primaryField] = key
+      return
+    }
+
+    // Never retro-block another legacy account (shared Wi-Fi among old users).
+    if (user.antiAbuseLegacy && other.antiAbuseLegacy) {
+      return
+    }
+
+    const selfMs = createdAtMs(user)
+    const otherMs = createdAtMs(other)
+    const otherIsNewerNonLegacy = !other.antiAbuseLegacy && otherMs >= selfMs
+
+    if (otherIsNewerNonLegacy && !other.blocked) {
+      blockUserMultiAccount(store, other, {
+        deviceId: kind === 'device' ? key : other.primaryDeviceId,
+        ipHash: kind === 'ip' ? key : other.primaryIpHash,
+        deviceUsed: kind === 'device',
+        ipUsed: kind === 'ip',
+      })
+      indexMap[key] =
+        kind === 'device'
+          ? { telegramId: Number(user.telegramId), createdAt: now }
+          : {
+              telegramId: Number(user.telegramId),
+              firstSeenAt: existing.firstSeenAt || now,
+              lastSeenAt: now,
+            }
+      user[primaryField] = key
     }
   }
 
-  if (ipHash) {
-    const existing = store.ipHashIndex[ipHash]
-    if (!existing) {
-      store.ipHashIndex[ipHash] = {
-        telegramId: Number(user.telegramId),
-        firstSeenAt: now,
-        lastSeenAt: now,
-      }
-      if (!user.primaryIpHash) {
-        user.primaryIpHash = ipHash
-      }
-    } else if (Number(existing.telegramId) === Number(user.telegramId)) {
-      existing.lastSeenAt = now
-      if (!user.primaryIpHash) {
-        user.primaryIpHash = ipHash
-      }
-    }
-  }
+  reclaimOrTouch('device', deviceId, store.deviceIndex, 'primaryDeviceId')
+  reclaimOrTouch('ip', ipHash, store.ipHashIndex, 'primaryIpHash')
 }
 
 /**

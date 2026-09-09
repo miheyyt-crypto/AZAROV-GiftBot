@@ -191,6 +191,15 @@ function assertProductionEnv() {
     process.exit(1)
   }
 
+  // Stable pepper for IP hashing — never derive from rotatable BOT_TOKEN.
+  const antiAbuseSecret = String(process.env.ANTI_ABUSE_HMAC_SECRET || '').trim()
+  if (!antiAbuseSecret) {
+    missing.push('ANTI_ABUSE_HMAC_SECRET')
+  } else if (antiAbuseSecret.length < 32) {
+    console.error('[boot] ANTI_ABUSE_HMAC_SECRET must be at least 32 characters in production.')
+    process.exit(1)
+  }
+
   if (missing.length) {
     console.error(`[boot] Missing required production env: ${missing.join(', ')}`)
     process.exit(1)

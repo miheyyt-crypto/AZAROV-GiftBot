@@ -1,3 +1,4 @@
+import { userCanUseAppEconomy } from './anti-abuse.mjs'
 import { withStore, withStoreRead } from './store.mjs'
 import {
   assertSafeScreenshot,
@@ -114,6 +115,16 @@ export function createCommunityAccessRequestOnStore(store, telegramUser, payload
   const userId = Number(telegramUser?.id ?? telegramUser?.telegramId)
   if (!Number.isFinite(userId) || userId <= 0) {
     return { success: false, code: 'MISSING_TELEGRAM_ID', message: '❌ Telegram ID не найден' }
+  }
+
+  const owner = store.users?.[String(userId)]
+  const economy = userCanUseAppEconomy(owner)
+  if (!economy.ok) {
+    return {
+      success: false,
+      code: economy.code || 'FORBIDDEN',
+      message: economy.message || 'Аккаунт недоступен.',
+    }
   }
 
   const clientRequestId = String(payload?.requestId || '').trim()
@@ -293,6 +304,19 @@ export function approveCommunityAccessOnStore(store, requestId, reviewedBy) {
     }
   }
 
+  const owner = store.users?.[String(row.telegramId)]
+  if (owner) {
+    const economy = userCanUseAppEconomy(owner)
+    if (!economy.ok) {
+      return {
+        success: false,
+        code: economy.code || 'FORBIDDEN',
+        message: economy.message || 'Аккаунт недоступен для верификации.',
+        request: publicRequest(row, { includeAdmin: true }),
+      }
+    }
+  }
+
   row.status = 'approved'
   row.reviewedAt = utcNow()
   row.reviewedBy = reviewedBy != null ? String(reviewedBy) : null
@@ -300,7 +324,6 @@ export function approveCommunityAccessOnStore(store, requestId, reviewedBy) {
   // Hook point for future invite link issuance.
   row.inviteReady = false
 
-  const owner = store.users?.[String(row.telegramId)]
   if (owner) {
     owner.welvuraVerified = true
   }
@@ -411,6 +434,9 @@ export function getAdminCommunityRequestOnStore(store, requestId) {
 export function syncWelvuraVerifiedFromCommunityAccess(store, user) {
   if (!user || user.welvuraVerified === true) {
     return Boolean(user?.welvuraVerified)
+  }
+  if (!userCanUseAppEconomy(user).ok) {
+    return false
   }
   ensureMaps(store)
   const userId = Number(user.telegramId)

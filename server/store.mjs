@@ -89,7 +89,7 @@ export function isPersistentStoreDir(dir = getDataDir()) {
 
 export function createEmptyStore() {
   return {
-    version: 15,
+    version: 16,
     users: {},
     referralIndex: {},
     referrals: {},
@@ -276,8 +276,24 @@ function migrateStore(store) {
       }
       // Do not auto-block legacy accounts that may share NAT/IP.
       user.antiAbuseBound = true
+      user.antiAbuseLegacy = true
     }
     store.version = 15
+  }
+
+  // v16: mark all pre-existing accounts as legacy so shared-Wi-Fi grandfathers
+  // are never retro-blocked when reclaiming IP/device from slipped multi-accounts.
+  // New registrations after this deploy keep antiAbuseLegacy=false (createUser).
+  if (Number(store.version) < 16) {
+    for (const user of Object.values(store.users || {})) {
+      if (!user || typeof user !== 'object') {
+        continue
+      }
+      if (user.antiAbuseLegacy == null) {
+        user.antiAbuseLegacy = true
+      }
+    }
+    store.version = 16
   }
 
   return store

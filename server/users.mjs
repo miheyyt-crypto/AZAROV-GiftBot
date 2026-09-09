@@ -174,6 +174,7 @@ export function createUser(store, telegramUser, options = {}) {
     // Production registration uses unbound:true then bind via enforceAntiAbuse.
     // Unit tests create bound users by default so ledger helpers keep working.
     antiAbuseBound: !unbound,
+    antiAbuseLegacy: false,
   }
 
   hydrateAntiAbuseUserFields(user, { isNew: unbound })

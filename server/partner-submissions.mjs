@@ -11,6 +11,7 @@ import {
   resolveSubmissionScreenshotPath,
   saveSubmissionScreenshot,
 } from './uploads.mjs'
+import { userCanUseAppEconomy } from './anti-abuse.mjs'
 import { addCoins, hasEvent, TX_TYPE } from './wallet.mjs'
 import {
   notifyPartnerSubmissionApprovedOnStore,
@@ -76,6 +77,16 @@ export function createPartnerSubmissionOnStore(store, userId, payload, file) {
   const taskId = String(payload?.taskId || '').trim()
   const requestId = String(payload?.requestId || '').trim()
   const partnerAccountIdRaw = payload?.partnerAccountId
+
+  const owner = store.users?.[String(userId)]
+  const economy = userCanUseAppEconomy(owner)
+  if (!economy.ok) {
+    return {
+      success: false,
+      code: economy.code || 'FORBIDDEN',
+      message: economy.message || 'Аккаунт недоступен.',
+    }
+  }
 
   if (!requestId) {
     return {
@@ -281,6 +292,15 @@ export function approvePartnerSubmissionOnStore(store, submissionId, reviewedBy,
   const user = store.users[String(submission.telegramUserId)]
   if (!user) {
     return { success: false, message: 'Пользователь не найден.' }
+  }
+
+  const economy = userCanUseAppEconomy(user)
+  if (!economy.ok) {
+    return {
+      success: false,
+      code: economy.code || 'FORBIDDEN',
+      message: economy.message || 'Аккаунт недоступен.',
+    }
   }
 
   if (found.previousTask && !(user.completedTasks || []).includes(found.previousTask.id)) {

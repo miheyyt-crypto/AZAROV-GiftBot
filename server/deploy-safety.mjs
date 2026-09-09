@@ -39,6 +39,14 @@ export function assertSingleReplicaDeployment({ isProduction = false } = {}) {
     note: 'File lock does not protect across replicas. Keep numReplicas=1 (railway.toml) and one Volume.',
   })
 
+  const webConcurrency = Number(process.env.WEB_CONCURRENCY || 0)
+  if (Number.isFinite(webConcurrency) && webConcurrency > 1 && !diag.allowMultiReplica) {
+    console.error(
+      `[deploy] WEB_CONCURRENCY=${webConcurrency} is incompatible with JSON file store. Keep a single process (or set AZAROV_ALLOW_MULTI_REPLICA=1 only for emergency diagnostics).`,
+    )
+    process.exit(1)
+  }
+
   if (diag.allowMultiReplica) {
     console.error(
       '[deploy] AZAROV_ALLOW_MULTI_REPLICA=1 — economy is NOT safe under horizontal scale. Use only for emergency diagnostics.',
