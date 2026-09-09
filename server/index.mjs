@@ -68,6 +68,19 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from './notifications.mjs'
+import {
+  createGiveaway,
+  deleteGiveaway,
+  finalizeGiveaway,
+  getGiveaway,
+  listAdminGiveaways,
+  listGiveaways,
+  notifyGiveawayTelegramJobs,
+  participateGiveaway,
+  parseGiveawayId,
+  startGiveawayScheduler,
+  updateGiveaway,
+} from './giveaways.mjs'
 import { getLeaderboard, getRecentCaseDrops } from './home.mjs'
 import {
   getAchievementsProgress,
@@ -1400,6 +1413,187 @@ app.post(
   }),
 )
 
+app.get(
+  '/api/giveaways',
+  withUser(async (_req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const result = listGiveaways({ userId: telegramUser.id })
+    if (result.telegramJobs?.length) {
+      void notifyGiveawayTelegramJobs(result.telegramJobs)
+    }
+    res.json({
+      success: true,
+      giveaways: result.giveaways || [],
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.get(
+  '/api/giveaways/:giveawayId',
+  withUser(async (req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const giveawayId = parseGiveawayId(req.params.giveawayId)
+    if (!giveawayId) {
+      res.status(400).json({
+        success: false,
+        code: 'INVALID_ID',
+        message: 'Некорректный id розыгрыша.',
+      })
+      return
+    }
+    const result = getGiveaway(giveawayId, { userId: telegramUser.id })
+    if (result.telegramJobs?.length) {
+      void notifyGiveawayTelegramJobs(result.telegramJobs)
+    }
+    if (!result.success) {
+      res.status(result.code === 'NOT_FOUND' ? 404 : 400).json({
+        success: false,
+        code: result.code,
+        message: result.message,
+        user: toPublicUser(getUser(telegramUser.id)),
+      })
+      return
+    }
+    res.json({
+      success: true,
+      giveaway: result.giveaway,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/giveaways/:giveawayId/participate',
+  withEconomicUser(async (req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const giveawayId = parseGiveawayId(req.params.giveawayId)
+    if (!giveawayId) {
+      res.status(400).json({
+        success: false,
+        code: 'INVALID_ID',
+        message: 'Некорректный id розыгрыша.',
+      })
+      return
+    }
+    const result = participateGiveaway(giveawayId, telegramUser.id)
+    if (result.telegramJobs?.length) {
+      void notifyGiveawayTelegramJobs(result.telegramJobs)
+    }
+    if (!result.success) {
+      const status =
+        result.code === 'NOT_FOUND'
+          ? 404
+          : result.code === 'ENDED' || result.code === 'NOT_ACTIVE' || result.code === 'NOT_STARTED'
+            ? 409
+            : 400
+      res.status(status).json({
+        success: false,
+        code: result.code,
+        message: result.message,
+        user: toPublicUser(getUser(telegramUser.id)),
+      })
+      return
+    }
+    res.json({
+      success: true,
+      participating: true,
+      alreadyParticipating: Boolean(result.alreadyParticipating),
+      participantsCount: result.participantsCount,
+      giveaway: result.giveaway,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.get(
+  '/api/admin/giveaways',
+  withAdmin(async (_req, res) => {
+    const result = listAdminGiveaways()
+    if (result.telegramJobs?.length) {
+      void notifyGiveawayTelegramJobs(result.telegramJobs)
+    }
+    res.json({ success: true, giveaways: result.giveaways })
+  }),
+)
+
+app.post(
+  '/api/admin/giveaways',
+  withAdmin(async (req, res) => {
+    const result = createGiveaway(req.body || {}, { createdBy: 'admin-key' })
+    res.status(result.success ? 201 : 400).json(result)
+  }),
+)
+
+app.patch(
+  '/api/admin/giveaways/:giveawayId',
+  withAdmin(async (req, res) => {
+    const giveawayId = parseGiveawayId(req.params.giveawayId)
+    if (!giveawayId) {
+      res.status(400).json({
+        success: false,
+        code: 'INVALID_ID',
+        message: 'Некорректный id розыгрыша.',
+      })
+      return
+    }
+    const result = updateGiveaway(giveawayId, req.body || {})
+    const status = result.success ? 200 : result.code === 'NOT_FOUND' ? 404 : 400
+    res.status(status).json(result)
+  }),
+)
+
+app.delete(
+  '/api/admin/giveaways/:giveawayId',
+  withAdmin(async (req, res) => {
+    const giveawayId = parseGiveawayId(req.params.giveawayId)
+    if (!giveawayId) {
+      res.status(400).json({
+        success: false,
+        code: 'INVALID_ID',
+        message: 'Некорректный id розыгрыша.',
+      })
+      return
+    }
+    const result = deleteGiveaway(giveawayId)
+    const status = result.success
+      ? 200
+      : result.code === 'NOT_FOUND'
+        ? 404
+        : result.code === 'HAS_PARTICIPANTS' || result.code === 'IMMUTABLE'
+          ? 409
+          : 400
+    res.status(status).json(result)
+  }),
+)
+
+app.post(
+  '/api/admin/giveaways/:giveawayId/complete',
+  withAdmin(async (req, res) => {
+    const giveawayId = parseGiveawayId(req.params.giveawayId)
+    if (!giveawayId) {
+      res.status(400).json({
+        success: false,
+        code: 'INVALID_ID',
+        message: 'Некорректный id розыгрыша.',
+      })
+      return
+    }
+    const result = finalizeGiveaway(giveawayId)
+    if (result.telegramJobs?.length) {
+      void notifyGiveawayTelegramJobs(result.telegramJobs)
+    }
+    const status = result.success ? 200 : result.code === 'NOT_FOUND' ? 404 : 400
+    res.status(status).json({
+      success: result.success,
+      alreadyCompleted: Boolean(result.alreadyCompleted),
+      giveaway: result.giveaway,
+      code: result.code,
+      message: result.message,
+    })
+  }),
+)
+
 app.post(
   '/api/cases/open',
   withEconomicUser(async (req, res, telegramUser) => {
@@ -1488,6 +1682,7 @@ export function startHttpServer() {
     if (canServeFrontend) {
       console.log(`[boot] Serving frontend from ${distDir}`)
     }
+    startGiveawayScheduler()
     void bootstrapKickFollowInfrastructure().then((result) => {
       if (result?.ok) {
         console.info('[kick-follow] webhook subscription ready', {

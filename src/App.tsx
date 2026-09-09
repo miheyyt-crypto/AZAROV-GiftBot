@@ -7,6 +7,7 @@ import { AppLayout } from '@/layouts/AppLayout'
 import { ROUTES } from '@/lib/constants'
 import {
   FriendsPage,
+  GiveawayDetailPage,
   GiveawaysPage,
   HomePage,
   NotFoundPage,
@@ -33,6 +34,7 @@ export default function App() {
           <Route path={ROUTES.operations} element={<OperationsHistoryPage />} />
           <Route path={ROUTES.orders} element={<OrdersPage />} />
           <Route path={ROUTES.giveaways} element={<GiveawaysPage />} />
+          <Route path={`${ROUTES.giveaways}/:giveawayId`} element={<GiveawayDetailPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

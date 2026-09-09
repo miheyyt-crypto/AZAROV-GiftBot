@@ -88,7 +88,7 @@ export function isPersistentStoreDir(dir = getDataDir()) {
 
 export function createEmptyStore() {
   return {
-    version: 7,
+    version: 8,
     users: {},
     referralIndex: {},
     referrals: {},
@@ -109,6 +109,8 @@ export function createEmptyStore() {
     kickLivestreamState: null,
     kickWatchStats: {},
     notifications: {},
+    giveaways: {},
+    giveawayParticipants: {},
   }
 }
 
@@ -135,6 +137,8 @@ function migrateStore(store) {
   }
   store.kickWatchStats = store.kickWatchStats || {}
   store.notifications = store.notifications || {}
+  store.giveaways = store.giveaways || {}
+  store.giveawayParticipants = store.giveawayParticipants || {}
 
   // One-shot upgrade: pending streak-freeze orders → inventory (strategy B).
   if (Number(store.version) < 5) {
@@ -152,6 +156,13 @@ function migrateStore(store) {
   if (Number(store.version) < 7) {
     store.notifications = store.notifications || {}
     store.version = 7
+  }
+
+  // Additive v8: giveaways + participants maps.
+  if (Number(store.version) < 8) {
+    store.giveaways = store.giveaways || {}
+    store.giveawayParticipants = store.giveawayParticipants || {}
+    store.version = 8
   }
 
   return store

@@ -1,16 +1,37 @@
-import { filterGiveawaysByStatus, MOCK_GIVEAWAYS } from '@/data/giveaways'
+import { MOCK_GIVEAWAYS } from '@/data/giveaways'
 import { getTelegramInitData } from '@/lib/telegram'
-import type { Giveaway, GiveawayStatus } from '@/types/giveaway'
-
-interface GiveawaysApiResponse {
-  success?: boolean
-  giveaways?: Giveaway[]
-  items?: Giveaway[]
-}
+import type {
+  Giveaway,
+  GiveawayResponse,
+  GiveawaysResponse,
+  GiveawayStatus,
+  ParticipateGiveawayResponse,
+} from '@/types/giveaway'
 
 function apiUrl(path: string): string {
   const base = import.meta.env.VITE_API_URL ?? ''
   return `${base}${path}`
+}
+
+async function requestJson<T>(path: string, init: RequestInit = {}): Promise<{ ok: boolean; status: number; data: T | null }> {
+  const initData = getTelegramInitData()
+  const headers = new Headers(init.headers)
+  headers.set('Content-Type', 'application/json')
+  if (initData) {
+    headers.set('Authorization', `tma ${initData}`)
+  }
+
+  try {
+    const response = await fetch(apiUrl(path), {
+      ...init,
+      headers,
+      credentials: 'include',
+    })
+    const data = (await response.json().catch(() => null)) as T | null
+    return { ok: response.ok, status: response.status, data }
+  } catch {
+    return { ok: false, status: 0, data: null }
+  }
 }
 
 function normalizeGiveaway(raw: Partial<Giveaway> & { id?: string | number }): Giveaway | null {
@@ -27,57 +48,116 @@ function normalizeGiveaway(raw: Partial<Giveaway> & { id?: string | number }): G
   return {
     id,
     title,
+    description: raw.description ? String(raw.description) : '',
     image,
     status,
+    prizeType: raw.prizeType === 'coins' || raw.prizeType === 'text' ? raw.prizeType : undefined,
+    prizeAmount: raw.prizeAmount == null ? null : Number(raw.prizeAmount),
+    prizeText: raw.prizeText == null ? null : String(raw.prizeText),
     winnersCount: Math.floor(winnersCount),
+    participantsCount: Math.max(0, Math.floor(Number(raw.participantsCount) || 0)),
+    startAt: raw.startAt ? String(raw.startAt) : undefined,
+    endAt: raw.endAt ? String(raw.endAt) : undefined,
     createdAt: raw.createdAt ? String(raw.createdAt) : undefined,
-    endedAt: raw.endedAt ? String(raw.endedAt) : undefined,
+    completedAt: raw.completedAt ? String(raw.completedAt) : null,
+    endedAt: raw.endedAt
+      ? String(raw.endedAt)
+      : raw.completedAt
+        ? String(raw.completedAt)
+        : raw.endAt
+          ? String(raw.endAt)
+          : undefined,
+    isParticipating: Boolean(raw.isParticipating),
+    winners: Array.isArray(raw.winners) ? raw.winners : undefined,
   }
 }
 
-async function requestGiveawaysApi(): Promise<Giveaway[] | null> {
-  const initData = getTelegramInitData()
-  const headers = new Headers({ 'Content-Type': 'application/json' })
-  if (initData) {
-    headers.set('Authorization', `tma ${initData}`)
+export async function getGiveaways(): Promise<GiveawaysResponse> {
+  const result = await requestJson<GiveawaysResponse>('/api/giveaways')
+  if (!result.data) {
+    return { success: false, code: 'NETWORK_ERROR', message: 'Не удалось загрузить розыгрыши.' }
+  }
+  if (!result.ok || !result.data.success || !Array.isArray(result.data.giveaways)) {
+    return {
+      success: false,
+      code: result.data.code || 'LOAD_FAILED',
+      message: result.data.message || 'Не удалось загрузить розыгрыши.',
+    }
   }
 
-  try {
-    const response = await fetch(apiUrl('/api/giveaways'), {
-      headers,
-      credentials: 'include',
-    })
+  return {
+    success: true,
+    giveaways: result.data.giveaways
+      .map((item) => normalizeGiveaway(item))
+      .filter((item): item is Giveaway => Boolean(item)),
+  }
+}
 
-    if (!response.ok) {
-      return null
+export async function getGiveaway(giveawayId: string): Promise<GiveawayResponse> {
+  const id = encodeURIComponent(String(giveawayId || '').trim())
+  const result = await requestJson<GiveawayResponse>(`/api/giveaways/${id}`)
+  if (!result.data) {
+    return { success: false, code: 'NETWORK_ERROR', message: 'Не удалось загрузить розыгрыш.' }
+  }
+  if (!result.ok || !result.data.success || !result.data.giveaway) {
+    return {
+      success: false,
+      code: result.data.code || 'LOAD_FAILED',
+      message: result.data.message || 'Розыгрыш не найден.',
     }
+  }
+  const giveaway = normalizeGiveaway(result.data.giveaway)
+  if (!giveaway) {
+    return { success: false, code: 'BAD_PAYLOAD', message: 'Некорректные данные розыгрыша.' }
+  }
+  return { success: true, giveaway }
+}
 
-    const payload = (await response.json().catch(() => null)) as GiveawaysApiResponse | null
-    const list = payload?.giveaways ?? payload?.items
-    if (!Array.isArray(list)) {
-      return null
+export async function participateGiveaway(giveawayId: string): Promise<ParticipateGiveawayResponse> {
+  const id = encodeURIComponent(String(giveawayId || '').trim())
+  const result = await requestJson<ParticipateGiveawayResponse>(`/api/giveaways/${id}/participate`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+  if (!result.data) {
+    return { success: false, code: 'NETWORK_ERROR', message: 'Не удалось записаться в розыгрыш.' }
+  }
+  if (!result.ok || !result.data.success) {
+    return {
+      success: false,
+      code: result.data.code || 'PARTICIPATE_FAILED',
+      message: result.data.message || 'Не удалось записаться в розыгрыш.',
     }
-
-    return list.map(normalizeGiveaway).filter((item): item is Giveaway => Boolean(item))
-  } catch {
-    return null
+  }
+  return {
+    success: true,
+    participating: true,
+    alreadyParticipating: Boolean(result.data.alreadyParticipating),
+    participantsCount: Number(result.data.participantsCount) || 0,
+    giveaway: result.data.giveaway ? normalizeGiveaway(result.data.giveaway) || undefined : undefined,
   }
 }
 
 /**
- * Load giveaways for Home / Giveaways page.
- * Prefers GET /api/giveaways when available; otherwise uses local mock catalog.
+ * Home / list loader. Production never silently falls back to mock data.
+ * Dev-only mock fallback keeps local UI workable without API.
  */
 export async function fetchGiveaways(): Promise<{ items: Giveaway[]; fromMock: boolean }> {
-  const remote = await requestGiveawaysApi()
-  if (remote) {
-    return { items: remote, fromMock: false }
+  const result = await getGiveaways()
+  if (result.success && Array.isArray(result.giveaways)) {
+    return { items: result.giveaways, fromMock: false }
   }
-  return { items: MOCK_GIVEAWAYS.map((item) => ({ ...item })), fromMock: true }
+
+  if (import.meta.env.DEV) {
+    console.warn('[giveaways] API unavailable in DEV — using mock catalog', result.message)
+    return { items: MOCK_GIVEAWAYS.map((item) => ({ ...item })), fromMock: true }
+  }
+
+  throw new Error(result.message || 'giveaways_load_failed')
 }
 
 export function getGiveawaysByTab(items: Giveaway[], status: GiveawayStatus): Giveaway[] {
-  return filterGiveawaysByStatus(items, status)
+  return items.filter((item) => item.status === status)
 }
 
 /** Russian plural for «N победитель(я/ей)». */
@@ -96,4 +176,52 @@ export function formatWinnersLabel(count: number): string {
     return `${n} победителя`
   }
   return `${n} победителей`
+}
+
+export function formatParticipantsLabel(count: number): string {
+  const n = Math.max(0, Math.floor(Number(count) || 0))
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod100 >= 11 && mod100 <= 14) {
+    return `${n} участников`
+  }
+  if (mod10 === 1) {
+    return `${n} участник`
+  }
+  if (mod10 >= 2 && mod10 <= 4) {
+    return `${n} участника`
+  }
+  return `${n} участников`
+}
+
+export function formatPrizeLabel(giveaway: Pick<Giveaway, 'prizeType' | 'prizeAmount' | 'prizeText'>): string {
+  if (giveaway.prizeType === 'coins') {
+    const amount = Number(giveaway.prizeAmount) || 0
+    return `${amount.toLocaleString('ru-RU')} монет`
+  }
+  if (giveaway.prizeType === 'text' && giveaway.prizeText) {
+    return String(giveaway.prizeText)
+  }
+  return 'Приз'
+}
+
+export function formatCountdown(endAt: string | undefined, nowMs = Date.now()): string {
+  if (!endAt) {
+    return '—'
+  }
+  const endMs = Date.parse(endAt)
+  if (!Number.isFinite(endMs)) {
+    return '—'
+  }
+  const diff = Math.max(0, endMs - nowMs)
+  const totalSec = Math.floor(diff / 1000)
+  const hours = Math.floor(totalSec / 3600)
+  const minutes = Math.floor((totalSec % 3600) / 60)
+  const seconds = totalSec % 60
+  const pad = (value: number) => String(value).padStart(2, '0')
+  if (hours >= 100) {
+    const days = Math.floor(hours / 24)
+    return `${days}д ${pad(hours % 24)}:${pad(minutes)}:${pad(seconds)}`
+  }
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
 }

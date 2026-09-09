@@ -41,6 +41,8 @@ export const OPERATION_REWARD_TYPES: ReadonlySet<string> = new Set([
   'referral_reward',
   'partner_reward',
   'case_reward',
+  'giveaway_reward',
+  'achievement_reward',
 ])
 
 /** Ledger amounts are already signed. */
@@ -60,6 +62,8 @@ export function iconForOperationType(type: string, income: boolean): string {
       return '💰'
     case 'task_reward':
       return '🎮'
+    case 'giveaway_reward':
+      return '🎁'
     case 'case_reward':
       return '🎉'
     case 'case_purchase':

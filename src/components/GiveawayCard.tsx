@@ -1,30 +1,19 @@
 import { Trophy } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 import { formatWinnersLabel } from '@/lib/giveaways'
+import { ROUTES } from '@/lib/constants'
 import type { Giveaway } from '@/types/giveaway'
 
 interface GiveawayCardProps {
   giveaway: Giveaway
-  onClick?: (giveaway: Giveaway) => void
 }
 
-export function GiveawayCard({ giveaway, onClick }: GiveawayCardProps) {
+export function GiveawayCard({ giveaway }: GiveawayCardProps) {
   return (
-    <article
+    <Link
+      to={`${ROUTES.giveaways}/${encodeURIComponent(giveaway.id)}`}
       className="interactive flex h-full flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#141218]/95"
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onClick={onClick ? () => onClick(giveaway) : undefined}
-      onKeyDown={
-        onClick
-          ? (event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                onClick(giveaway)
-              }
-            }
-          : undefined
-      }
     >
       <div className="aspect-[5/4] w-full shrink-0 overflow-hidden bg-black/40">
         <img
@@ -48,6 +37,6 @@ export function GiveawayCard({ giveaway, onClick }: GiveawayCardProps) {
           </span>
         </div>
       </div>
-    </article>
+    </Link>
   )
 }

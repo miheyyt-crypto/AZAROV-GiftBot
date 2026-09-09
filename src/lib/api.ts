@@ -247,3 +247,18 @@ export function fetchAuthMe(): Promise<ApiUserResponse> {
     method: 'GET',
   })
 }
+
+export function getGiveawaysRequest(): Promise<ApiUserResponse> {
+  return request('/api/giveaways', { method: 'GET' })
+}
+
+export function getGiveawayRequest(giveawayId: string): Promise<ApiUserResponse> {
+  return request(`/api/giveaways/${encodeURIComponent(giveawayId)}`, { method: 'GET' })
+}
+
+export function participateGiveawayRequest(giveawayId: string): Promise<ApiUserResponse> {
+  return request(`/api/giveaways/${encodeURIComponent(giveawayId)}/participate`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}

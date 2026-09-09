@@ -27,6 +27,7 @@ const TRANSACTION_LABELS = {
   shop_purchase: 'Покупка в магазине',
   streak_freeze: 'Заморозка стрика',
   achievement_reward: 'Награда за достижение',
+  giveaway_reward: 'Победа в розыгрыше',
   admin_adjustment: 'Корректировка баланса',
   refund: 'Возврат',
 }
@@ -38,6 +39,7 @@ const REWARD_TYPES = new Set([
   'partner_reward',
   'case_reward',
   'achievement_reward',
+  'giveaway_reward',
 ])
 
 function getCaseName(caseId) {

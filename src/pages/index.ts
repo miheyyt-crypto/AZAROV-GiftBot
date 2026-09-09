@@ -1,4 +1,5 @@
 export { Friends as FriendsPage } from './Friends'
+export { GiveawayDetail as GiveawayDetailPage } from './GiveawayDetail'
 export { Giveaways as GiveawaysPage } from './Giveaways'
 export { Home as HomePage } from './Home'
 export { NotFoundPage } from './NotFoundPage'
