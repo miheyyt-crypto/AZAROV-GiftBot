@@ -55,7 +55,7 @@ test('create community access request stores pending status', async () => {
       return createCommunityAccessRequestOnStore(
         store,
         { id: 501, username: 'secretuser', first_name: 'Ann' },
-        { username: 'secretuser', requestId: 'req-community-1' },
+        { welvuraId: '123456', username: 'secretuser', requestId: 'req-community-1' },
         { buffer: tinyPng(), mimetype: 'image/png', originalname: 'shot.png' },
       )
     })
@@ -63,6 +63,7 @@ test('create community access request stores pending status', async () => {
     assert.equal(created.request.status, 'pending')
     assert.equal(created.request.telegramId, 501)
     assert.equal(created.request.username, 'secretuser')
+    assert.equal(created.request.welvuraId, '123456')
     assert.ok(created.request.id)
   })
 })
@@ -74,13 +75,13 @@ test('duplicate pending community request is blocked', async () => {
       createCommunityAccessRequestOnStore(
         store,
         { id: 502, username: 'dupuser', first_name: 'Bob' },
-        { username: 'dupuser', requestId: 'req-a' },
+        { welvuraId: '111', username: 'dupuser', requestId: 'req-a' },
         { buffer: tinyPng(), mimetype: 'image/png', originalname: 'a.png' },
       )
       const second = createCommunityAccessRequestOnStore(
         store,
         { id: 502, username: 'dupuser', first_name: 'Bob' },
-        { username: 'dupuser', requestId: 'req-b' },
+        { welvuraId: '222', username: 'dupuser', requestId: 'req-b' },
         { buffer: tinyPng(), mimetype: 'image/png', originalname: 'b.png' },
       )
       assert.equal(second.success, false)
@@ -96,7 +97,7 @@ test('approve and reject community access update status', async () => {
       const created = createCommunityAccessRequestOnStore(
         store,
         { id: 503, username: 'winner', first_name: 'Cat' },
-        { username: 'winner', requestId: 'req-c' },
+        { welvuraId: '999001', username: 'winner', requestId: 'req-c' },
         { buffer: tinyPng(), mimetype: 'image/png', originalname: 'c.png' },
       )
       return created.request.id
@@ -118,7 +119,7 @@ test('approve and reject community access update status', async () => {
       return createCommunityAccessRequestOnStore(
         store,
         { id: 504, username: 'loser', first_name: 'Dan' },
-        { username: 'loser', requestId: 'req-d' },
+        { welvuraId: '999002', username: 'loser', requestId: 'req-d' },
         { buffer: tinyPng(), mimetype: 'image/png', originalname: 'd.png' },
       ).request.id
     })
@@ -136,7 +137,7 @@ test('approve and reject community access update status', async () => {
       createCommunityAccessRequestOnStore(
         store,
         { id: 504, username: 'loser', first_name: 'Dan' },
-        { username: 'loser', requestId: 'req-d2' },
+        { welvuraId: '999003', username: 'loser', requestId: 'req-d2' },
         { buffer: tinyPng(), mimetype: 'image/png', originalname: 'd2.png' },
       ),
     )
@@ -158,11 +159,39 @@ test('username validation rejects short names', async () => {
       return createCommunityAccessRequestOnStore(
         store,
         { id: 505, first_name: 'Eve' },
-        { username: 'ab', requestId: 'req-e' },
+        { welvuraId: '555', username: 'ab', requestId: 'req-e' },
         { buffer: tinyPng(), mimetype: 'image/png', originalname: 'e.png' },
       )
     })
     assert.equal(result.success, false)
     assert.equal(result.code, 'INVALID_USERNAME')
+  })
+})
+
+test('welvuraId is required and must be numeric', async () => {
+  await withTempStore(async () => {
+    const missing = withStore((store) => {
+      seedUser(store, 506)
+      return createCommunityAccessRequestOnStore(
+        store,
+        { id: 506, username: 'validuser', first_name: 'Fay' },
+        { username: 'validuser', requestId: 'req-f1' },
+        { buffer: tinyPng(), mimetype: 'image/png', originalname: 'f1.png' },
+      )
+    })
+    assert.equal(missing.success, false)
+    assert.equal(missing.code, 'INVALID_WELVURA_ID')
+
+    const bad = withStore((store) => {
+      seedUser(store, 507)
+      return createCommunityAccessRequestOnStore(
+        store,
+        { id: 507, username: 'validuser', first_name: 'Gus' },
+        { welvuraId: 'abc', username: 'validuser', requestId: 'req-f2' },
+        { buffer: tinyPng(), mimetype: 'image/png', originalname: 'f2.png' },
+      )
+    })
+    assert.equal(bad.success, false)
+    assert.equal(bad.code, 'INVALID_WELVURA_ID')
   })
 })

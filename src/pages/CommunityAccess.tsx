@@ -7,7 +7,9 @@ import {
   COMMUNITY_ACCESS_MAX_BYTES,
   getCommunityAccessStatus,
   isValidTelegramUsername,
+  isValidWelvuraId,
   normalizeUsernameInput,
+  normalizeWelvuraIdInput,
   submitCommunityAccessRequest,
 } from '@/lib/community-access'
 import { getTelegramUserUnsafe } from '@/lib/telegram'
@@ -47,6 +49,7 @@ export function CommunityAccess() {
   const [loading, setLoading] = useState(true)
   const [request, setRequest] = useState<CommunityAccessRequest | null>(null)
   const [forceNewForm, setForceNewForm] = useState(false)
+  const [welvuraId, setWelvuraId] = useState('')
   const [username, setUsername] = useState(sessionUsername)
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -119,7 +122,11 @@ export function CommunityAccess() {
   async function onSubmit() {
     setError('')
     if (!telegramId) {
-      setError('❌ Telegram ID не найден')
+      setError('❌ Войдите через Telegram, чтобы отправить заявку')
+      return
+    }
+    if (!isValidWelvuraId(welvuraId)) {
+      setError('❌ Укажите Welvura ID')
       return
     }
     if (!isValidTelegramUsername(username)) {
@@ -133,6 +140,7 @@ export function CommunityAccess() {
 
     setBusy(true)
     const result = await submitCommunityAccessRequest({
+      welvuraId: normalizeWelvuraIdInput(welvuraId),
       username: normalizeUsernameInput(username),
       requestId: crypto.randomUUID(),
       screenshot: file,
@@ -146,6 +154,7 @@ export function CommunityAccess() {
 
     setRequest(result.request)
     setForceNewForm(false)
+    setWelvuraId('')
     clearFile()
   }
 
@@ -191,7 +200,8 @@ export function CommunityAccess() {
           <p className="mt-2 text-sm text-text-secondary">{statusCopy(request).body}</p>
           <div className="mt-4 space-y-1.5 text-sm text-white/80">
             <p>
-              Telegram ID: <span className="font-mono text-white">{request.telegramId}</span>
+              Welvura ID:{' '}
+              <span className="font-mono text-white">{request.welvuraId || '—'}</span>
             </p>
             <p className="break-all">
               Username: {request.username ? `@${request.username}` : 'отсутствует'}
@@ -203,6 +213,7 @@ export function CommunityAccess() {
               onClick={() => {
                 setForceNewForm(true)
                 setError('')
+                setWelvuraId('')
                 clearFile()
               }}
               className="mt-4 flex w-full min-h-12 items-center justify-center rounded-[14px] bg-kick px-4 text-sm font-semibold text-white"
@@ -216,10 +227,19 @@ export function CommunityAccess() {
       {showForm ? (
         <section className="space-y-4 overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#141218]/95 p-4">
           <div>
-            <label className="text-xs font-semibold text-muted">Telegram ID</label>
-            <div className="mt-1.5 rounded-[14px] border border-white/[0.08] bg-black/30 px-3 py-3 font-mono text-sm text-white">
-              {telegramId || '—'}
-            </div>
+            <label htmlFor="community-welvura-id" className="text-xs font-semibold text-muted">
+              Welvura ID
+            </label>
+            <input
+              id="community-welvura-id"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={welvuraId}
+              onChange={(event) => setWelvuraId(event.target.value.replace(/[^\d]/g, ''))}
+              placeholder="Введите ID от Welvura"
+              className="mt-1.5 w-full rounded-[14px] border border-white/[0.08] bg-black/30 px-3 py-3 font-mono text-sm text-white placeholder:font-sans placeholder:text-muted focus:border-kick/50 focus:outline-none"
+            />
           </div>
 
           <div>

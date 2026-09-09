@@ -3,6 +3,7 @@ export type CommunityAccessStatus = 'pending' | 'approved' | 'rejected'
 export type CommunityAccessRequest = {
   id: string
   telegramId: number
+  welvuraId: string | null
   username: string | null
   firstName: string | null
   status: CommunityAccessStatus

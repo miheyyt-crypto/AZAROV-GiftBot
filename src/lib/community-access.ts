@@ -22,6 +22,15 @@ export function isValidTelegramUsername(raw: string): boolean {
   return /^[a-zA-Z0-9_]{5,32}$/.test(value)
 }
 
+export function normalizeWelvuraIdInput(raw: string): string {
+  return String(raw || '').trim()
+}
+
+export function isValidWelvuraId(raw: string): boolean {
+  const value = normalizeWelvuraIdInput(raw)
+  return /^\d{1,32}$/.test(value)
+}
+
 export async function getCommunityAccessStatus(): Promise<CommunityAccessStatusResponse> {
   const initData = getTelegramInitData()
   const headers = new Headers()
@@ -46,12 +55,14 @@ export async function getCommunityAccessStatus(): Promise<CommunityAccessStatusR
 }
 
 export async function submitCommunityAccessRequest(input: {
+  welvuraId: string
   username: string
   requestId: string
   screenshot: File
 }): Promise<CommunityAccessSubmitResponse> {
   const initData = getTelegramInitData()
   const body = new FormData()
+  body.set('welvuraId', input.welvuraId)
   body.set('username', input.username)
   body.set('requestId', input.requestId)
   body.set('screenshot', input.screenshot)

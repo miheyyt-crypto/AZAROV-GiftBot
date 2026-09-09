@@ -14,6 +14,7 @@ import {
 
 const USERNAME_RE = /^@?[a-zA-Z0-9_]{5,32}$/
 const REQUEST_ID_RE = /^[a-zA-Z0-9_-]{4,128}$/
+const WELVURA_ID_RE = /^\d{1,32}$/
 
 function ensureMaps(store) {
   store.communityAccessRequests = store.communityAccessRequests || {}
@@ -22,6 +23,23 @@ function ensureMaps(store) {
 
 function utcNow() {
   return new Date().toISOString()
+}
+
+function normalizeWelvuraId(raw) {
+  const value = String(raw || '').trim()
+  if (!value) {
+    return { ok: false, message: '❌ Укажите Welvura ID' }
+  }
+  if (value.length > 32) {
+    return { ok: false, message: '❌ Welvura ID слишком длинный' }
+  }
+  if (/[<>&"'`\\/]|script|javascript:/i.test(value)) {
+    return { ok: false, message: '❌ Некорректный Welvura ID' }
+  }
+  if (!WELVURA_ID_RE.test(value)) {
+    return { ok: false, message: '❌ Welvura ID должен содержать только цифры' }
+  }
+  return { ok: true, value }
 }
 
 function normalizeUsername(raw) {
@@ -37,7 +55,6 @@ function normalizeUsername(raw) {
       message: '❌ Username некорректный. Пример: @username',
     }
   }
-  // Telegram usernames: 5–32 chars, letters/digits/underscore
   if (value.length < 5 || value.length > 32 || !/^[a-zA-Z0-9_]+$/.test(value)) {
     return {
       ok: false,
@@ -51,6 +68,7 @@ function publicRequest(row, { includeAdmin = false } = {}) {
   const base = {
     id: row.id,
     telegramId: Number(row.telegramId),
+    welvuraId: row.welvuraId || null,
     username: row.username || null,
     firstName: row.firstName || null,
     status: row.status,
@@ -105,6 +123,11 @@ export function createCommunityAccessRequestOnStore(store, telegramUser, payload
       code: 'MISSING_REQUEST_ID',
       message: 'Нужен requestId для этой операции.',
     }
+  }
+
+  const welvuraCheck = normalizeWelvuraId(payload?.welvuraId)
+  if (!welvuraCheck.ok) {
+    return { success: false, code: 'INVALID_WELVURA_ID', message: welvuraCheck.message }
   }
 
   const usernameCheck = normalizeUsername(
@@ -200,6 +223,7 @@ export function createCommunityAccessRequestOnStore(store, telegramUser, payload
   const row = {
     id,
     telegramId: userId,
+    welvuraId: welvuraCheck.value,
     username: usernameCheck.value,
     firstName:
       String(telegramUser?.first_name || telegramUser?.firstName || user?.firstName || '').trim() ||

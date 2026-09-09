@@ -1031,6 +1031,7 @@ app.post(
     const result = createCommunityAccessRequest(
       telegramUser,
       {
+        welvuraId: req.body?.welvuraId,
         username: req.body?.username,
         requestId: req.body?.requestId,
       },

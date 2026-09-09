@@ -120,11 +120,13 @@ export function parseCommunityModerationCallback(data) {
 export function buildCommunityRequestAdminText(request) {
   const username = request.username ? `@${escapeHtml(request.username)}` : 'отсутствует'
   const firstName = request.firstName ? escapeHtml(request.firstName) : '—'
+  const welvuraId = request.welvuraId ? escapeHtml(request.welvuraId) : '—'
   return [
     '🔒 <b>Новая заявка на доступ</b>',
     '',
     `👤 Пользователь: ${username}`,
     `🪪 Имя: ${firstName}`,
+    `🎮 Welvura ID: <code>${welvuraId}</code>`,
     `🆔 Telegram ID: <code>${request.telegramId}</code>`,
     `📅 Дата: ${escapeHtml(formatDateRu(request.createdAt))}`,
     '',
@@ -223,7 +225,8 @@ function formatRequestBlock(request) {
     '',
     `👤 ${escapeHtml(username)}`,
     `🪪 ${escapeHtml(request.firstName || '—')}`,
-    `🆔 <code>${request.telegramId}</code>`,
+    `🎮 Welvura ID: <code>${escapeHtml(request.welvuraId || '—')}</code>`,
+    `🆔 TG: <code>${request.telegramId}</code>`,
     `📅 ${escapeHtml(formatDateRu(request.createdAt))}`,
     `Статус: ${statusLabel}`,
   ].join('\n')

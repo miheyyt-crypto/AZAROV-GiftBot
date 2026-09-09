@@ -35,23 +35,9 @@ export function CommunityAccessBanner() {
           </p>
         </div>
 
-        <div className="mt-auto pt-5">
-          <div className="flex gap-1.5" aria-hidden>
-            {Array.from({ length: 12 }, (_, index) => (
-              <span
-                key={index}
-                className={[
-                  'h-1 w-3 rounded-full',
-                  index === 0 ? 'bg-kick' : 'bg-white/20',
-                ].join(' ')}
-              />
-            ))}
-          </div>
-
-          <div className="mt-3 flex items-center gap-1 text-sm font-medium text-white">
-            Получить доступ
-            <ChevronRight size={16} aria-hidden />
-          </div>
+        <div className="mt-auto flex items-center gap-1 pt-5 text-sm font-medium text-white">
+          Получить доступ
+          <ChevronRight size={16} aria-hidden />
         </div>
       </div>
     </button>
