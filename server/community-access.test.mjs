@@ -149,7 +149,7 @@ test('approve and reject community access update status', async () => {
 
 test('createEmptyStore includes communityAccessRequests at v9', () => {
   const store = createEmptyStore()
-  assert.equal(store.version, 13)
+  assert.equal(store.version, 14)
   assert.ok(store.communityAccessRequests)
 })
 

@@ -34,6 +34,10 @@ import {
   startPromoCreateWizard,
 } from './promo-admin.mjs'
 import {
+  answerWithdrawalCallback,
+  handleWithdrawalModerationCallback,
+} from './withdrawal-admin.mjs'
+import {
   answerCommunityCallback,
   handleCommunityAdminCallback,
   handleCommunityAdminCommand,
@@ -305,6 +309,25 @@ export function createBot() {
   bot.action(/^shop:(approve|reject):([A-Z0-9]{4,32})$/i, onShopModerationAction)
   bot.action('shop:noop', async (ctx) => {
     await answerShopCallback(ctx)
+  })
+
+  async function onWithdrawalModerationAction(ctx) {
+    try {
+      const handled = await handleWithdrawalModerationCallback(ctx)
+      if (!handled) {
+        await answerWithdrawalCallback(ctx)
+      }
+    } catch (error) {
+      console.error('[Telegram Bot] withdrawal moderation action failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+      await answerWithdrawalCallback(ctx, 'Ошибка обработки', true)
+    }
+  }
+
+  bot.action(/^wd:(approve|reject):(WD-[A-Z0-9]{4,16})$/i, onWithdrawalModerationAction)
+  bot.action('wd:noop', async (ctx) => {
+    await answerWithdrawalCallback(ctx)
   })
 
   async function onCommunityAdminAction(ctx) {

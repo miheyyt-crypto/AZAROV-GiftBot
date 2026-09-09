@@ -21,6 +21,16 @@ export interface CaseOpeningItem {
   caseName: string
   rarity: string
   createdAt: string
+  /** AVAILABLE | PENDING_WITHDRAWAL | WITHDRAWN */
+  withdrawalStatus?: string
+  activeWithdrawalId?: string | null
+  canWithdraw?: boolean
+  withdrawal?: {
+    id: string
+    status: string
+    method?: string
+    createdAt?: string
+  } | null
 }
 
 /** Real inventory item (shop fulfillment after admin approve). */

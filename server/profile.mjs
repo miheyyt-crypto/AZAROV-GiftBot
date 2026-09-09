@@ -8,6 +8,7 @@ import {
 import { withStore, withStoreRead } from './store.mjs'
 import { getReferralsByReferrer } from './users.mjs'
 import { addCoins, hasEvent, listUserTransactions, normalizeTxType, TX_TYPE } from './wallet.mjs'
+import { resolveItemWithdrawalStatus } from './withdrawals.mjs'
 
 const CASE_NAMES = {
   poor: 'Нищий кейс',
@@ -172,16 +173,37 @@ export function getInventory(userId) {
       .slice()
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
-    const caseOpenings = openings.map((opening) => ({
-      id: opening.openingId,
-      name: opening.prize?.name || `${opening.rewardAmount}`,
-      amount: opening.rewardAmount,
-      currency: opening.rewardCurrency,
-      caseId: opening.caseId,
-      caseName: getCaseName(opening.caseId),
-      rarity: opening.prize?.rarity || 'common',
-      createdAt: opening.createdAt,
-    }))
+    const caseOpenings = openings.map((opening) => {
+      const withdrawalStatus = resolveItemWithdrawalStatus(opening, store)
+      const activeWithdrawalId = opening.activeWithdrawalId || null
+      const activeWithdrawal = activeWithdrawalId
+        ? store.withdrawals?.[activeWithdrawalId] || null
+        : null
+      return {
+        id: opening.openingId,
+        name: opening.prize?.name || `${opening.rewardAmount}`,
+        amount: opening.rewardAmount,
+        currency: opening.rewardCurrency,
+        caseId: opening.caseId,
+        caseName: getCaseName(opening.caseId),
+        rarity: opening.prize?.rarity || 'common',
+        createdAt: opening.createdAt,
+        withdrawalStatus,
+        activeWithdrawalId,
+        canWithdraw:
+          String(opening.rewardCurrency || '').toUpperCase() === 'RUB' &&
+          withdrawalStatus === 'AVAILABLE' &&
+          Math.floor(Number(opening.rewardAmount) || 0) >= 1,
+        withdrawal: activeWithdrawal
+          ? {
+              id: activeWithdrawal.id,
+              status: activeWithdrawal.status,
+              method: activeWithdrawal.method,
+              createdAt: activeWithdrawal.createdAt,
+            }
+          : null,
+      }
+    })
 
     const inventoryRows = listUserInventoryItems(store, userId)
     const availableFreezes = inventoryRows.filter(

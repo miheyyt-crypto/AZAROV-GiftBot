@@ -62,6 +62,8 @@ import {
   notifyAdminsNewShopOrder,
   notifyUserShopDecision,
 } from './shop-admin.mjs'
+import { notifyAdminsNewWithdrawal } from './withdrawal-admin.mjs'
+import { createWithdrawal } from './withdrawals.mjs'
 import { getBotRuntimeDiagnostics } from './bot.mjs'
 import { telegramApi } from './telegram-notify.mjs'
 import { listPartnersPublic } from './partners.mjs'
@@ -1986,6 +1988,28 @@ app.post(
   withEconomicUser(async (req, res, telegramUser) => {
     bootstrapUser(telegramUser, '')
     const result = redeemPromoCode(telegramUser.id, req.body?.code)
+    res.status(result.success ? 200 : 400).json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/withdrawals/create',
+  withEconomicUser(async (req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const result = createWithdrawal(telegramUser.id, {
+      itemId: req.body?.itemId,
+      walletAddress: req.body?.walletAddress,
+    })
+    if (result.success && result.withdrawal) {
+      void notifyAdminsNewWithdrawal(result.withdrawal).catch((error) => {
+        console.error('[withdrawal-admin] create notify failed', {
+          message: error instanceof Error ? error.message : 'unknown_error',
+        })
+      })
+    }
     res.status(result.success ? 200 : 400).json({
       ...result,
       user: toPublicUser(getUser(telegramUser.id)),
