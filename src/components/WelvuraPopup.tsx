@@ -154,10 +154,13 @@ export function WelvuraPopup() {
       {open
         ? createPortal(
             <div
-              className="fixed inset-0 z-[90] flex items-center justify-center px-4"
+              className="fixed inset-0 z-[90] flex items-center justify-center"
               style={{
-                paddingTop: 'max(3.25rem, calc(var(--safe-area-top, 0px) + 2.75rem))',
-                paddingBottom: 'max(1rem, var(--safe-area-bottom, 0px))',
+                // Symmetric insets keep banner+CTA optically centered; room for ✕ above.
+                paddingTop: 'max(3.25rem, calc(var(--safe-area-top, 0px) + 0.75rem))',
+                paddingBottom: 'max(3.25rem, calc(var(--safe-area-bottom, 0px) + 0.75rem))',
+                paddingLeft: 'max(1rem, env(safe-area-inset-left, 0px))',
+                paddingRight: 'max(1rem, env(safe-area-inset-right, 0px))',
               }}
               role="presentation"
             >
@@ -178,39 +181,42 @@ export function WelvuraPopup() {
               {/* Blocks interaction under popup; does not dismiss (only ✕ does). */}
               <div className="press-none absolute inset-0" aria-hidden />
 
+              {/*
+                Single content column: banner + CTA share identical width & center axis.
+                Close is absolute to the banner edge and does not affect layout/centering.
+              */}
               <div
                 role="dialog"
                 aria-modal="true"
                 aria-label="Welvura"
                 className={[
-                  'relative z-10 mx-auto w-full transition-[opacity,transform] duration-200 ease-out',
+                  'relative z-10 box-border flex w-full max-w-[20rem] flex-col items-stretch',
+                  'transition-[opacity,transform] duration-200 ease-out',
                   'motion-reduce:transition-none motion-reduce:transform-none',
                   visible ? 'scale-100 opacity-100' : 'scale-[0.96] opacity-0',
                 ].join(' ')}
                 style={{
-                  // Banner side fits viewport with room for close (above) + CTA (below).
                   width:
-                    'min(20rem, calc(100vw - 2rem), calc(100dvh - var(--safe-area-top, 0px) - var(--safe-area-bottom, 0px) - 8.5rem))',
+                    'min(20rem, 100%, calc(100dvh - var(--safe-area-top, 0px) - var(--safe-area-bottom, 0px) - 9.5rem))',
                 }}
               >
-                {/* Soft ambient green glow behind the unified block. */}
+                {/* Soft ambient green glow — centered on the column, not the viewport. */}
                 <div
                   className={[
-                    'pointer-events-none absolute top-[18%] left-1/2 -z-10 h-[70%] w-[118%] -translate-x-1/2 rounded-full',
-                    'bg-[radial-gradient(ellipse_at_center,rgb(83_204_24/28%),transparent_68%)] blur-2xl',
+                    'pointer-events-none absolute top-[22%] left-1/2 -z-10 h-[62%] w-[112%] -translate-x-1/2 rounded-full',
+                    'bg-[radial-gradient(ellipse_at_center,rgb(83_204_24/26%),transparent_68%)] blur-2xl',
                     'transition-opacity duration-200 motion-reduce:transition-none',
                     visible ? 'opacity-100' : 'opacity-0',
                   ].join(' ')}
                   aria-hidden
                 />
 
-                {/* Content wrapper: single horizontal center for banner + CTA. */}
-                <div className="relative mx-auto flex w-full flex-col items-stretch">
+                <div className="relative w-full shrink-0">
                   <button
                     type="button"
                     onClick={closePopupOnly}
                     className={[
-                      'press-none absolute right-0 bottom-full z-20 mb-[10px] flex size-10 items-center justify-center',
+                      'press-none absolute top-0 right-0 z-20 flex size-10 -translate-y-[calc(100%+10px)] items-center justify-center',
                       'rounded-full border border-white/18 bg-white/12 text-white/95',
                       'shadow-[0_6px_20px_rgb(0_0_0/35%)] backdrop-blur-md',
                       'transition-transform duration-150 ease-out',
@@ -226,7 +232,7 @@ export function WelvuraPopup() {
                     type="button"
                     onClick={openFirstWelvuraTask}
                     className={[
-                      'press-none relative aspect-square w-full overflow-hidden rounded-[26px] p-0',
+                      'press-none relative box-border aspect-square w-full overflow-hidden rounded-[26px] p-0',
                       'border border-white/12 bg-[#0d120e]',
                       'shadow-[0_22px_48px_rgb(0_0_0/55%),0_0_0_1px_rgb(83_204_24/12%),0_0_42px_rgb(83_204_24/16%)]',
                       'transition-transform duration-150 ease-out',
@@ -246,24 +252,24 @@ export function WelvuraPopup() {
                       aria-hidden
                     />
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={openFirstWelvuraTask}
-                    className={[
-                      'press-none mt-3 flex min-h-12 w-full items-center justify-center rounded-[16px]',
-                      'border border-[#7ae045]/35 bg-gradient-to-b from-[#6ad62a] to-[#3fad12]',
-                      'text-[15px] font-bold tracking-[0.06em] text-[#071205]',
-                      'shadow-[0_10px_28px_rgb(0_0_0/35%),0_0_24px_rgb(83_204_24/28%)]',
-                      'transition-[transform,box-shadow] duration-150 ease-out',
-                      'active:scale-[0.97] active:shadow-[0_6px_18px_rgb(0_0_0/30%),0_0_18px_rgb(83_204_24/35%)]',
-                      'motion-reduce:transition-none motion-reduce:active:scale-100',
-                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-kick-light/70',
-                    ].join(' ')}
-                  >
-                    ПРИВЯЗАТЬ
-                  </button>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={openFirstWelvuraTask}
+                  className={[
+                    'press-none mt-2.5 box-border flex min-h-12 w-full shrink-0 items-center justify-center rounded-[16px]',
+                    'border border-[#7ae045]/35 bg-gradient-to-b from-[#6ad62a] to-[#3fad12]',
+                    'text-[15px] font-bold tracking-[0.06em] text-[#071205]',
+                    'shadow-[0_10px_28px_rgb(0_0_0/35%),0_0_24px_rgb(83_204_24/28%)]',
+                    'transition-[transform,box-shadow] duration-150 ease-out',
+                    'active:scale-[0.97] active:shadow-[0_6px_18px_rgb(0_0_0/30%),0_0_18px_rgb(83_204_24/35%)]',
+                    'motion-reduce:transition-none motion-reduce:active:scale-100',
+                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-kick-light/70',
+                  ].join(' ')}
+                >
+                  ПРИВЯЗАТЬ
+                </button>
               </div>
             </div>,
             document.body,
