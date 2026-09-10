@@ -63,8 +63,42 @@ function formatAmount(amount) {
   return `${Number(amount || 0).toLocaleString('ru-RU')} ₽`
 }
 
+function formatGramWithdrawalAmount(withdrawal) {
+  const amount = Number(withdrawal.amountGram || 0)
+  const text = Number.isFinite(amount)
+    ? String(amount)
+        .replace(/(\.\d*?[1-9])0+$/, '$1')
+        .replace(/\.0+$/, '')
+    : '0'
+  return `${text} Gramm`
+}
+
+function isGramWithdrawal(withdrawal) {
+  return String(withdrawal?.currency || '').toUpperCase() === 'GRAM'
+}
+
 export function buildWithdrawalAdminText(withdrawal, user) {
   const username = user?.username ? `@${escapeHtml(user.username)}` : '—'
+  if (isGramWithdrawal(withdrawal)) {
+    return [
+      '━━━━━━━━━━━━━━━━',
+      '💠 <b>НОВЫЙ ВЫВОД GRAMM</b>',
+      '━━━━━━━━━━━━━━━━',
+      '',
+      `👤 Пользователь: ${username}`,
+      `🆔 ID: <code>${withdrawal.userId}</code>`,
+      '',
+      `💰 Сумма: <b>${escapeHtml(formatGramWithdrawalAmount(withdrawal))}</b>`,
+      '💎 Метод: Gramm',
+      '',
+      `📋 Заявка: <code>${escapeHtml(withdrawal.id)}</code>`,
+      '',
+      `🕐 ${escapeHtml(formatDateRu(withdrawal.createdAt))}`,
+      '',
+      '🟡 ОЖИДАЕТ ОБРАБОТКИ',
+      '━━━━━━━━━━━━━━━━',
+    ].join('\n')
+  }
   return [
     '━━━━━━━━━━━━━━━━',
     '💸 <b>НОВЫЙ ВЫВОД</b>',
@@ -165,26 +199,45 @@ export async function notifyUserWithdrawalDecision(withdrawal, options = {}) {
   }
 
   const status = String(withdrawal.status || '').toUpperCase()
-  const amount = formatAmount(withdrawal.amountRub)
+  const gram = isGramWithdrawal(withdrawal)
+  const amount = gram
+    ? formatGramWithdrawalAmount(withdrawal)
+    : formatAmount(withdrawal.amountRub)
   let text
 
   if (status === WITHDRAWAL_STATUS.PAID) {
-    text = [
-      '✅ <b>Выплата подтверждена!</b>',
-      '',
-      escapeHtml(amount),
-      'на баланс Welvura',
-      '',
-      `Заявка <code>${escapeHtml(withdrawal.id)}</code>`,
-    ].join('\n')
+    text = gram
+      ? [
+          '✅ <b>Выплата Gramm подтверждена!</b>',
+          '',
+          escapeHtml(amount),
+          '',
+          `Заявка <code>${escapeHtml(withdrawal.id)}</code>`,
+        ].join('\n')
+      : [
+          '✅ <b>Выплата подтверждена!</b>',
+          '',
+          escapeHtml(amount),
+          'на баланс Welvura',
+          '',
+          `Заявка <code>${escapeHtml(withdrawal.id)}</code>`,
+        ].join('\n')
   } else if (status === WITHDRAWAL_STATUS.REJECTED) {
-    text = [
-      '❌ <b>Заявка на вывод отклонена.</b>',
-      '',
-      `Заявка <code>${escapeHtml(withdrawal.id)}</code>`,
-      '',
-      'Предмет возвращён в инвентарь.',
-    ].join('\n')
+    text = gram
+      ? [
+          '❌ <b>Заявка на вывод Gramm отклонена.</b>',
+          '',
+          `Заявка <code>${escapeHtml(withdrawal.id)}</code>`,
+          '',
+          'Gramm возвращены на баланс.',
+        ].join('\n')
+      : [
+          '❌ <b>Заявка на вывод отклонена.</b>',
+          '',
+          `Заявка <code>${escapeHtml(withdrawal.id)}</code>`,
+          '',
+          'Предмет возвращён в инвентарь.',
+        ].join('\n')
   } else {
     return { ok: false, reason: 'not_final' }
   }
@@ -228,7 +281,9 @@ export async function handleWithdrawalModerationCallback(ctx) {
           '',
           `Заявка <code>${escapeHtml(w.id)}</code>`,
           '',
-          `Сумма: ${escapeHtml(formatAmount(w.amountRub))}`,
+          `Сумма: ${escapeHtml(
+            isGramWithdrawal(w) ? formatGramWithdrawalAmount(w) : formatAmount(w.amountRub),
+          )}`,
           '',
           'Статус: 🟢 Выплачено',
         ].join('\n'),

@@ -63,7 +63,7 @@ import {
   notifyUserShopDecision,
 } from './shop-admin.mjs'
 import { notifyAdminsNewWithdrawal } from './withdrawal-admin.mjs'
-import { createWithdrawal } from './withdrawals.mjs'
+import { createWithdrawal, createGramWithdrawal } from './withdrawals.mjs'
 import { getBotRuntimeDiagnostics } from './bot.mjs'
 import { telegramApi } from './telegram-notify.mjs'
 import { listPartnersPublic } from './partners.mjs'
@@ -2352,6 +2352,47 @@ app.post(
       })
     } catch (error) {
       console.error('[WITHDRAWAL]', error)
+      res.status(500).json({
+        success: false,
+        code: 'SERVER_ERROR',
+        message: 'Не удалось создать заявку. Попробуйте ещё раз.',
+        user: toPublicUser(getUser(telegramUser.id)),
+      })
+    }
+  }),
+)
+
+app.post(
+  '/api/withdrawals/gram/create',
+  withEconomicUser(async (req, res, telegramUser) => {
+    try {
+      bootstrapUser(telegramUser, '')
+      const result = createGramWithdrawal(telegramUser.id, {
+        amount: req.body?.amount,
+        requestId: req.body?.requestId,
+      })
+      if (!result.success) {
+        console.error('[GRAM_WITHDRAWAL]', {
+          stage: 'create_rejected',
+          code: result.code || null,
+          userId: telegramUser.id,
+        })
+      }
+      if (result.success && result.withdrawal) {
+        void notifyAdminsNewWithdrawal(result.withdrawal).catch((error) => {
+          console.error('[GRAM_WITHDRAWAL]', {
+            stage: 'admin_notify_failed',
+            withdrawalId: result.withdrawal?.id || null,
+            message: error instanceof Error ? error.message : 'unknown_error',
+          })
+        })
+      }
+      res.status(result.success ? 200 : 400).json({
+        ...result,
+        user: toPublicUser(getUser(telegramUser.id)),
+      })
+    } catch (error) {
+      console.error('[GRAM_WITHDRAWAL]', error)
       res.status(500).json({
         success: false,
         code: 'SERVER_ERROR',

@@ -6,6 +6,8 @@ import { AchievementsSheet } from '@/components/AchievementsSheet'
 import { useAuth } from '@/components/AuthGate'
 import { CoinBalance } from '@/components/BalanceCard'
 import { CoinHistorySheet } from '@/components/CoinHistorySheet'
+import { GrammBalanceCard } from '@/components/GrammBalanceCard'
+import { GrammSheet } from '@/components/GrammSheet'
 import { InventorySheet } from '@/components/InventorySheet'
 import { KickConnectCard } from '@/components/KickConnectCard'
 import { NotificationsSheet } from '@/components/NotificationsSheet'
@@ -18,9 +20,11 @@ import { UserAvatar } from '@/components/UserAvatar'
 import { XPProgress } from '@/components/XPProgress'
 import { getPartnerById } from '@/data/partners'
 import { useBalance } from '@/hooks/useBalance'
+import { useUserAccount } from '@/hooks/useUserAccount'
 import { useUserProfile } from '@/hooks/useUserProfile'
 import { isMiniAppAuthAvailable } from '@/lib/auth'
 import { ROUTES } from '@/lib/constants'
+import { roundGram } from '@/lib/gramm'
 import { fetchUnreadNotificationCount } from '@/lib/notifications'
 import { subscribeNotificationsUpdated } from '@/lib/notification-events'
 import type { ProfileMenuId } from '@/types/profile'
@@ -30,6 +34,7 @@ export function Profile() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { logout, isWebSession } = useAuth()
   const { formatted } = useBalance()
+  const account = useUserAccount()
   const {
     user,
     profile,
@@ -41,10 +46,12 @@ export function Profile() {
 
   const [activeSheet, setActiveSheet] = useState<ProfileMenuId | null>(null)
   const [showWelvuraModal, setShowWelvuraModal] = useState(false)
+  const [showGrammSheet, setShowGrammSheet] = useState(false)
   const [logoutBusy, setLogoutBusy] = useState(false)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [highlightKick, setHighlightKick] = useState(false)
 
+  const gramBalance = roundGram(account.gramBalance)
   const welvuraPartner = getPartnerById('dragonmoney')
   const showLogout = isWebSession || (!isMiniAppAuthAvailable() && !isDemo)
 
@@ -172,6 +179,10 @@ export function Profile() {
       </section>
 
       <div className="mb-4">
+        <GrammBalanceCard balance={gramBalance} onOpen={() => setShowGrammSheet(true)} />
+      </div>
+
+      <div className="mb-4">
         <PromoCodeCard />
       </div>
 
@@ -210,6 +221,10 @@ export function Profile() {
       {activeSheet === 'achievements' && (
         <AchievementsSheet onClose={() => setActiveSheet(null)} />
       )}
+
+      {showGrammSheet ? (
+        <GrammSheet balance={gramBalance} onClose={() => setShowGrammSheet(false)} />
+      ) : null}
 
       {showWelvuraModal && welvuraPartner && (
         <PartnerTaskModal

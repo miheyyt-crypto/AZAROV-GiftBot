@@ -3,6 +3,7 @@ import { createHash, randomInt } from 'node:crypto'
 import { withStore } from './store.mjs'
 import { toPublicUser } from './users.mjs'
 import { addCoins, TX_TYPE } from './wallet.mjs'
+import { roundGram } from './gram.mjs'
 import {
   DAILY_FREE_CASE_COOLDOWN_MS,
   DAILY_FREE_CASE_REWARDS,
@@ -65,10 +66,6 @@ function publicReward(reward) {
     rarityName: reward.rarityName,
     rarityChance: reward.rarityChance,
   }
-}
-
-function roundGram(value) {
-  return Math.round((Number(value) + Number.EPSILON) * 1e6) / 1e6
 }
 
 function grantDailyFreeCaseReward(store, user, reward, openingId) {

@@ -1,6 +1,16 @@
 import crypto from 'node:crypto'
 
 import {
+  canWithdrawGram,
+  formatGramAmount,
+  getGramBalance,
+  GRAM_CURRENCY,
+  GRAM_LABEL,
+  MIN_GRAM_WITHDRAWAL,
+  parseGramAmount,
+  roundGram,
+} from './gram.mjs'
+import {
   hasCompletedWelvuraTask1,
   WELVURA_REFERRAL_REQUIRED,
 } from './giveaway-eligibility.mjs'
@@ -105,13 +115,16 @@ export function publicWithdrawal(row) {
     return null
   }
   const welvuraId = row.welvuraId || row.walletAddress || ''
+  const currency = String(row.currency || 'RUB').toUpperCase()
+  const amountGram = currency === GRAM_CURRENCY ? roundGram(row.amountGram || 0) : 0
   return {
     id: row.id,
     userId: Number(row.userId),
     itemId: row.itemId,
     amountRub: Math.floor(Number(row.amountRub) || 0),
-    currency: row.currency || 'RUB',
-    method: row.method || WITHDRAWAL_METHOD,
+    amountGram,
+    currency,
+    method: row.method || (currency === GRAM_CURRENCY ? GRAM_CURRENCY : WITHDRAWAL_METHOD),
     welvuraId,
     // Legacy alias for older clients / admin helpers.
     walletAddress: welvuraId,
@@ -291,6 +304,164 @@ export function createWithdrawal(userId, input = {}) {
   return withStore((store) => createWithdrawalOnStore(store, userId, input))
 }
 
+/**
+ * Create a Gramm balance withdrawal request.
+ * Atomically checks min threshold + balance, then deducts from gramBalance.
+ */
+export function createGramWithdrawalOnStore(store, userId, input = {}) {
+  ensureMaps(store)
+
+  const uid = Number(userId)
+  if (!Number.isInteger(uid) || uid <= 0) {
+    return {
+      success: false,
+      code: 'UNAUTHORIZED',
+      message: 'Не удалось определить пользователя.',
+    }
+  }
+
+  const user = store.users[String(uid)]
+  if (!user) {
+    return {
+      success: false,
+      code: 'USER_NOT_FOUND',
+      message: 'Пользователь не найден.',
+    }
+  }
+
+  const requestId = String(input.requestId || '').trim()
+  if (requestId) {
+    const reqKey = `gram-withdrawal:request:${uid}:${requestId}`
+    const existing = store.events[reqKey]
+    if (existing?.done && existing.result) {
+      return {
+        ...existing.result,
+        alreadyProcessed: true,
+        user,
+      }
+    }
+  }
+
+  const balance = getGramBalance(user)
+  if (balance < MIN_GRAM_WITHDRAWAL) {
+    return {
+      success: false,
+      canWithdraw: false,
+      code: 'BELOW_MINIMUM',
+      message: `Минимальная сумма для вывода — ${MIN_GRAM_WITHDRAWAL} ${GRAM_LABEL}.`,
+      minAmount: MIN_GRAM_WITHDRAWAL,
+      gramBalance: balance,
+      missing: roundGram(MIN_GRAM_WITHDRAWAL - balance),
+    }
+  }
+
+  const amount =
+    input.amount == null || input.amount === ''
+      ? balance
+      : parseGramAmount(input.amount)
+
+  if (amount == null) {
+    return {
+      success: false,
+      code: 'INVALID_AMOUNT',
+      message: 'Укажи корректную сумму вывода.',
+      minAmount: MIN_GRAM_WITHDRAWAL,
+      gramBalance: balance,
+    }
+  }
+
+  if (amount < MIN_GRAM_WITHDRAWAL) {
+    return {
+      success: false,
+      canWithdraw: false,
+      code: 'BELOW_MINIMUM',
+      message: `Минимальная сумма для вывода — ${MIN_GRAM_WITHDRAWAL} ${GRAM_LABEL}.`,
+      minAmount: MIN_GRAM_WITHDRAWAL,
+      gramBalance: balance,
+      missing: roundGram(MIN_GRAM_WITHDRAWAL - amount),
+    }
+  }
+
+  if (!canWithdrawGram(balance, amount)) {
+    return {
+      success: false,
+      code: 'INSUFFICIENT_BALANCE',
+      message: 'Недостаточно Gramm на балансе.',
+      minAmount: MIN_GRAM_WITHDRAWAL,
+      gramBalance: balance,
+    }
+  }
+
+  const id = generateWithdrawalId(store)
+  const createdAt = utcNow()
+  const nextBalance = roundGram(balance - amount)
+  user.gramBalance = nextBalance
+
+  const withdrawal = {
+    id,
+    userId: uid,
+    itemId: `gram:${id}`,
+    amountRub: 0,
+    amountGram: amount,
+    currency: GRAM_CURRENCY,
+    method: GRAM_CURRENCY,
+    welvuraId: '',
+    walletAddress: '',
+    status: WITHDRAWAL_STATUS.PENDING,
+    itemName: `${formatGramAmount(amount)} ${GRAM_LABEL}`,
+    createdAt,
+    processedAt: null,
+    processedBy: null,
+    rejectionReason: null,
+  }
+
+  store.withdrawals[id] = withdrawal
+
+  const result = {
+    success: true,
+    code: 'OK',
+    message: 'Заявка на вывод Gramm отправлена',
+    withdrawal: publicWithdrawal(withdrawal),
+    gramBalance: nextBalance,
+  }
+
+  if (requestId) {
+    store.events[`gram-withdrawal:request:${uid}:${requestId}`] = {
+      done: true,
+      at: createdAt,
+      result: {
+        success: true,
+        code: 'OK',
+        message: result.message,
+        withdrawal: result.withdrawal,
+        gramBalance: nextBalance,
+      },
+    }
+  }
+
+  recordAudit(store, `gram-withdrawal:create:${id}`, {
+    type: 'GRAM_WITHDRAWAL_CREATED',
+    withdrawalId: id,
+    userId: uid,
+    amountGram: amount,
+    previousBalance: balance,
+    nextBalance,
+  })
+
+  return result
+}
+
+export function createGramWithdrawal(userId, input = {}) {
+  return withStore((store) => {
+    const result = createGramWithdrawalOnStore(store, userId, input)
+    const user = store.users[String(userId)]
+    return {
+      ...result,
+      user: user || null,
+    }
+  })
+}
+
 export function approveWithdrawalOnStore(store, withdrawalId, adminId) {
   ensureMaps(store)
   const id = String(withdrawalId || '').trim().toUpperCase()
@@ -415,15 +586,24 @@ export function rejectWithdrawalOnStore(store, withdrawalId, adminId, reason = '
   withdrawal.rejectionReason = String(reason || '').slice(0, 240) || null
 
   const user = store.users[String(withdrawal.userId)]
-  const opening = user ? findUserOpening(user, withdrawal.itemId) : null
-  if (user && opening) {
-    syncOpeningFields(store, user, opening, {
-      withdrawalStatus: ITEM_WITHDRAWAL_STATUS.AVAILABLE,
-      activeWithdrawalId: null,
-    })
-  } else if (store.caseOpenings[withdrawal.itemId]) {
-    store.caseOpenings[withdrawal.itemId].withdrawalStatus = ITEM_WITHDRAWAL_STATUS.AVAILABLE
-    store.caseOpenings[withdrawal.itemId].activeWithdrawalId = null
+  const currency = String(withdrawal.currency || 'RUB').toUpperCase()
+
+  if (currency === GRAM_CURRENCY && user) {
+    const refund = roundGram(withdrawal.amountGram || 0)
+    if (refund > 0) {
+      user.gramBalance = roundGram(getGramBalance(user) + refund)
+    }
+  } else {
+    const opening = user ? findUserOpening(user, withdrawal.itemId) : null
+    if (user && opening) {
+      syncOpeningFields(store, user, opening, {
+        withdrawalStatus: ITEM_WITHDRAWAL_STATUS.AVAILABLE,
+        activeWithdrawalId: null,
+      })
+    } else if (store.caseOpenings[withdrawal.itemId]) {
+      store.caseOpenings[withdrawal.itemId].withdrawalStatus = ITEM_WITHDRAWAL_STATUS.AVAILABLE
+      store.caseOpenings[withdrawal.itemId].activeWithdrawalId = null
+    }
   }
 
   recordAudit(store, rejectKey, {
@@ -432,6 +612,8 @@ export function rejectWithdrawalOnStore(store, withdrawalId, adminId, reason = '
     userId: withdrawal.userId,
     itemId: withdrawal.itemId,
     amountRub: withdrawal.amountRub,
+    amountGram: withdrawal.amountGram || 0,
+    currency,
     adminId: Number(adminId) || null,
   })
 
