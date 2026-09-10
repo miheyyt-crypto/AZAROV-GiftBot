@@ -10,7 +10,7 @@ import {
   resolveGiveawayEligibility,
   resolvePublicGiveawayEligibility,
 } from './giveaways.mjs'
-import { sendAdminRootMenu } from './community-admin.mjs'
+import { sendAdminRootMenu, buildAdminRootKeyboard } from './community-admin.mjs'
 import {
   answerTelegramCallback,
   isAdminTelegramUser,
@@ -330,12 +330,7 @@ export function buildGiveawayActiveKeyboard() {
 }
 
 export function buildGiveawayStartAdminKeyboard() {
-  return {
-    inline_keyboard: [
-      [{ text: '🎁 Розыгрыши', callback_data: 'gw:menu' }],
-      [{ text: '🔒 Заявки на доступ', callback_data: 'ca:menu' }],
-    ],
-  }
+  return buildAdminRootKeyboard()
 }
 
 function winnerDisplay(giveaway) {

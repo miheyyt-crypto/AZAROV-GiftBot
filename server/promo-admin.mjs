@@ -97,6 +97,37 @@ function confirmKeyboard() {
   ])
 }
 
+export function buildPromoAdminMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '➕ Создать промокод', callback_data: 'promo:create' }],
+      [{ text: '📋 Список промокодов', callback_data: 'promo:list' }],
+      [{ text: '◀️ Назад', callback_data: 'admin:root' }],
+    ],
+  }
+}
+
+async function replyPromoMenu(ctx) {
+  await ctx.reply(['🎟 <b>Промокоды</b>', '', 'Выберите действие:'].join('\n'), {
+    parse_mode: 'HTML',
+    reply_markup: buildPromoAdminMenuKeyboard(),
+  })
+}
+
+export async function sendPromoAdminMenu(ctx) {
+  const adminId = ctx.from?.id
+  if (!isAdminTelegramUser(adminId)) {
+    if (ctx.callbackQuery) {
+      await answerPromoCallback(ctx, '⛔ Недостаточно прав', true)
+    } else if (typeof ctx.reply === 'function') {
+      await ctx.reply('⛔ Недостаточно прав.')
+    }
+    return true
+  }
+  await replyPromoMenu(ctx)
+  return true
+}
+
 function formatConfirmText(draft) {
   return [
     'Проверьте данные:',
@@ -157,7 +188,7 @@ export async function handlePromoListCommand(ctx) {
 
   const list = listPromoCodes()
   if (!list.length) {
-    await ctx.reply('Промокодов пока нет.\nСоздайте через /промокод')
+    await ctx.reply('Промокодов пока нет.\nСоздайте через /admin → Промокоды или /промокод')
     return true
   }
 
@@ -294,6 +325,24 @@ export async function handlePromoAdminCallback(ctx) {
   const adminId = ctx.from?.id
   if (!isAdminTelegramUser(adminId)) {
     await answerPromoCallback(ctx, 'Нет доступа', true)
+    return true
+  }
+
+  if (data === 'promo:menu') {
+    await answerPromoCallback(ctx)
+    await replyPromoMenu(ctx)
+    return true
+  }
+
+  if (data === 'promo:create') {
+    await answerPromoCallback(ctx)
+    await startPromoCreateWizard(ctx)
+    return true
+  }
+
+  if (data === 'promo:list') {
+    await answerPromoCallback(ctx)
+    await handlePromoListCommand(ctx)
     return true
   }
 
