@@ -598,15 +598,34 @@ async function startBotInner(options = {}) {
             throw new Error('deleteWebhook_timeout')
           }),
         ])
-        await Promise.race([
-          bot.launch({
-            dropPendingUpdates: attempt === 1,
-            allowedUpdates: ['message', 'callback_query'],
-          }),
-          sleep(20_000).then(() => {
-            throw new Error('bot_launch_timeout')
-          }),
-        ])
+
+        // IMPORTANT (Telegraf 4): `launch()` awaits the polling loop and only
+        // resolves when the bot stops. Never `await launch()` for readiness —
+        // that hung production and our timeout was killing a healthy poller.
+        let earlyLaunchError = null
+        const launchPromise = bot.launch({
+          dropPendingUpdates: attempt === 1,
+          allowedUpdates: ['message', 'callback_query'],
+        })
+        launchPromise.catch((error) => {
+          earlyLaunchError = error
+          const message = error instanceof Error ? error.message : 'unknown_error'
+          botRuntimeDiagnostics = {
+            ...botRuntimeDiagnostics,
+            pollingActive: false,
+            lastLaunchError: message.slice(0, 200),
+          }
+          console.error('[Telegram Bot] Long polling crashed', {
+            message: message.slice(0, 200),
+          })
+        })
+
+        // Brief window to surface immediate 409 Conflict from a dying replica.
+        await sleep(2000)
+        if (earlyLaunchError) {
+          throw earlyLaunchError
+        }
+
         launched = true
         break
       } catch (error) {
