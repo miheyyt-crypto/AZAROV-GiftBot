@@ -175,7 +175,7 @@ test('approve vs reject race — only one wins', () => {
       return true
     })
     const bought = purchaseProduct(804, 'cash-5000', 'req-cash-804', {
-      usdtAddress: 'TXeL2z1bnqSbdLVz1HR7oFVxrQVsoP2MTy',
+      welvuraId: '12345678',
     })
     const orderId = bought.order.orderId
 

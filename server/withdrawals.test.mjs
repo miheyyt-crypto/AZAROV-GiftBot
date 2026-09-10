@@ -9,13 +9,13 @@ import { createUser } from './users.mjs'
 import {
   approveWithdrawalOnStore,
   createWithdrawalOnStore,
-  isValidTronAddress,
+  isValidWelvuraId,
   ITEM_WITHDRAWAL_STATUS,
   rejectWithdrawalOnStore,
   WITHDRAWAL_STATUS,
 } from './withdrawals.mjs'
 
-const VALID_TRON = 'TABCDEFGHJKLMNPQRSTUVWXYZabcdefghi'
+const VALID_WELVURA = '12345678'
 
 function withTempStore(run) {
   const dir = mkdtempSync(path.join(tmpdir(), 'azarov-wd-'))
@@ -79,12 +79,13 @@ function seedCoinOpening(store, user, openingId) {
   return opening
 }
 
-test('TRON address validation', () => {
-  assert.equal(isValidTronAddress(VALID_TRON), true)
-  assert.equal(isValidTronAddress(` ${VALID_TRON} `), true)
-  assert.equal(isValidTronAddress('T short'), false)
-  assert.equal(isValidTronAddress('A' + VALID_TRON.slice(1)), false)
-  assert.equal(isValidTronAddress('TXYZ abcdefghijklmnopqrstuvwxyz123456'), false)
+test('Welvura ID validation', () => {
+  assert.equal(isValidWelvuraId(VALID_WELVURA), true)
+  assert.equal(isValidWelvuraId(` ${VALID_WELVURA} `), true)
+  assert.equal(isValidWelvuraId('12ab34'), true)
+  assert.equal(isValidWelvuraId('abc'), false)
+  assert.equal(isValidWelvuraId(''), false)
+  assert.equal(isValidWelvuraId('1'.repeat(33)), false)
 })
 
 test('rub item can withdraw; coins cannot; amount from item', async () => {
@@ -95,19 +96,20 @@ test('rub item can withdraw; coins cannot; amount from item', async () => {
       seedCoinOpening(store, user, 'open-coin-1')
       return createWithdrawalOnStore(store, 101, {
         itemId: 'open-rub-1',
-        walletAddress: VALID_TRON,
+        welvuraId: VALID_WELVURA,
         amountRub: 999999,
       })
     })
     assert.equal(created.success, true)
     assert.equal(created.withdrawal.amountRub, 5000)
-    assert.equal(created.withdrawal.method, 'USDT_TRC20')
+    assert.equal(created.withdrawal.method, 'WELVURA')
+    assert.equal(created.withdrawal.welvuraId, VALID_WELVURA)
     assert.equal(created.withdrawal.status, WITHDRAWAL_STATUS.PENDING)
 
     const coins = withStore((store) =>
       createWithdrawalOnStore(store, 101, {
         itemId: 'open-coin-1',
-        walletAddress: VALID_TRON,
+        welvuraId: VALID_WELVURA,
       }),
     )
     assert.equal(coins.success, false)
@@ -115,7 +117,7 @@ test('rub item can withdraw; coins cannot; amount from item', async () => {
   })
 })
 
-test('cannot withdraw foreign item or invalid wallet', async () => {
+test('cannot withdraw foreign item or invalid Welvura ID', async () => {
   await withTempStore(async () => {
     withStore((store) => {
       const owner = seedUser(store, 201)
@@ -126,20 +128,20 @@ test('cannot withdraw foreign item or invalid wallet', async () => {
     const foreign = withStore((store) =>
       createWithdrawalOnStore(store, 202, {
         itemId: 'open-own',
-        walletAddress: VALID_TRON,
+        welvuraId: VALID_WELVURA,
       }),
     )
     assert.equal(foreign.success, false)
     assert.equal(foreign.code, 'ITEM_NOT_FOUND')
 
-    const badWallet = withStore((store) =>
+    const badId = withStore((store) =>
       createWithdrawalOnStore(store, 201, {
         itemId: 'open-own',
-        walletAddress: 'not-a-tron-address',
+        welvuraId: 'not-a-welvura-id',
       }),
     )
-    assert.equal(badWallet.success, false)
-    assert.equal(badWallet.code, 'INVALID_WALLET')
+    assert.equal(badId.success, false)
+    assert.equal(badId.code, 'INVALID_WELVURA_ID')
   })
 })
 
@@ -150,7 +152,7 @@ test('pending blocks double request; reject restores; approve withdraws', async 
       seedRubOpening(store, user, { openingId: 'open-once', amount: 1000 })
       return createWithdrawalOnStore(store, 301, {
         itemId: 'open-once',
-        walletAddress: VALID_TRON,
+        welvuraId: VALID_WELVURA,
       })
     })
     assert.equal(first.success, true)
@@ -159,11 +161,11 @@ test('pending blocks double request; reject restores; approve withdraws', async 
     const double = withStore((store) => {
       const a = createWithdrawalOnStore(store, 301, {
         itemId: 'open-once',
-        walletAddress: VALID_TRON,
+        welvuraId: VALID_WELVURA,
       })
       const b = createWithdrawalOnStore(store, 301, {
         itemId: 'open-once',
-        walletAddress: VALID_TRON,
+        welvuraId: VALID_WELVURA,
       })
       return { a, b, opening: store.users['301'].caseOpenings[0] }
     })
@@ -179,33 +181,49 @@ test('pending blocks double request; reject restores; approve withdraws', async 
     const restored = withStore((store) => store.users['301'].caseOpenings[0].withdrawalStatus)
     assert.equal(restored, ITEM_WITHDRAWAL_STATUS.AVAILABLE)
 
-    const afterReject = withStore((store) =>
+    const second = withStore((store) =>
       createWithdrawalOnStore(store, 301, {
         itemId: 'open-once',
-        walletAddress: VALID_TRON,
+        welvuraId: VALID_WELVURA,
       }),
     )
-    assert.equal(afterReject.success, true)
+    assert.equal(second.success, true)
 
-    const paidId = afterReject.withdrawal.id
-    const approved = withStore((store) => approveWithdrawalOnStore(store, paidId, 999))
+    const approved = withStore((store) => approveWithdrawalOnStore(store, second.withdrawal.id, 999))
     assert.equal(approved.success, true)
     assert.equal(approved.withdrawal.status, WITHDRAWAL_STATUS.PAID)
 
-    const afterPay = withStore((store) => ({
-      opening: store.users['301'].caseOpenings[0],
+    const finalStatus = withStore((store) => store.users['301'].caseOpenings[0].withdrawalStatus)
+    assert.equal(finalStatus, ITEM_WITHDRAWAL_STATUS.WITHDRAWN)
+
+    const afterPaid = withStore((store) => ({
       again: createWithdrawalOnStore(store, 301, {
         itemId: 'open-once',
-        walletAddress: VALID_TRON,
+        welvuraId: VALID_WELVURA,
       }),
-      doubleApprove: approveWithdrawalOnStore(store, paidId, 999),
-      rejectPaid: rejectWithdrawalOnStore(store, paidId, 999),
+      doubleApprove: approveWithdrawalOnStore(store, second.withdrawal.id, 999),
+      rejectPaid: rejectWithdrawalOnStore(store, second.withdrawal.id, 999),
     }))
-    assert.equal(afterPay.opening.withdrawalStatus, ITEM_WITHDRAWAL_STATUS.WITHDRAWN)
-    assert.equal(afterPay.again.success, false)
-    assert.equal(afterPay.again.code, 'ALREADY_WITHDRAWN')
-    assert.equal(afterPay.doubleApprove.alreadyProcessed, true)
-    assert.equal(afterPay.rejectPaid.success, false)
+    assert.equal(afterPaid.again.success, false)
+    assert.equal(afterPaid.again.code, 'ALREADY_WITHDRAWN')
+    assert.equal(afterPaid.doubleApprove.alreadyProcessed, true)
+    assert.equal(afterPaid.rejectPaid.success, false)
+  })
+})
+
+test('accepts legacy walletAddress field as Welvura ID', async () => {
+  await withTempStore(async () => {
+    const created = withStore((store) => {
+      const user = seedUser(store, 401)
+      seedRubOpening(store, user, { openingId: 'open-legacy', amount: 500 })
+      return createWithdrawalOnStore(store, 401, {
+        itemId: 'open-legacy',
+        walletAddress: VALID_WELVURA,
+      })
+    })
+    assert.equal(created.success, true)
+    assert.equal(created.withdrawal.welvuraId, VALID_WELVURA)
+    assert.equal(created.withdrawal.walletAddress, VALID_WELVURA)
   })
 })
 
@@ -222,7 +240,7 @@ test('withdrawal persists across store reload', async () => {
       seedRubOpening(store, user, { openingId: 'open-persist', amount: 2000 })
       return createWithdrawalOnStore(store, 501, {
         itemId: 'open-persist',
-        walletAddress: VALID_TRON,
+        welvuraId: VALID_WELVURA,
       })
     })
     assert.equal(created.success, true)
@@ -235,11 +253,13 @@ test('withdrawal persists across store reload', async () => {
         amount: wd?.amountRub,
         itemStatus: opening.withdrawalStatus,
         activeId: opening.activeWithdrawalId,
+        welvuraId: wd?.welvuraId,
       }
     })
     assert.equal(reloaded.status, WITHDRAWAL_STATUS.PENDING)
     assert.equal(reloaded.amount, 2000)
     assert.equal(reloaded.itemStatus, ITEM_WITHDRAWAL_STATUS.PENDING_WITHDRAWAL)
     assert.equal(reloaded.activeId, created.withdrawal.id)
+    assert.equal(reloaded.welvuraId, VALID_WELVURA)
   })
 })

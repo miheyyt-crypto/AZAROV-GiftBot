@@ -56,16 +56,16 @@ export const products: ShopProduct[] = [
     category: 'money',
     image: cashImage,
     imageClassName: 'object-contain scale-[0.9]',
-    description: 'Выплата 5 000 ₽ на USDT TRC20.',
+    description: 'Выплата 5 000 ₽ на баланс Welvura.',
     detailText:
-      'Выплата производится на вашу криптовалюту, например USDT по сети TRC20. Обработка до 24 часов.',
+      'Выплата 5 000 ₽ на твой баланс Welvura. Укажи ID аккаунта Welvura — администратор зачислит средства после проверки. Обработка до 24 часов.',
     infoText: ADMIN_ORDERS_INFO,
     checkoutField: {
-      type: 'usdt_trc20',
-      label: 'Твой USDT-кошелёк, сеть TRC20',
-      placeholder: 'TXeL2z1bnqSbdLVz1HR7oFVxrQVsoP2MTy',
-      hint:
-        'Только USDT в сети TRC-20 (Tron) — адрес начинается с T. Суммы указаны в рублях, отправляем эквивалент в USDT по курсу на момент выплаты. Адрес из другой сети — деньги уйдут в никуда и вернуть их нельзя, так что проверь символ в символ.',
+      type: 'welvura_id',
+      label: 'ID аккаунта Welvura',
+      placeholder: 'Например: 12345678',
+      hint: 'Только цифры — ID из твоего аккаунта Welvura.',
+      maxLength: 32,
     },
     available: true,
   },

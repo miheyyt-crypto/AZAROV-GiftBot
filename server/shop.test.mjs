@@ -24,3 +24,9 @@ test('welvura-balance-200 requires welvuraId metadata', () => {
   assert.equal(product.requireWelvuraId, true)
   assert.equal(product.name, '200 рублей на Welvura')
 })
+
+test('cash-5000 requires welvuraId metadata', () => {
+  const product = findProduct('cash-5000')
+  assert.ok(product)
+  assert.equal(product.requireWelvuraId, true)
+})

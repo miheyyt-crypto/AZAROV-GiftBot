@@ -1,5 +1,6 @@
 import { applyAccountSnapshot } from '@/lib/account'
 import { hydrateBalanceFromAccount } from '@/lib/balance'
+import { isValidWelvuraId, normalizeWelvuraIdInput } from '@/lib/community-access'
 import { getTelegramInitData } from '@/lib/telegram'
 import { mapRemoteAccount } from '@/lib/session'
 import type { UserAccount } from '@/types/account'
@@ -11,6 +12,8 @@ export type WithdrawalRecord = {
   amountRub: number
   currency: string
   method: string
+  welvuraId?: string
+  /** Legacy alias — same value as welvuraId. */
   walletAddress: string
   status: string
   itemName?: string | null
@@ -25,11 +28,11 @@ export type WithdrawalCreateResponse = {
   user?: UserAccount
 }
 
-/** Same TRON / TRC20 check as shop USDT field. */
-export const TRON_ADDRESS_RE = /^T[1-9A-HJ-NP-Za-km-z]{33}$/
+export { isValidWelvuraId, normalizeWelvuraIdInput }
 
+/** @deprecated use isValidWelvuraId */
 export function isValidTronAddress(value: string): boolean {
-  return TRON_ADDRESS_RE.test(String(value || '').trim())
+  return isValidWelvuraId(value)
 }
 
 export function withdrawalErrorMessage(code?: string, fallback?: string): string {
@@ -43,7 +46,8 @@ export function withdrawalErrorMessage(code?: string, fallback?: string): string
     case 'NOT_WITHDRAWABLE':
       return 'Этот предмет нельзя вывести.'
     case 'INVALID_WALLET':
-      return 'Проверьте адрес USDT TRC20.'
+    case 'INVALID_WELVURA_ID':
+      return 'Укажи свой ID аккаунта Welvura (только цифры).'
     default:
       return fallback || 'Не удалось создать заявку. Попробуйте ещё раз.'
   }
@@ -64,7 +68,7 @@ function applyRemoteUser(user: UserAccount | undefined): void {
 
 export async function createWithdrawalRequest(input: {
   itemId: string
-  walletAddress: string
+  welvuraId: string
 }): Promise<WithdrawalCreateResponse> {
   const initData = getTelegramInitData()
   const headers = new Headers()
@@ -73,6 +77,8 @@ export async function createWithdrawalRequest(input: {
     headers.set('Authorization', `tma ${initData}`)
   }
 
+  const welvuraId = normalizeWelvuraIdInput(input.welvuraId).replace(/\D/g, '')
+
   try {
     const response = await fetch(apiUrl('/api/withdrawals/create'), {
       method: 'POST',
@@ -80,7 +86,7 @@ export async function createWithdrawalRequest(input: {
       credentials: 'include',
       body: JSON.stringify({
         itemId: input.itemId,
-        walletAddress: String(input.walletAddress || '').trim(),
+        welvuraId,
       }),
     })
 

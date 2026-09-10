@@ -15,10 +15,9 @@ export const ITEM_WITHDRAWAL_STATUS = {
   WITHDRAWN: 'WITHDRAWN',
 }
 
-export const WITHDRAWAL_METHOD = 'USDT_TRC20'
+export const WITHDRAWAL_METHOD = 'WELVURA'
 
-/** Base58Check TRON address: T + 33 base58 chars (no 0,O,I,l). */
-export const TRON_ADDRESS_RE = /^T[1-9A-HJ-NP-Za-km-z]{33}$/
+const WELVURA_ID_RE = /^\d{1,32}$/
 
 function ensureMaps(store) {
   store.withdrawals = store.withdrawals || {}
@@ -27,12 +26,19 @@ function ensureMaps(store) {
   store.users = store.users || {}
 }
 
-export function normalizeTronAddress(raw) {
-  return String(raw || '').trim()
+export function normalizeWelvuraId(raw) {
+  return String(raw || '')
+    .trim()
+    .replace(/\D/g, '')
 }
 
+export function isValidWelvuraId(raw) {
+  return WELVURA_ID_RE.test(normalizeWelvuraId(raw))
+}
+
+/** @deprecated kept for older imports; use isValidWelvuraId */
 export function isValidTronAddress(raw) {
-  return TRON_ADDRESS_RE.test(normalizeTronAddress(raw))
+  return isValidWelvuraId(raw)
 }
 
 export function generateWithdrawalId(store) {
@@ -57,7 +63,6 @@ function syncOpeningFields(store, user, opening, patch) {
   if (stored) {
     Object.assign(stored, patch)
   }
-  // Keep user list entry in sync (same object reference usually, but be safe).
   const list = Array.isArray(user.caseOpenings) ? user.caseOpenings : []
   const idx = list.findIndex((row) => String(row.openingId) === String(opening.openingId))
   if (idx >= 0 && list[idx] !== opening) {
@@ -95,6 +100,7 @@ export function publicWithdrawal(row) {
   if (!row) {
     return null
   }
+  const welvuraId = row.welvuraId || row.walletAddress || ''
   return {
     id: row.id,
     userId: Number(row.userId),
@@ -102,7 +108,9 @@ export function publicWithdrawal(row) {
     amountRub: Math.floor(Number(row.amountRub) || 0),
     currency: row.currency || 'RUB',
     method: row.method || WITHDRAWAL_METHOD,
-    walletAddress: row.walletAddress,
+    welvuraId,
+    // Legacy alias for older clients / admin helpers.
+    walletAddress: welvuraId,
     status: row.status,
     itemName: row.itemName || null,
     createdAt: row.createdAt || null,
@@ -120,7 +128,7 @@ function recordAudit(store, eventId, payload) {
 }
 
 /**
- * Create a USDT TRC20 withdrawal request for a RUB case prize (openingId = itemId).
+ * Create a Welvura-ID withdrawal request for a RUB case prize (openingId = itemId).
  * Amount always comes from the opening — never from the client.
  */
 export function createWithdrawalOnStore(store, userId, input = {}) {
@@ -136,7 +144,6 @@ export function createWithdrawalOnStore(store, userId, input = {}) {
     }
   }
 
-  // Intentionally ignore any client-provided amount / userId / status.
   const itemId = String(input.itemId || '').trim()
   if (!itemId) {
     console.error('[WITHDRAWAL]', { stage: 'missing_item_id', userId: uid })
@@ -147,14 +154,13 @@ export function createWithdrawalOnStore(store, userId, input = {}) {
     }
   }
 
-  const walletRaw = String(input.walletAddress || '')
-  const walletAddress = normalizeTronAddress(walletRaw)
-  if (!isValidTronAddress(walletRaw)) {
-    console.error('[WITHDRAWAL]', { stage: 'invalid_wallet', userId: uid, itemId })
+  const welvuraId = normalizeWelvuraId(input.welvuraId || input.walletAddress || '')
+  if (!isValidWelvuraId(welvuraId)) {
+    console.error('[WITHDRAWAL]', { stage: 'invalid_welvura_id', userId: uid, itemId })
     return {
       success: false,
-      code: 'INVALID_WALLET',
-      message: 'Проверьте адрес USDT TRC20.',
+      code: 'INVALID_WELVURA_ID',
+      message: 'Укажи свой ID аккаунта Welvura (только цифры).',
     }
   }
 
@@ -210,7 +216,6 @@ export function createWithdrawalOnStore(store, userId, input = {}) {
     }
   }
 
-  // Race / unique active withdrawal per item.
   const existingPending = Object.values(store.withdrawals).find(
     (row) =>
       String(row.itemId) === itemId &&
@@ -236,7 +241,8 @@ export function createWithdrawalOnStore(store, userId, input = {}) {
     amountRub,
     currency: 'RUB',
     method: WITHDRAWAL_METHOD,
-    walletAddress,
+    welvuraId,
+    walletAddress: welvuraId,
     status: WITHDRAWAL_STATUS.PENDING,
     itemName,
     createdAt,
@@ -258,6 +264,7 @@ export function createWithdrawalOnStore(store, userId, input = {}) {
     itemId,
     amountRub,
     method: WITHDRAWAL_METHOD,
+    welvuraId,
   })
 
   return {

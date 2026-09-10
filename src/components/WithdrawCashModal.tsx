@@ -6,7 +6,8 @@ import { useNotifications } from '@/components/NotificationProvider'
 import { formatBalance } from '@/lib/balance'
 import {
   createWithdrawalRequest,
-  isValidTronAddress,
+  isValidWelvuraId,
+  normalizeWelvuraIdInput,
   withdrawalErrorMessage,
   type WithdrawalRecord,
 } from '@/lib/withdrawals'
@@ -20,7 +21,7 @@ type WithdrawCashModalProps = {
 
 export function WithdrawCashModal({ item, onClose, onSuccess }: WithdrawCashModalProps) {
   const { showNotification } = useNotifications()
-  const [wallet, setWallet] = useState('')
+  const [welvuraId, setWelvuraId] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [visible, setVisible] = useState(false)
@@ -37,9 +38,9 @@ export function WithdrawCashModal({ item, onClose, onSuccess }: WithdrawCashModa
   }, [])
 
   async function handleSubmit() {
-    const trimmed = wallet.trim()
-    if (!isValidTronAddress(trimmed)) {
-      setError('Проверьте адрес USDT TRC20.')
+    const trimmed = normalizeWelvuraIdInput(welvuraId).replace(/\D/g, '')
+    if (!isValidWelvuraId(trimmed)) {
+      setError('Укажи свой ID аккаунта Welvura (только цифры).')
       return
     }
 
@@ -48,7 +49,7 @@ export function WithdrawCashModal({ item, onClose, onSuccess }: WithdrawCashModa
     try {
       const result = await createWithdrawalRequest({
         itemId: item.id,
-        walletAddress: trimmed,
+        welvuraId: trimmed,
       })
       if (!result.success || !result.withdrawal) {
         const message = withdrawalErrorMessage(result.code, result.message)
@@ -111,7 +112,7 @@ export function WithdrawCashModal({ item, onClose, onSuccess }: WithdrawCashModa
             <h2 id="withdraw-modal-title" className="text-lg font-bold text-white">
               Вывод средств
             </h2>
-            <p className="mt-1 text-sm text-muted">Заявка на выплату USDT TRC20</p>
+            <p className="mt-1 text-sm text-muted">Заявка на выплату на баланс Welvura</p>
           </div>
           <button
             type="button"
@@ -129,21 +130,23 @@ export function WithdrawCashModal({ item, onClose, onSuccess }: WithdrawCashModa
             {formatBalance(item.amount)} ₽
           </p>
           <p className="mt-3 text-[11px] uppercase tracking-[0.14em] text-muted">Способ вывода</p>
-          <p className="mt-1 text-sm font-semibold text-white">USDT TRC20</p>
+          <p className="mt-1 text-sm font-semibold text-white">Баланс Welvura</p>
         </div>
 
         <label className="mt-4 block">
-          <span className="mb-2 block text-sm font-medium text-[#b8b4c4]">Адрес USDT TRC20</span>
+          <span className="mb-2 block text-sm font-medium text-[#b8b4c4]">ID аккаунта Welvura</span>
           <input
             type="text"
-            value={wallet}
+            inputMode="numeric"
+            value={welvuraId}
             disabled={busy}
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}
-            placeholder="Введите адрес кошелька"
+            placeholder="Например: 12345678"
+            maxLength={32}
             onChange={(event) => {
-              setWallet(event.target.value)
+              setWelvuraId(event.target.value.replace(/\D/g, '').slice(0, 32))
               setError(null)
             }}
             className={[
@@ -157,14 +160,14 @@ export function WithdrawCashModal({ item, onClose, onSuccess }: WithdrawCashModa
 
         <p className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-[#8b8699]">
           <Info size={14} className="mt-0.5 shrink-0 text-kick" />
-          Проверьте адрес перед отправкой. Вывод осуществляется в сети TRC20.
+          Только цифры — ID из твоего аккаунта Welvura. Администратор зачислит средства после проверки.
         </p>
 
         {error ? <p className="mt-3 text-sm text-pink">{error}</p> : null}
 
         <button
           type="button"
-          disabled={busy || !wallet.trim()}
+          disabled={busy || !welvuraId.trim()}
           onClick={() => void handleSubmit()}
           className={[
             'mt-5 flex min-h-12 w-full items-center justify-center rounded-full',

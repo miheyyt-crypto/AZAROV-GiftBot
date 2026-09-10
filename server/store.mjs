@@ -238,7 +238,7 @@ function migrateStore(store) {
     store.version = 13
   }
 
-  // Additive v14: cash prize withdrawals (USDT TRC20).
+  // Additive v14: cash prize withdrawals (Welvura ID).
   if (Number(store.version) < 14) {
     store.withdrawals = store.withdrawals || {}
     store.version = 14

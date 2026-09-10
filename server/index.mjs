@@ -2303,7 +2303,7 @@ app.post(
       bootstrapUser(telegramUser, '')
       const result = createWithdrawal(telegramUser.id, {
         itemId: req.body?.itemId,
-        walletAddress: req.body?.walletAddress,
+        welvuraId: req.body?.welvuraId ?? req.body?.walletAddress,
       })
       if (!result.success) {
         console.error('[WITHDRAWAL]', {
