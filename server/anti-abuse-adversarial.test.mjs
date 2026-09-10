@@ -23,6 +23,9 @@ import { clientIp } from './rate-limit.mjs'
 import { bootstrapUser, processReferral } from './referrals.mjs'
 import { createEmptyStore, withStore } from './store.mjs'
 import { createUser } from './users.mjs'
+
+// Tests exercise twin blocking — keep enabled regardless of production default.
+process.env.ANTI_ABUSE_MULTI_ACCOUNT = '1'
 import { addCoins, TX_TYPE } from './wallet.mjs'
 
 const DEVICE_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'

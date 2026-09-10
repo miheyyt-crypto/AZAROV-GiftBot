@@ -151,6 +151,7 @@ import {
 import { clientIp, createRateLimiter, sessionAuthLimiter, timingSafeEqualString, trustProxyHop } from './rate-limit.mjs'
 import {
   buildAdminAntiAbuseView,
+  isMultiAccountCheckEnabled,
   MULTI_ACCOUNT_USER_MESSAGE,
   parseDeviceId,
   userCanUseAppEconomy,
@@ -216,6 +217,12 @@ function assertProductionEnv() {
 assertProductionEnv()
 assertPersistentStoreOrExit()
 assertSingleReplicaDeployment({ isProduction: IS_PRODUCTION })
+
+if (!isMultiAccountCheckEnabled()) {
+  console.warn(
+    '[boot] Multi-account / twin check DISABLED — set ANTI_ABUSE_MULTI_ACCOUNT=1 to re-enable',
+  )
+}
 
 const adminAuthLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 })
 const partnerUploadLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 10 })
@@ -495,7 +502,7 @@ function withUser(handler) {
       })
       return
     }
-    if (stored.antiAbuseBound === false) {
+    if (stored.antiAbuseBound === false && isMultiAccountCheckEnabled()) {
       res.status(403).json({
         success: false,
         code: 'REGISTRATION_INCOMPLETE',

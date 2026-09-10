@@ -28,6 +28,9 @@ import {
   getUnsafeMultiProcessHints,
 } from './deploy-safety.mjs'
 
+// Tests exercise twin blocking — keep enabled regardless of production default.
+process.env.ANTI_ABUSE_MULTI_ACCOUNT = '1'
+
 const DEVICE_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const DEVICE_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const BOT_TOKEN = '123456:HTTP_AUTH_SECURITY_TOKEN'

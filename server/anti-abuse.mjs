@@ -4,6 +4,18 @@ import net from 'node:net'
 export const BLOCK_REASON_MULTI_ACCOUNT = 'MULTI_ACCOUNT'
 export const AUDIT_MULTI_ACCOUNT_BLOCK = 'MULTI_ACCOUNT_BLOCK'
 
+/**
+ * Temporary kill switch for multi-account / twin blocking.
+ * Default: OFF (was incorrectly blocking many new users).
+ * Re-enable with Railway env: ANTI_ABUSE_MULTI_ACCOUNT=1
+ */
+export function isMultiAccountCheckEnabled() {
+  const raw = String(process.env.ANTI_ABUSE_MULTI_ACCOUNT || '')
+    .trim()
+    .toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
+
 const DEVICE_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -228,6 +240,18 @@ export function peekRegistrationSignals(store, { deviceId: rawDeviceId = null, i
   const deviceId = parseDeviceId(rawDeviceId)
   const ipHash = hashIp(ip)
 
+  if (!isMultiAccountCheckEnabled()) {
+    return {
+      ok: true,
+      code: null,
+      message: null,
+      deviceId,
+      ipHash,
+      deviceUsed: false,
+      ipUsed: false,
+    }
+  }
+
   if (!deviceId) {
     return {
       ok: false,
@@ -393,6 +417,19 @@ export function enforceAntiAbuseOnStore(store, user, { deviceId: rawDeviceId = n
   const ipHash = hashIp(ip)
   const now = new Date().toISOString()
 
+  // Twin check temporarily disabled — allow registration without device/IP exclusivity.
+  if (!isMultiAccountCheckEnabled()) {
+    user.antiAbuseBound = true
+    tryClaimFreeAssociations(store, user, deviceId, ipHash)
+    return {
+      allowed: true,
+      code: null,
+      message: null,
+      deviceUsed: false,
+      ipUsed: false,
+    }
+  }
+
   if (user.antiAbuseBound) {
     tryClaimFreeAssociations(store, user, deviceId, ipHash)
     return {
@@ -479,7 +516,7 @@ export function userCanEarnRewards(user) {
       message: 'Аккаунт заблокирован',
     }
   }
-  if (user.antiAbuseBound === false) {
+  if (isMultiAccountCheckEnabled() && user.antiAbuseBound === false) {
     return {
       ok: false,
       code: 'REGISTRATION_INCOMPLETE',

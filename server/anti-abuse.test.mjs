@@ -19,6 +19,9 @@ import { applyReferralAndReward } from './referrals.mjs'
 const DEVICE_A = '11111111-1111-4111-8111-111111111111'
 const DEVICE_B = '22222222-2222-4222-8222-222222222222'
 
+// Tests exercise twin blocking — keep enabled regardless of production default.
+process.env.ANTI_ABUSE_MULTI_ACCOUNT = '1'
+
 function newUnbound(store, id, name = 'U') {
   return createUser(store, { id, first_name: name }, { unbound: true })
 }

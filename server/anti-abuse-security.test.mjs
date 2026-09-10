@@ -20,6 +20,9 @@ import { addCoins, TX_TYPE } from './wallet.mjs'
 const DEVICE_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const DEVICE_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
+// Tests exercise twin blocking — keep enabled regardless of production default.
+process.env.ANTI_ABUSE_MULTI_ACCOUNT = '1'
+
 async function withTempStore(fn) {
   const dir = mkdtempSync(path.join(tmpdir(), 'azarov-sec-audit-'))
   const prevDir = process.env.AZAROV_STORE_DIR
