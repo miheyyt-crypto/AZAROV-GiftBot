@@ -19,36 +19,39 @@ if (!process.env.NODE_ENV) {
 const { startHttpServer } = await import('./index.mjs')
 const { startBot, getBotRuntimeDiagnostics } = await import('./bot.mjs')
 
+// Always bind HTTP first so Railway healthchecks / Mini App stay up even if
+ // Telegraf getUpdates is stuck on a 409 Conflict from a previous replica.
 const server = startHttpServer()
-let bot = await startBot({ registerSignals: false })
+let bot = null
 
-if (!bot) {
-  // Common during Railway rolling restart: previous replica still holds getUpdates (409).
-  // Keep API up and retry bot attach until polling is active.
-  console.error(
-    '[production] Telegram Bot did not start yet — retrying in background (API stays up).',
-    getBotRuntimeDiagnostics(),
-  )
-  const retryMs = 5_000
-  const retryTimer = setInterval(() => {
-    void (async () => {
-      if (bot || getBotRuntimeDiagnostics().pollingActive) {
-        clearInterval(retryTimer)
-        return
-      }
-      console.info('[production] retrying Telegram Bot launch…')
-      bot = await startBot({ registerSignals: false })
-      if (bot) {
-        console.info('[production] Telegram Bot attached after retry (long polling).')
-        clearInterval(retryTimer)
-      }
-    })()
-  }, retryMs)
-  if (typeof retryTimer.unref === 'function') {
-    retryTimer.unref()
+async function attachBot(reason = 'boot') {
+  if (bot || getBotRuntimeDiagnostics().pollingActive) {
+    return bot
   }
-} else {
-  console.info('[production] Telegram Bot attached to this process (long polling).')
+  console.info('[production] attaching Telegram Bot…', { reason })
+  const next = await startBot({ registerSignals: false })
+  if (next) {
+    bot = next
+    console.info('[production] Telegram Bot attached (long polling).', {
+      username: getBotRuntimeDiagnostics().botUsername,
+    })
+  } else {
+    console.error('[production] Telegram Bot attach failed', getBotRuntimeDiagnostics())
+  }
+  return bot
+}
+
+// Never block API boot on bot.launch — previous replica can hold getUpdates for minutes.
+void attachBot('initial')
+
+const retryTimer = setInterval(() => {
+  if (bot || getBotRuntimeDiagnostics().pollingActive) {
+    return
+  }
+  void attachBot('retry')
+}, 5_000)
+if (typeof retryTimer.unref === 'function') {
+  retryTimer.unref()
 }
 
 let shuttingDown = false

@@ -537,8 +537,18 @@ export async function startBot(options = {}) {
 
   try {
     // Probe Telegram before launch (safe fields only — no token).
-    const me = await bot.telegram.getMe()
-    const webhookInfo = await bot.telegram.getWebhookInfo()
+    const me = await Promise.race([
+      bot.telegram.getMe(),
+      sleep(12_000).then(() => {
+        throw new Error('getMe_timeout')
+      }),
+    ])
+    const webhookInfo = await Promise.race([
+      bot.telegram.getWebhookInfo(),
+      sleep(12_000).then(() => {
+        throw new Error('getWebhookInfo_timeout')
+      }),
+    ])
     botRuntimeDiagnostics = {
       ...botRuntimeDiagnostics,
       botId: me?.id ?? null,
@@ -569,22 +579,42 @@ export async function startBot(options = {}) {
       try {
         // Clear webhook explicitly; Railway rolling deploys often leave a sibling
         // getUpdates session → 409 Conflict unless we retry after the old process dies.
-        await bot.telegram.deleteWebhook({ drop_pending_updates: attempt === 1 })
-        await bot.launch({
-          dropPendingUpdates: attempt === 1,
-          allowedUpdates: ['message', 'callback_query'],
-        })
+        await Promise.race([
+          bot.telegram.deleteWebhook({ drop_pending_updates: attempt === 1 }),
+          sleep(12_000).then(() => {
+            throw new Error('deleteWebhook_timeout')
+          }),
+        ])
+        await Promise.race([
+          bot.launch({
+            dropPendingUpdates: attempt === 1,
+            allowedUpdates: ['message', 'callback_query'],
+          }),
+          sleep(20_000).then(() => {
+            throw new Error('bot_launch_timeout')
+          }),
+        ])
         launched = true
         break
       } catch (error) {
         lastErrorMessage = error instanceof Error ? error.message : 'unknown_error'
-        const conflict = /409|Conflict|getUpdates/i.test(lastErrorMessage)
+        const conflict = /409|Conflict|getUpdates|timeout/i.test(lastErrorMessage)
+        botRuntimeDiagnostics = {
+          ...botRuntimeDiagnostics,
+          pollingActive: false,
+          lastLaunchError: lastErrorMessage.slice(0, 200),
+        }
         console.warn('[Telegram Bot] launch attempt failed', {
           attempt,
           maxAttempts,
           conflict,
           message: lastErrorMessage.slice(0, 200),
         })
+        try {
+          bot.stop('launch_retry')
+        } catch {
+          // ignore — may not have started
+        }
         if (!conflict || attempt === maxAttempts) {
           throw error
         }
