@@ -477,17 +477,28 @@ export function getReferralMe(store, user) {
 
 export function bootstrapUser(telegramUser, startParam, options = {}) {
   return withStore((store) => {
-    migrateAllReferrals(store)
+    // When true, skip rewriting store.json if nothing durable changed (warm Mini App session).
+    const trackDirty = options.skipUnchangedPersist === true
+    const beforeSnap = trackDirty ? JSON.stringify(store) : null
+
     store.pendingBotStarts = store.pendingBotStarts || {}
 
     const telegramId = Number(telegramUser.id)
     let user = store.users[String(telegramId)] || null
     const isNew = !user
 
+    const finish = (payload) => {
+      if (!trackDirty) {
+        return payload
+      }
+      const dirty = JSON.stringify(store) !== beforeSnap
+      return { ...payload, __storeDirty: dirty, storePersisted: dirty }
+    }
+
     // NEW telegram: never create a durable economic user before anti-abuse ALLOW.
     if (isNew) {
       if (!options.enforceAntiAbuse) {
-        return {
+        return finish({
           referral: { applied: false, reason: 'registration_incomplete' },
           activation: { rewarded: false, reason: 'registration_incomplete' },
           me: emptyReferralMe(),
@@ -499,7 +510,8 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
           },
           blocked: false,
           created: false,
-        }
+          user: null,
+        })
       }
 
       const peek = peekRegistrationSignals(store, {
@@ -515,7 +527,7 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
           deviceUsed: peek.deviceUsed,
           ipUsed: peek.ipUsed,
         })
-        return {
+        return finish({
           referral: { applied: false, reason: 'blocked' },
           activation: { rewarded: false, reason: 'blocked' },
           me: getReferralMe(store, user),
@@ -529,11 +541,12 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
           },
           blocked: true,
           created: true,
-        }
+          user,
+        })
       }
 
       if (!peek.ok) {
-        return {
+        return finish({
           referral: { applied: false, reason: 'registration_incomplete' },
           activation: { rewarded: false, reason: 'registration_incomplete' },
           me: emptyReferralMe(),
@@ -545,7 +558,8 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
           },
           blocked: false,
           created: false,
-        }
+          user: null,
+        })
       }
 
       user = createUser(store, telegramUser, { unbound: true })
@@ -554,7 +568,7 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
         ip: options.ip,
       })
       if (!bound.allowed) {
-        return {
+        return finish({
           referral: { applied: false, reason: 'blocked' },
           activation: { rewarded: false, reason: 'blocked' },
           me: getReferralMe(store, user),
@@ -562,14 +576,21 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
           antiAbuse: bound,
           blocked: Boolean(user.blocked),
           created: true,
-        }
+          user,
+        })
       }
     } else {
       user = ensureUser(store, telegramUser)
     }
 
+    // Legacy invitedUsers → referrals for THIS user only (never scan all users on session).
+    // ensureUser already hydrates; call again only for freshly created users.
+    if (isNew) {
+      hydrateUserReferrals(store, user)
+    }
+
     if (user.blocked) {
-      return {
+      return finish({
         referral: { applied: false, reason: 'blocked' },
         activation: { rewarded: false, reason: 'blocked' },
         me: getReferralMe(store, user),
@@ -581,14 +602,15 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
         },
         blocked: true,
         created: false,
-      }
+        user,
+      })
     }
 
     let antiAbuse = { allowed: true, code: null, message: null }
 
     if (!user.antiAbuseBound) {
       if (!options.enforceAntiAbuse) {
-        return {
+        return finish({
           referral: { applied: false, reason: 'registration_incomplete' },
           activation: { rewarded: false, reason: 'registration_incomplete' },
           me: getReferralMe(store, user),
@@ -600,14 +622,15 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
           },
           blocked: false,
           created: false,
-        }
+          user,
+        })
       }
       antiAbuse = enforceAntiAbuseOnStore(store, user, {
         deviceId: options.deviceId,
         ip: options.ip,
       })
       if (!antiAbuse.allowed) {
-        return {
+        return finish({
           referral: {
             applied: false,
             reason:
@@ -623,7 +646,8 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
           antiAbuse,
           blocked: Boolean(user.blocked),
           created: false,
-        }
+          user,
+        })
       }
     } else if (options.deviceId || options.ip) {
       // Existing / grandfathered: allow login; seed free IP/device indexes.
@@ -632,7 +656,7 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
         ip: options.ip,
       })
       if (!antiAbuse.allowed) {
-        return {
+        return finish({
           referral: { applied: false, reason: 'blocked' },
           activation: { rewarded: false, reason: 'blocked' },
           me: getReferralMe(store, user),
@@ -640,7 +664,8 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
           antiAbuse,
           blocked: true,
           created: false,
-        }
+          user,
+        })
       }
     }
 
@@ -677,7 +702,7 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
 
     maybeGrantInviteFriendsTask(store, user)
     const levelRewards = grantPendingLevelRewardsOnStore(store, user)
-    return {
+    return finish({
       referral,
       activation,
       me: getReferralMe(store, user),
@@ -685,7 +710,8 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
       antiAbuse,
       blocked: Boolean(user.blocked),
       created: isNew,
-    }
+      user,
+    })
   })
 }
 

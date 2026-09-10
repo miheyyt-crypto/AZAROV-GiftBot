@@ -339,8 +339,13 @@ function tryClaimFreeAssociations(store, user, deviceId, ipHash) {
     }
 
     if (Number(existing.telegramId) === Number(user.telegramId)) {
+      // Throttle lastSeenAt — updating on every /api/session forced a full store.json
+      // rewrite (stringify+fsync+backup) and blocked the Node event loop under load.
       if (kind === 'ip') {
-        existing.lastSeenAt = now
+        const prevMs = Date.parse(String(existing.lastSeenAt || ''))
+        if (!Number.isFinite(prevMs) || Date.now() - prevMs > 6 * 60 * 60 * 1000) {
+          existing.lastSeenAt = now
+        }
       }
       if (!user[primaryField]) {
         user[primaryField] = key

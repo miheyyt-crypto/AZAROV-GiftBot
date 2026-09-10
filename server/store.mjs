@@ -25,6 +25,19 @@ const LOCK_TIMEOUT_MS = 15_000
 const LOCK_RETRY_MS = 25
 const STALE_LOCK_MS = 60_000
 
+/** In-process cache: avoid re-parsing store.json on every getUser / toPublicUser / session. */
+let memoryStore = null
+let memoryMtimeMs = -1
+let memoryStorePath = ''
+
+/** Throttle expensive rotating .bak copies (volume I/O blocks the event loop). */
+let lastBackupAtMs = 0
+let writesSinceBackup = 0
+const BACKUP_MIN_INTERVAL_MS = 30_000
+const BACKUP_EVERY_N_WRITES = 25
+let writesSinceFsync = 0
+const FSYNC_EVERY_N_WRITES = 10
+
 export class StoreCorruptError extends Error {
   constructor(message, cause) {
     super(message)
@@ -451,7 +464,26 @@ export function loadStore() {
   }
 
   if (!existsSync(storePath)) {
-    return createEmptyStore()
+    memoryStore = createEmptyStore()
+    memoryMtimeMs = -1
+    memoryStorePath = storePath
+    return memoryStore
+  }
+
+  let mtimeMs = -1
+  try {
+    mtimeMs = Number(statSync(storePath).mtimeMs) || -1
+  } catch {
+    mtimeMs = -1
+  }
+
+  if (
+    memoryStore &&
+    memoryStorePath === storePath &&
+    mtimeMs >= 0 &&
+    memoryMtimeMs === mtimeMs
+  ) {
+    return memoryStore
   }
 
   let raw
@@ -462,7 +494,11 @@ export function loadStore() {
   }
 
   try {
-    return parseStoreRaw(raw, storePath)
+    const store = parseStoreRaw(raw, storePath)
+    memoryStore = store
+    memoryMtimeMs = mtimeMs
+    memoryStorePath = storePath
+    return store
   } catch (error) {
     // Corrupt primary: try backup before failing closed.
     if (existsSync(backupPath)) {
@@ -470,6 +506,9 @@ export function loadStore() {
         const bakRaw = readFileSync(backupPath, 'utf8')
         const restored = parseStoreRaw(bakRaw, backupPath)
         console.warn('[store] primary store.json corrupt — loaded from store.json.bak')
+        memoryStore = restored
+        memoryMtimeMs = -1
+        memoryStorePath = storePath
         return restored
       } catch {
         // fall through
@@ -483,33 +522,74 @@ export function saveStore(store) {
   ensureDataDir()
 
   const storePath = getStorePath()
-  const payload = JSON.stringify(store, null, 2)
+  const t0 = performance.now()
+  // Compact JSON: pretty-print doubled write size/time on every session/API write.
+  const payload = JSON.stringify(store)
+  const stringifyMs = performance.now() - t0
   const tempPath = `${storePath}.tmp`
   writeFileSync(tempPath, payload)
+  const writeMs = performance.now() - t0 - stringifyMs
 
-  try {
-    const fd = openSync(tempPath, 'r+')
+  writesSinceFsync += 1
+  const forceFsync = process.env.AZAROV_STORE_FSYNC === '1'
+  if (forceFsync || writesSinceFsync >= FSYNC_EVERY_N_WRITES) {
+    writesSinceFsync = 0
     try {
-      fsyncSync(fd)
-    } finally {
-      closeSync(fd)
+      const fd = openSync(tempPath, 'r+')
+      try {
+        fsyncSync(fd)
+      } finally {
+        closeSync(fd)
+      }
+    } catch {
+      // fsync is best-effort (some environments disallow it).
     }
-  } catch {
-    // fsync is best-effort (some environments disallow it).
   }
 
   renameSync(tempPath, storePath)
 
-  // Rotating backups on the same volume so a bad write can be recovered.
   try {
-    const bak = getBackupPath(storePath)
-    const bakPrev = `${storePath}.bak.1`
-    if (existsSync(bak)) {
-      copyFileSync(bak, bakPrev)
-    }
-    copyFileSync(storePath, bak)
+    memoryStore = store
+    memoryMtimeMs = Number(statSync(storePath).mtimeMs) || Date.now()
+    memoryStorePath = storePath
   } catch {
-    // Backup is best-effort; primary write already succeeded.
+    memoryStore = store
+    memoryMtimeMs = Date.now()
+    memoryStorePath = storePath
+  }
+
+  // Rotating backups: not on every write — volume copy of a large store blocks the event loop.
+  writesSinceBackup += 1
+  const now = Date.now()
+  const dueByTime = now - lastBackupAtMs >= BACKUP_MIN_INTERVAL_MS
+  const dueByCount = writesSinceBackup >= BACKUP_EVERY_N_WRITES
+  let backupMs = 0
+  if (dueByTime || dueByCount) {
+    const b0 = performance.now()
+    try {
+      const bak = getBackupPath(storePath)
+      const bakPrev = `${storePath}.bak.1`
+      if (existsSync(bak)) {
+        copyFileSync(bak, bakPrev)
+      }
+      copyFileSync(storePath, bak)
+      lastBackupAtMs = now
+      writesSinceBackup = 0
+    } catch {
+      // Backup is best-effort; primary write already succeeded.
+    }
+    backupMs = performance.now() - b0
+  }
+
+  const totalMs = performance.now() - t0
+  if (totalMs >= 40) {
+    console.info('[STORE WRITE]', {
+      bytes: payload.length,
+      stringify_ms: Math.round(stringifyMs),
+      write_ms: Math.round(writeMs),
+      backup_ms: Math.round(backupMs),
+      total_ms: Math.round(totalMs),
+    })
   }
 }
 
@@ -533,14 +613,25 @@ export function saveUser(store, user) {
  * Protects concurrent requests on ONE Node process / ONE Railway replica only.
  * Does NOT provide distributed locking across multiple replicas — keep numReplicas=1.
  * Use readOnly for GET paths so we do not rewrite the whole ledger on every read.
+ *
+ * If updater returns `{ __storeDirty: false }`, skip persist (warm session no-ops).
  */
 export function withStore(updater, { readOnly = false } = {}) {
   const lock = acquireFileLock()
   try {
     const store = loadStore()
     const result = updater(store)
-    if (!readOnly) {
+    const skipPersist =
+      result &&
+      typeof result === 'object' &&
+      Object.prototype.hasOwnProperty.call(result, '__storeDirty') &&
+      result.__storeDirty === false
+    if (!readOnly && !skipPersist) {
       saveStore(store)
+    }
+    if (result && typeof result === 'object' && Object.prototype.hasOwnProperty.call(result, '__storeDirty')) {
+      const { __storeDirty: _dirty, ...rest } = result
+      return rest
     }
     return result
   } finally {
@@ -548,8 +639,13 @@ export function withStore(updater, { readOnly = false } = {}) {
   }
 }
 
+/**
+ * Read path: no exclusive lock. Writers use atomic tmp+rename, so readers see
+ * the previous or next consistent file. Avoids serializing all GETs behind writers
+ * and prevents Atomics.wait lock spins from blocking read-only traffic.
+ */
 export function withStoreRead(reader) {
-  return withStore(reader, { readOnly: true })
+  return reader(loadStore())
 }
 
 /**
@@ -592,6 +688,7 @@ export function getStoreDiagnostics() {
     exists = existsSync(storePath)
     if (exists) {
       bytes = statSync(storePath).size
+      // Prefer cached store; avoid full disk parse on every health probe when warm.
       const store = loadStore()
       usersCount = Object.keys(store.users || {}).length
     }

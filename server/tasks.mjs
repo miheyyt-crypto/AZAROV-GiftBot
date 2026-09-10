@@ -387,7 +387,9 @@ export async function checkTelegramSubscribe(userId, requestId, options = {}) {
 
 export function maybeGrantInviteFriendsTask(store, user) {
   const active = countActiveReferrals(store, user.telegramId)
-  user.activeReferrals = active
+  if (user.activeReferrals !== active) {
+    user.activeReferrals = active
+  }
   if (active < REFERRAL_INVITE_TASK_REQUIRED) {
     return { granted: false, reason: 'not_ready' }
   }

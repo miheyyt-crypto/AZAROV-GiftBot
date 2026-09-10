@@ -34,7 +34,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-const BOOTSTRAP_TIMEOUT_MS = 12_000
+const BOOTSTRAP_TIMEOUT_MS = 30_000
 
 function peekMiniAppAuth(): boolean {
   try {
@@ -112,9 +112,8 @@ export function AuthGate({ children }: AuthGateProps) {
       const timeout = window.setTimeout(() => {
         if (!cancelled) {
           sessionBootLog('AuthGate boot timeout')
-          setSessionReady(false)
-          setStatus((current) => (current === 'loading' || miniAppAtBoot ? 'unauthenticated' : current))
-          setError('Не удалось проверить сессию. Попробуй войти снова.')
+          // Keep shell in loading state — do not flash a fake auth failure while the
+          // shared in-flight POST /api/session may still succeed (mobile WebView).
         }
       }, BOOTSTRAP_TIMEOUT_MS)
 

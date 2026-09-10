@@ -156,15 +156,21 @@ async function runBootstrapSession(): Promise<BootstrapSessionResult> {
       sessionBootLog('request finished', { confirmed, path: 'miniapp' })
       return { account: getCurrentAccount(), confirmed }
     } catch (error) {
+      const aborted =
+        (error instanceof DOMException && error.name === 'AbortError') ||
+        (error instanceof Error &&
+          (error.name === 'AbortError' || /aborted|AbortError/i.test(error.message)))
       sessionBootLog('request finished', {
         confirmed: false,
         path: 'miniapp',
+        aborted,
         error: error instanceof Error ? error.name : 'unknown',
         message: error instanceof Error ? error.message : String(error),
       })
       if (error instanceof MultiAccountBlockedError) {
         throw error
       }
+      // Abort/cancel is not MULTI_ACCOUNT; fall through as unconfirmed so AuthGate can retry.
       hydrateBalanceFromAccount()
       return { account: getCurrentAccount(), confirmed: false }
     }

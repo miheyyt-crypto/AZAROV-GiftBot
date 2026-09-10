@@ -130,6 +130,7 @@ import {
   assertPersistentStoreOrExit,
   getStoreDiagnostics,
   getUser,
+  loadStore,
   persistStoreMigrations,
   withStore,
 } from './store.mjs'
@@ -851,6 +852,13 @@ app.get(
 app.post(
   '/api/session',
   asyncHandler(async (req, res) => {
+    const t0 = performance.now()
+    /** @type {Record<string, number>} */
+    const timing = {}
+    const mark = (name) => {
+      timing[name] = Math.round(performance.now() - t0)
+    }
+    mark('request_start')
     assertNoClientFinancialOverrides(req.body)
 
     const ip = clientIp(req)
@@ -864,9 +872,12 @@ app.post(
       })
       return
     }
+    mark('rate_limit')
 
     const auth = requireTelegramAuth(req, res)
+    mark('telegram_initData_validation')
     if (!auth) {
+      console.info('[SESSION TIMING]', { ...timing, total_ms: Math.round(performance.now() - t0), ok: false })
       return
     }
 
@@ -891,8 +902,12 @@ app.post(
       enforceAntiAbuse: true,
       deviceId,
       ip,
+      skipUnchangedPersist: true,
     })
-    const user = getUser(auth.user.id)
+    mark('bootstrapUser_store')
+    // Prefer user from same withStore pass — avoids a second full store lock/load.
+    const user = result.user || getUser(auth.user.id)
+    mark('user_resolve')
 
     console.info('[referral] session_result', {
       telegramId: auth.user.id,
@@ -906,7 +921,7 @@ app.post(
     })
 
     if (result.blocked || user?.blocked || result.antiAbuse?.code === 'MULTI_ACCOUNT_BLOCKED') {
-      res.status(403).json({
+      const body = {
         success: false,
         code: 'MULTI_ACCOUNT_BLOCKED',
         message: MULTI_ACCOUNT_USER_MESSAGE.title,
@@ -914,16 +929,36 @@ app.post(
         description: MULTI_ACCOUNT_USER_MESSAGE.message,
         detail: MULTI_ACCOUNT_USER_MESSAGE.detail,
         user: toPublicUser(user),
+      }
+      mark('response_prepare')
+      res.status(403).json(body)
+      mark('response_sent')
+      console.info('[SESSION TIMING]', {
+        ...timing,
+        total_ms: Math.round(performance.now() - t0),
+        status: 403,
+        external_api_ms: 0,
+        telegram_bot_api_ms: 0,
       })
       return
     }
 
     if (result.antiAbuse && !result.antiAbuse.allowed) {
-      res.status(403).json({
+      const body = {
         success: false,
         code: result.antiAbuse.code || 'REGISTRATION_INCOMPLETE',
         message: result.antiAbuse.message || 'Не удалось завершить регистрацию.',
         user: toPublicUser(user),
+      }
+      mark('response_prepare')
+      res.status(403).json(body)
+      mark('response_sent')
+      console.info('[SESSION TIMING]', {
+        ...timing,
+        total_ms: Math.round(performance.now() - t0),
+        status: 403,
+        external_api_ms: 0,
+        telegram_bot_api_ms: 0,
       })
       return
     }
@@ -932,10 +967,13 @@ app.post(
       username: user?.username || auth.user.username,
       firstName: user?.firstName || auth.user.first_name,
     })
+    mark('presence')
 
-    res.json({
+    const publicUser = toPublicUser(user, loadStore())
+    mark('toPublicUser')
+    const payload = {
       success: true,
-      user: toPublicUser(user),
+      user: publicUser,
       referral: result.referral,
       referralStats: result.me,
       activation: result.activation,
@@ -947,6 +985,19 @@ app.post(
           }
         : null,
       onlineCount: getOnlineCount(),
+    }
+    mark('response_prepare')
+    res.json(payload)
+    mark('response_sent')
+    console.info('[SESSION TIMING]', {
+      ...timing,
+      total_ms: Math.round(performance.now() - t0),
+      status: 200,
+      payload_bytes: Buffer.byteLength(JSON.stringify(payload)),
+      store_persisted: result.storePersisted !== false,
+      external_api_ms: 0,
+      telegram_bot_api_ms: 0,
+      note: 'no_external_http_in_session; store.json sync I/O only',
     })
   }),
 )

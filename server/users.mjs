@@ -205,6 +205,15 @@ export function hydrateUserReferrals(store, user) {
   store.referrals = store.referrals || {}
   user.invitedUsers = ensureArray(user.invitedUsers)
 
+  // One pass index — avoid O(invites × referrals) .find on every bootstrap.
+  const referralByInvitee = new Map()
+  for (const row of Object.values(store.referrals)) {
+    const id = Number(row?.referredUserId)
+    if (Number.isInteger(id) && id > 0 && !referralByInvitee.has(id)) {
+      referralByInvitee.set(id, row)
+    }
+  }
+
   for (const item of user.invitedUsers) {
     const inviteeId = Number(item.telegramId)
     if (!Number.isInteger(inviteeId) || inviteeId <= 0) {
@@ -215,9 +224,7 @@ export function hydrateUserReferrals(store, user) {
     const status = mapLegacyStatus(item.status)
 
     // Do not invent a second referrer row for an invitee already claimed elsewhere.
-    const existingForInvitee = Object.values(store.referrals).find(
-      (row) => Number(row.referredUserId) === inviteeId,
-    )
+    const existingForInvitee = referralByInvitee.get(inviteeId)
     if (
       existingForInvitee &&
       Number(existingForInvitee.referrerUserId) !== Number(user.telegramId)
@@ -238,6 +245,7 @@ export function hydrateUserReferrals(store, user) {
             : null,
         rewardedAt: status === 'rewarded' ? item.rewardedAt || null : null,
       }
+      referralByInvitee.set(inviteeId, store.referrals[key])
     }
 
     const invitee = store.users[String(inviteeId)]
@@ -258,14 +266,18 @@ export function ensureUser(store, telegramUser) {
     throw new Error('user_not_registered')
   }
 
-  existing.username = telegramUser.username || existing.username || ''
-  existing.firstName = telegramUser.first_name || existing.firstName || ''
-  existing.lastName = telegramUser.last_name || existing.lastName || ''
-  existing.photoUrl = telegramUser.photo_url || existing.photoUrl || ''
-  if (telegramUser.language_code) {
+  const nextUsername = telegramUser.username || existing.username || ''
+  const nextFirstName = telegramUser.first_name || existing.firstName || ''
+  const nextLastName = telegramUser.last_name || existing.lastName || ''
+  const nextPhotoUrl = telegramUser.photo_url || existing.photoUrl || ''
+  if (existing.username !== nextUsername) existing.username = nextUsername
+  if (existing.firstName !== nextFirstName) existing.firstName = nextFirstName
+  if (existing.lastName !== nextLastName) existing.lastName = nextLastName
+  if (existing.photoUrl !== nextPhotoUrl) existing.photoUrl = nextPhotoUrl
+  if (telegramUser.language_code && existing.languageCode !== telegramUser.language_code) {
     existing.languageCode = telegramUser.language_code
   }
-  if (typeof telegramUser.is_premium === 'boolean') {
+  if (typeof telegramUser.is_premium === 'boolean' && existing.isPremium !== telegramUser.is_premium) {
     existing.isPremium = telegramUser.is_premium
   }
   existing.invitedUsers = ensureArray(existing.invitedUsers)
@@ -273,22 +285,22 @@ export function ensureUser(store, telegramUser) {
   existing.startedPartnerTasks = ensureArray(existing.startedPartnerTasks)
   existing.completedTasks = ensureArray(existing.completedTasks)
   existing.earnedRewards = ensureArray(existing.earnedRewards)
-  existing.referralEarnings = existing.referralEarnings || 0
+  if (existing.referralEarnings == null) existing.referralEarnings = 0
   existing.kickVerified = Boolean(existing.kickVerified)
-  existing.kickUserId = existing.kickUserId || null
-  existing.kickUsername = existing.kickUsername || null
-  existing.kickDisplayName = existing.kickDisplayName || null
-  existing.kickAvatarUrl = existing.kickAvatarUrl || null
-  existing.kickLinkedAt = existing.kickLinkedAt || null
+  existing.kickUserId = existing.kickUserId ?? null
+  existing.kickUsername = existing.kickUsername ?? null
+  existing.kickDisplayName = existing.kickDisplayName ?? null
+  existing.kickAvatarUrl = existing.kickAvatarUrl ?? null
+  existing.kickLinkedAt = existing.kickLinkedAt ?? null
   existing.welvuraVerified = Boolean(existing.welvuraVerified)
   existing.inviterRewardGranted = Boolean(existing.inviterRewardGranted)
   existing.invitedRewardGranted = Boolean(existing.invitedRewardGranted)
-  existing.openedReferralCases = existing.openedReferralCases || 0
+  if (!existing.openedReferralCases) existing.openedReferralCases = 0
   existing.caseOpenings = ensureArray(existing.caseOpenings)
-  existing.referredByUserId = existing.referredByUserId || null
-  existing.referralStatus = existing.referralStatus || null
-  existing.referralCreatedAt = existing.referralCreatedAt || null
-  existing.referralActivatedAt = existing.referralActivatedAt || null
+  existing.referredByUserId = existing.referredByUserId ?? null
+  existing.referralStatus = existing.referralStatus ?? null
+  existing.referralCreatedAt = existing.referralCreatedAt ?? null
+  existing.referralActivatedAt = existing.referralActivatedAt ?? null
   existing.referralRewardClaimed = Boolean(existing.referralRewardClaimed)
   if (existing.pendingStartParam === undefined) {
     existing.pendingStartParam = null
@@ -301,7 +313,10 @@ export function ensureUser(store, telegramUser) {
   } else if (isTelegramIdBasedCode(existing.referralCode, existing.telegramId)) {
     existing.referralCode = generateReferralCode(store)
   } else {
-    existing.referralCode = normalizeReferralCode(existing.referralCode)
+    const normalized = normalizeReferralCode(existing.referralCode)
+    if (existing.referralCode !== normalized) {
+      existing.referralCode = normalized
+    }
   }
 
   indexReferralCode(store, existing)
