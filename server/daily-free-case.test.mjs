@@ -32,6 +32,13 @@ test('daily free case config has 16 rewards across 3 rarities', () => {
   assert.equal(rarities[0].chance, 1)
   assert.equal(rarities[1].chance, 15)
   assert.equal(rarities[2].chance, 50)
+  assert.equal(rarities[0].rollWeight, 1)
+  assert.equal(rarities[1].rollWeight, 100)
+  assert.equal(rarities[2].rollWeight, 999_899)
+  assert.equal(
+    rarities.reduce((sum, item) => sum + item.rollWeight, 0),
+    1_000_000,
+  )
   assert.equal(rarities[0].rewards.length, 6)
   assert.equal(rarities[1].rewards.length, 4)
   assert.equal(rarities[2].rewards.length, 6)

@@ -3,14 +3,21 @@
 export const DAILY_FREE_CASE_COOLDOWN_MS = 24 * 60 * 60 * 1000
 
 /**
- * Category chance is relative weight for rarity selection (display as-is).
+ * `chance` — display % in UI ("Что внутри").
+ * `rollWeight` — real drop weight; sum = 1_000_000 (= 100%):
+ *   legendary 0.0001% → 1
+ *   epic      0.01%   → 100
+ *   common    remainder → 999_899  (~99.9899%; "всё остальное")
  * Individual `weight` distributes within the category.
  */
+export const DAILY_FREE_CASE_RARITY_ROLL_TOTAL = 1_000_000
+
 export const DAILY_FREE_CASE_RARITIES = {
   legendary: {
     id: 'legendary',
     name: 'Легендарный',
     chance: 1,
+    rollWeight: 1,
     rewards: [
       {
         id: 'dfc-gram-100',
@@ -72,6 +79,7 @@ export const DAILY_FREE_CASE_RARITIES = {
     id: 'epic',
     name: 'Эпический',
     chance: 15,
+    rollWeight: 100,
     rewards: [
       {
         id: 'dfc-gram-2',
@@ -115,6 +123,7 @@ export const DAILY_FREE_CASE_RARITIES = {
     id: 'common',
     name: 'Обычный',
     chance: 50,
+    rollWeight: 999_899,
     rewards: [
       {
         id: 'dfc-gram-0-01',
@@ -215,7 +224,7 @@ function pickWeighted(items, weightOf, rollValue) {
 
 export function rollDailyFreeCaseReward(rng = Math.random) {
   const rarities = listDailyFreeCaseRarities()
-  const rarity = pickWeighted(rarities, (item) => item.chance, rng())
+  const rarity = pickWeighted(rarities, (item) => item.rollWeight, rng())
   if (!rarity?.rewards?.length) {
     return getDailyFreeCaseRewardsFlat()[0]
   }

@@ -21,8 +21,13 @@ export interface DailyFreeCaseReward {
 export interface DailyFreeCaseRarityConfig {
   id: DailyFreeCaseRarityId
   name: string
-  /** Display / selection chance for the category (do not invent extra %). */
+  /** Display % in "Что внутри" UI (not the real drop rate). */
   chance: number
+  /**
+   * Real roll weight. Sum across rarities = 1_000_000 (= 100%):
+   * legendary 0.0001% → 1, epic 0.01% → 100, common remainder → 999_899.
+   */
+  rollWeight: number
   rewards: DailyFreeCaseReward[]
 }
 
@@ -34,6 +39,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
     id: 'legendary',
     name: 'Легендарный',
     chance: 1,
+    rollWeight: 1,
     rewards: [
       {
         id: 'dfc-gram-100',
@@ -95,6 +101,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
     id: 'epic',
     name: 'Эпический',
     chance: 15,
+    rollWeight: 100,
     rewards: [
       {
         id: 'dfc-gram-2',
@@ -138,6 +145,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
     id: 'common',
     name: 'Обычный',
     chance: 50,
+    rollWeight: 999_899,
     rewards: [
       {
         id: 'dfc-gram-0-01',

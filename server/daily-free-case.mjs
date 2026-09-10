@@ -38,7 +38,7 @@ function pickWeightedInt(items, weightOf) {
 
 function cryptoRoll() {
   const rarities = listDailyFreeCaseRarities()
-  const rarity = pickWeightedInt(rarities, (item) => item.chance)
+  const rarity = pickWeightedInt(rarities, (item) => item.rollWeight)
   if (!rarity?.rewards?.length) {
     return getDailyFreeCaseRewardsFlat()[0]
   }
