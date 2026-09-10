@@ -102,7 +102,7 @@ export function isPersistentStoreDir(dir = getDataDir()) {
 
 export function createEmptyStore() {
   return {
-    version: 18,
+    version: 19,
     users: {},
     referralIndex: {},
     referrals: {},
@@ -372,6 +372,31 @@ function migrateStore(store) {
       console.info('[anti-abuse] migration v18 unbanned users', { unbannedCount })
     }
     store.version = 18
+  }
+
+  // v19: permanently remove account bans — unban everyone, drop indexes.
+  if (Number(store.version) < 19) {
+    store.pendingBotStarts = store.pendingBotStarts || {}
+    let unbannedCount = 0
+    for (const user of Object.values(store.users || {})) {
+      if (!user || typeof user !== 'object') {
+        continue
+      }
+      if (user.blocked || user.blockReason) {
+        unbannedCount += 1
+      }
+      user.blocked = false
+      user.blockReason = null
+      user.blockedAt = null
+      user.antiAbuseBound = true
+      user.primaryDeviceId = null
+      user.primaryIpHash = null
+    }
+    store.deviceIndex = {}
+    store.ipHashIndex = {}
+    store.antiAbuseAudit = {}
+    console.info('[anti-abuse] migration v19 removed bans', { unbannedCount })
+    store.version = 19
   }
 
   return store

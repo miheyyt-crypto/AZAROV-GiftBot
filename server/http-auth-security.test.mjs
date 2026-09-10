@@ -28,7 +28,7 @@ import {
   getUnsafeMultiProcessHints,
 } from './deploy-safety.mjs'
 
-// Tests exercise twin blocking — keep enabled regardless of production default.
+// Ban system removed — env flag is ignored.
 process.env.ANTI_ABUSE_MULTI_ACCOUNT = '1'
 
 const DEVICE_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -436,7 +436,7 @@ test('HTTP: multipart partner upload ignores spoofed telegramId fields', async (
   })
 })
 
-test('concurrent same-IP registration: one ALLOW, one BLOCK; no duplicate reward/referral', async () => {
+test('concurrent same-IP registration: both ALLOW (ban system removed)', async () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'azarov-conc-'))
   const prevDir = process.env.AZAROV_STORE_DIR
   const prevHmac = process.env.ANTI_ABUSE_HMAC_SECRET
@@ -462,9 +462,7 @@ test('concurrent same-IP registration: one ALLOW, one BLOCK; no duplicate reward
     ])
 
     const allowed = results.filter((r) => r.antiAbuse?.allowed && !r.blocked)
-    const blocked = results.filter((r) => r.blocked || r.antiAbuse?.code === 'MULTI_ACCOUNT_BLOCKED')
-    assert.equal(allowed.length, 1)
-    assert.equal(blocked.length, 1)
+    assert.equal(allowed.length, 2)
 
     // Duplicate simultaneous registration for same TG does not fork users
     await Promise.all([
@@ -507,14 +505,8 @@ test('concurrent same-IP registration: one ALLOW, one BLOCK; no duplicate reward
     assert.equal(refOut.second.applied, false)
     assert.ok(refOut.first.applied === true || Boolean(refOut.first.reason))
 
-    // Peek after claim stays blocked for new TG same IP
-    const peek = withStore((store) =>
-      peekRegistrationSignals(store, {
-        deviceId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
-        ip,
-      }),
-    )
-    assert.equal(peek.ok, false)
+    const peek = peekRegistrationSignals()
+    assert.equal(peek.ok, true)
   } finally {
     if (prevDir === undefined) delete process.env.AZAROV_STORE_DIR
     else process.env.AZAROV_STORE_DIR = prevDir

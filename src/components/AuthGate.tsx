@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from 'react'
 
-import { BlockedAccountScreen } from '@/components/BlockedAccountScreen'
 import { LoginScreen } from '@/components/LoginScreen'
 import {
   completeTelegramWebLogin,
@@ -17,7 +16,6 @@ import {
   logoutCurrentWebSession,
   subscribeAuth,
 } from '@/lib/auth'
-import { MultiAccountBlockedError } from '@/lib/api'
 import { armBootSplashWatchdog, signalAppBootReady } from '@/lib/boot-splash'
 import { captureStartParam } from '@/lib/startParam'
 import { bootstrapSession, sessionBootLog } from '@/lib/session'
@@ -73,11 +71,6 @@ export function AuthGate({ children }: AuthGateProps) {
   )
   const [sessionReady, setSessionReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [blockCopy, setBlockCopy] = useState<{
-    title: string
-    message: string
-    detail: string
-  } | null>(null)
   const [loginBusy, setLoginBusy] = useState(false)
   const [, setTick] = useState(0)
 
@@ -87,10 +80,9 @@ export function AuthGate({ children }: AuthGateProps) {
     armBootSplashWatchdog()
   }, [])
 
-  // Hide branded HTML splash once we reach a stable UI path (not while still loading).
   useEffect(() => {
     sessionBootLog('sessionReady/status', { sessionReady, status })
-    if (sessionReady || status === 'unauthenticated' || status === 'blocked') {
+    if (sessionReady || status === 'unauthenticated') {
       sessionBootLog('appBootReady signal')
       signalAppBootReady()
     }
@@ -102,8 +94,6 @@ export function AuthGate({ children }: AuthGateProps) {
 
     async function boot() {
       setError(null)
-      setBlockCopy(null)
-      // Do not clear sessionReady here — StrictMode remount would flash/race a confirmed session.
 
       if (!miniAppAtBoot) {
         setStatus('loading')
@@ -112,8 +102,6 @@ export function AuthGate({ children }: AuthGateProps) {
       const timeout = window.setTimeout(() => {
         if (!cancelled) {
           sessionBootLog('AuthGate boot timeout')
-          // Keep shell in loading state — do not flash a fake auth failure while the
-          // shared in-flight POST /api/session may still succeed (mobile WebView).
         }
       }, BOOTSTRAP_TIMEOUT_MS)
 
@@ -147,19 +135,9 @@ export function AuthGate({ children }: AuthGateProps) {
           setSessionReady(false)
           setStatus('unauthenticated')
         }
-      } catch (err) {
+      } catch {
         if (cancelled) {
           sessionBootLog('AuthGate boot error ignored (cancelled)')
-          return
-        }
-        if (err instanceof MultiAccountBlockedError) {
-          setSessionReady(false)
-          setBlockCopy({
-            title: err.title,
-            message: err.description,
-            detail: err.detail,
-          })
-          setStatus('blocked')
           return
         }
         setSessionReady(false)
@@ -181,7 +159,6 @@ export function AuthGate({ children }: AuthGateProps) {
   const handleTelegramAuth = useCallback(async (payload: TelegramLoginWidgetUser) => {
     setLoginBusy(true)
     setError(null)
-    setBlockCopy(null)
     setSessionReady(false)
 
     try {
@@ -193,15 +170,6 @@ export function AuthGate({ children }: AuthGateProps) {
       setStatus('authenticated')
       setSessionReady(true)
     } catch (err) {
-      if (err instanceof MultiAccountBlockedError) {
-        setBlockCopy({
-          title: err.title,
-          message: err.description,
-          detail: err.detail,
-        })
-        setStatus('blocked')
-        return
-      }
       const message =
         err instanceof Error && err.message
           ? err.message
@@ -217,7 +185,6 @@ export function AuthGate({ children }: AuthGateProps) {
   const logout = useCallback(async () => {
     await logoutCurrentWebSession()
     setError(null)
-    setBlockCopy(null)
     setSessionReady(false)
     setStatus('unauthenticated')
   }, [])
@@ -232,19 +199,8 @@ export function AuthGate({ children }: AuthGateProps) {
     [status, sessionReady, logout],
   )
 
-  // Web / no initData: splash covers the wait — do not show technical "Загрузка…" spinner.
   if (status === 'loading') {
     return null
-  }
-
-  if (status === 'blocked') {
-    return (
-      <BlockedAccountScreen
-        title={blockCopy?.title}
-        message={blockCopy?.message}
-        detail={blockCopy?.detail}
-      />
-    )
   }
 
   if (status === 'unauthenticated') {

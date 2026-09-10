@@ -175,13 +175,12 @@ export function createUser(store, telegramUser, options = {}) {
     blockedAt: null,
     primaryDeviceId: null,
     primaryIpHash: null,
-    // Production registration uses unbound:true then bind via enforceAntiAbuse.
-    // Unit tests create bound users by default so ledger helpers keep working.
-    antiAbuseBound: !unbound,
+    // Production registration is always bound — ban system removed.
+    antiAbuseBound: true,
     antiAbuseLegacy: false,
   }
 
-  hydrateAntiAbuseUserFields(user, { isNew: unbound })
+  hydrateAntiAbuseUserFields(user, { isNew: true })
   store.users[String(user.telegramId)] = user
   indexReferralCode(store, user)
   return user

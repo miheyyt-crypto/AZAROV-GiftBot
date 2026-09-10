@@ -1,11 +1,5 @@
 import { getReferralActivationReward, REFERRAL_CASE_EVERY } from './constants.mjs'
-import {
-  blockUserMultiAccount,
-  emptyReferralMe,
-  enforceAntiAbuseOnStore,
-  peekRegistrationSignals,
-  userCanUseAppEconomy,
-} from './anti-abuse.mjs'
+import { emptyReferralMe, userCanUseAppEconomy } from './anti-abuse.mjs'
 import { addCoins, hasEvent, sumTransactions, TX_TYPE } from './wallet.mjs'
 import {
   buildReferralLink,
@@ -430,21 +424,23 @@ export function activateReferralOnStore(store, userId) {
  * Bind from start_param (if any). Confirm + reward only if Kick is already linked.
  */
 export function applyReferralAndReward(store, invitee, startParam) {
-  if (invitee?.blocked || !invitee?.antiAbuseBound) {
+  if (!invitee) {
     return {
       referral: {
         applied: false,
-        reason: invitee?.blocked ? 'blocked' : 'registration_incomplete',
-        message: invitee?.blocked
-          ? 'Аккаунт заблокирован'
-          : 'Завершите вход в приложение.',
+        reason: 'registration_incomplete',
+        message: 'Завершите вход в приложение.',
       },
       activation: {
         rewarded: false,
-        reason: invitee?.blocked ? 'blocked' : 'registration_incomplete',
+        reason: 'registration_incomplete',
       },
     }
   }
+  invitee.blocked = false
+  invitee.blockReason = null
+  invitee.blockedAt = null
+  invitee.antiAbuseBound = true
   const referral = processReferral(store, invitee, startParam)
   const activation = activateReferralOnStore(store, invitee.telegramId)
   return { referral, activation }
@@ -495,178 +491,17 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
       return { ...payload, __storeDirty: dirty, storePersisted: dirty }
     }
 
-    // NEW telegram: never create a durable economic user before anti-abuse ALLOW.
     if (isNew) {
-      if (!options.enforceAntiAbuse) {
-        return finish({
-          referral: { applied: false, reason: 'registration_incomplete' },
-          activation: { rewarded: false, reason: 'registration_incomplete' },
-          me: emptyReferralMe(),
-          levelRewards: { granted: [], totalAmount: 0, level: 0 },
-          antiAbuse: {
-            allowed: false,
-            code: 'REGISTRATION_INCOMPLETE',
-            message: 'Завершите вход в приложение.',
-          },
-          blocked: false,
-          created: false,
-          user: null,
-        })
-      }
-
-      const peek = peekRegistrationSignals(store, {
-        deviceId: options.deviceId,
-        ip: options.ip,
-      })
-
-      if (!peek.ok && peek.code === 'MULTI_ACCOUNT_BLOCKED') {
-      user = createUser(store, telegramUser, { unbound: true })
-        blockUserMultiAccount(store, user, {
-          deviceId: peek.deviceId,
-          ipHash: peek.ipHash,
-          deviceUsed: peek.deviceUsed,
-          ipUsed: peek.ipUsed,
-        })
-        return finish({
-          referral: { applied: false, reason: 'blocked' },
-          activation: { rewarded: false, reason: 'blocked' },
-          me: getReferralMe(store, user),
-          levelRewards: { granted: [], totalAmount: 0, level: 0 },
-          antiAbuse: {
-            allowed: false,
-            code: 'MULTI_ACCOUNT_BLOCKED',
-            message: 'Аккаунт заблокирован',
-            deviceUsed: peek.deviceUsed,
-            ipUsed: peek.ipUsed,
-          },
-          blocked: true,
-          created: true,
-          user,
-        })
-      }
-
-      if (!peek.ok) {
-        return finish({
-          referral: { applied: false, reason: 'registration_incomplete' },
-          activation: { rewarded: false, reason: 'registration_incomplete' },
-          me: emptyReferralMe(),
-          levelRewards: { granted: [], totalAmount: 0, level: 0 },
-          antiAbuse: {
-            allowed: false,
-            code: peek.code,
-            message: peek.message,
-          },
-          blocked: false,
-          created: false,
-          user: null,
-        })
-      }
-
-      user = createUser(store, telegramUser, { unbound: true })
-      const bound = enforceAntiAbuseOnStore(store, user, {
-        deviceId: options.deviceId,
-        ip: options.ip,
-      })
-      if (!bound.allowed) {
-        return finish({
-          referral: { applied: false, reason: 'blocked' },
-          activation: { rewarded: false, reason: 'blocked' },
-          me: getReferralMe(store, user),
-          levelRewards: { granted: [], totalAmount: 0, level: 0 },
-          antiAbuse: bound,
-          blocked: Boolean(user.blocked),
-          created: true,
-          user,
-        })
-      }
+      // Create durable users immediately — no ban / device / IP gate.
+      user = createUser(store, telegramUser, { unbound: false })
+      hydrateUserReferrals(store, user)
     } else {
       user = ensureUser(store, telegramUser)
-    }
-
-    // Legacy invitedUsers → referrals for THIS user only (never scan all users on session).
-    // ensureUser already hydrates; call again only for freshly created users.
-    if (isNew) {
-      hydrateUserReferrals(store, user)
-    }
-
-    if (user.blocked) {
-      return finish({
-        referral: { applied: false, reason: 'blocked' },
-        activation: { rewarded: false, reason: 'blocked' },
-        me: getReferralMe(store, user),
-        levelRewards: { granted: [], totalAmount: 0, level: 0 },
-        antiAbuse: {
-          allowed: false,
-          code: 'MULTI_ACCOUNT_BLOCKED',
-          message: 'Аккаунт заблокирован',
-        },
-        blocked: true,
-        created: false,
-        user,
-      })
-    }
-
-    let antiAbuse = { allowed: true, code: null, message: null }
-
-    if (!user.antiAbuseBound) {
-      if (!options.enforceAntiAbuse) {
-        return finish({
-          referral: { applied: false, reason: 'registration_incomplete' },
-          activation: { rewarded: false, reason: 'registration_incomplete' },
-          me: getReferralMe(store, user),
-          levelRewards: { granted: [], totalAmount: 0, level: 0 },
-          antiAbuse: {
-            allowed: false,
-            code: 'REGISTRATION_INCOMPLETE',
-            message: 'Завершите вход в приложение.',
-          },
-          blocked: false,
-          created: false,
-          user,
-        })
-      }
-      antiAbuse = enforceAntiAbuseOnStore(store, user, {
-        deviceId: options.deviceId,
-        ip: options.ip,
-      })
-      if (!antiAbuse.allowed) {
-        return finish({
-          referral: {
-            applied: false,
-            reason:
-              antiAbuse.code === 'MULTI_ACCOUNT_BLOCKED' ? 'blocked' : 'registration_incomplete',
-          },
-          activation: {
-            rewarded: false,
-            reason:
-              antiAbuse.code === 'MULTI_ACCOUNT_BLOCKED' ? 'blocked' : 'registration_incomplete',
-          },
-          me: getReferralMe(store, user),
-          levelRewards: { granted: [], totalAmount: 0, level: 0 },
-          antiAbuse,
-          blocked: Boolean(user.blocked),
-          created: false,
-          user,
-        })
-      }
-    } else if (options.deviceId || options.ip) {
-      // Existing / grandfathered: allow login; seed free IP/device indexes.
-      antiAbuse = enforceAntiAbuseOnStore(store, user, {
-        deviceId: options.deviceId,
-        ip: options.ip,
-      })
-      if (!antiAbuse.allowed) {
-        return finish({
-          referral: { applied: false, reason: 'blocked' },
-          activation: { rewarded: false, reason: 'blocked' },
-          me: getReferralMe(store, user),
-          levelRewards: { granted: [], totalAmount: 0, level: 0 },
-          antiAbuse,
-          blocked: true,
-          created: false,
-          user,
-        })
-      }
+      // Clear any historical ban leftovers on every bootstrap.
+      user.blocked = false
+      user.blockReason = null
+      user.blockedAt = null
+      user.antiAbuseBound = true
     }
 
     const pendingBot = store.pendingBotStarts[String(telegramId)]
@@ -707,8 +542,8 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
       activation,
       me: getReferralMe(store, user),
       levelRewards,
-      antiAbuse,
-      blocked: Boolean(user.blocked),
+      antiAbuse: { allowed: true, code: null, message: null },
+      blocked: false,
       created: isNew,
       user,
     })

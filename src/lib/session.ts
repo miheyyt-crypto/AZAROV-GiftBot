@@ -3,7 +3,7 @@ import {
   getCurrentAccount,
   setCurrentTelegramId,
 } from '@/lib/account'
-import { bootstrapRemoteSession, MultiAccountBlockedError } from '@/lib/api'
+import { bootstrapRemoteSession } from '@/lib/api'
 import {
   isMiniAppAuthAvailable,
   restoreWebSession,
@@ -167,10 +167,7 @@ async function runBootstrapSession(): Promise<BootstrapSessionResult> {
         error: error instanceof Error ? error.name : 'unknown',
         message: error instanceof Error ? error.message : String(error),
       })
-      if (error instanceof MultiAccountBlockedError) {
-        throw error
-      }
-      // Abort/cancel is not MULTI_ACCOUNT; fall through as unconfirmed so AuthGate can retry.
+      // Abort/cancel is not a fatal auth error; fall through as unconfirmed so AuthGate can retry.
       hydrateBalanceFromAccount()
       return { account: getCurrentAccount(), confirmed: false }
     }

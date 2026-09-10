@@ -1,5 +1,4 @@
 import { getTelegramInitData } from '@/lib/telegram'
-import { getOrCreateDeviceId } from '@/lib/device-id'
 import type { UserAccount } from '@/types/account'
 import type { CaseOpening } from '@/types/case'
 import type { PartnerSubmission } from '@/types/partner'
@@ -92,14 +91,12 @@ export class MultiAccountBlockedError extends Error {
     detail?: string
     message?: string
   }) {
+    // Kept for type compatibility — ban system removed; never thrown by request().
     super(payload?.message || payload?.title || 'Аккаунт заблокирован')
     this.name = 'MultiAccountBlockedError'
     this.title = payload?.title || 'Аккаунт заблокирован'
-    this.description =
-      payload?.description ||
-      'Обнаружена регистрация с устройства или сети, которая уже использовалась другим аккаунтом.'
-    this.detail =
-      payload?.detail || 'Если это ошибка, обратитесь в техническую поддержку.'
+    this.description = payload?.description || ''
+    this.detail = payload?.detail || ''
   }
 }
 
@@ -129,19 +126,6 @@ async function request(path: string, init: RequestInit = {}): Promise<ApiUserRes
     throw new Error('bad_response')
   }
 
-  if (
-    payload.code === 'MULTI_ACCOUNT_BLOCKED' ||
-    payload.user?.blocked ||
-    (response.status === 403 && payload.code === 'MULTI_ACCOUNT_BLOCKED')
-  ) {
-    throw new MultiAccountBlockedError({
-      title: payload.title,
-      description: payload.description,
-      detail: payload.detail,
-      message: payload.message,
-    })
-  }
-
   return payload
 }
 
@@ -150,7 +134,6 @@ export function bootstrapRemoteSession(startParam: string): Promise<ApiUserRespo
     method: 'POST',
     body: JSON.stringify({
       startParam,
-      deviceId: getOrCreateDeviceId(),
     }),
   })
 }
@@ -318,7 +301,6 @@ export function loginWithTelegramWeb(payload: {
     method: 'POST',
     body: JSON.stringify({
       ...payload,
-      deviceId: getOrCreateDeviceId(),
     }),
   })
 }

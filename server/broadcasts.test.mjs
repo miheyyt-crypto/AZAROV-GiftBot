@@ -29,11 +29,11 @@ function withTempStore(run) {
 
 test('store includes broadcasts map', () => {
   const store = createEmptyStore()
-  assert.equal(store.version, 18)
+  assert.equal(store.version, 19)
   assert.ok(store.broadcasts)
 })
 
-test('recipients skip blocked and botBlocked users', () => {
+test('recipients skip botBlocked users (account bans removed)', () => {
   withTempStore(() => {
     const ids = withStore((store) => {
       createUser(store, { id: 1, first_name: 'A', username: 'a' })
@@ -43,7 +43,7 @@ test('recipients skip blocked and botBlocked users', () => {
       store.users['3'].botBlocked = true
       return listBroadcastRecipients(store)
     })
-    assert.deepEqual(ids, [1])
+    assert.deepEqual(ids, [1, 2])
   })
 })
 

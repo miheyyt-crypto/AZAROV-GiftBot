@@ -60,9 +60,6 @@ export function listBroadcastRecipients(store) {
       if (!Number.isInteger(tid) || tid <= 0) {
         return false
       }
-      if (user.blocked === true) {
-        return false
-      }
       if (user.botBlocked === true) {
         return false
       }

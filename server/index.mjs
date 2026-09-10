@@ -152,8 +152,6 @@ import {
 import { clientIp, createRateLimiter, sessionAuthLimiter, timingSafeEqualString, trustProxyHop } from './rate-limit.mjs'
 import {
   buildAdminAntiAbuseView,
-  isMultiAccountCheckEnabled,
-  MULTI_ACCOUNT_USER_MESSAGE,
   parseDeviceId,
   unbanAllBlockedUsersOnStore,
   userCanUseAppEconomy,
@@ -202,15 +200,6 @@ function assertProductionEnv() {
     process.exit(1)
   }
 
-  // Stable pepper for IP hashing — never derive from rotatable BOT_TOKEN.
-  const antiAbuseSecret = String(process.env.ANTI_ABUSE_HMAC_SECRET || '').trim()
-  if (!antiAbuseSecret) {
-    missing.push('ANTI_ABUSE_HMAC_SECRET')
-  } else if (antiAbuseSecret.length < 32) {
-    console.error('[boot] ANTI_ABUSE_HMAC_SECRET must be at least 32 characters in production.')
-    process.exit(1)
-  }
-
   if (missing.length) {
     console.error(`[boot] Missing required production env: ${missing.join(', ')}`)
     process.exit(1)
@@ -221,11 +210,7 @@ assertProductionEnv()
 assertPersistentStoreOrExit()
 assertSingleReplicaDeployment({ isProduction: IS_PRODUCTION })
 
-if (!isMultiAccountCheckEnabled()) {
-  console.warn(
-    '[boot] Multi-account / twin check DISABLED — set ANTI_ABUSE_MULTI_ACCOUNT=1 to re-enable',
-  )
-}
+console.info('[boot] Account ban / multi-account blocking system is removed')
 
 const adminAuthLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 })
 const partnerUploadLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 10 })
@@ -494,27 +479,6 @@ function withUser(handler) {
       })
       return
     }
-    if (stored.blocked) {
-      res.status(403).json({
-        success: false,
-        code: 'MULTI_ACCOUNT_BLOCKED',
-        message: MULTI_ACCOUNT_USER_MESSAGE.title,
-        title: MULTI_ACCOUNT_USER_MESSAGE.title,
-        detail: MULTI_ACCOUNT_USER_MESSAGE.detail,
-        description: MULTI_ACCOUNT_USER_MESSAGE.message,
-        user: toPublicUser(stored),
-      })
-      return
-    }
-    if (stored.antiAbuseBound === false && isMultiAccountCheckEnabled()) {
-      res.status(403).json({
-        success: false,
-        code: 'REGISTRATION_INCOMPLETE',
-        message: 'Завершите вход в приложение.',
-        user: toPublicUser(stored),
-      })
-      return
-    }
 
     await handler(req, res, telegramUser)
   })
@@ -529,23 +493,10 @@ function withEconomicUser(handler) {
     const stored = getUser(telegramUser.id)
     const economy = userCanUseAppEconomy(stored)
     if (!economy.ok) {
-      const status = economy.code === 'MULTI_ACCOUNT_BLOCKED' ? 403 : 403
-      res.status(status).json({
+      res.status(403).json({
         success: false,
         code: economy.code,
         message: economy.message,
-        title:
-          economy.code === 'MULTI_ACCOUNT_BLOCKED'
-            ? MULTI_ACCOUNT_USER_MESSAGE.title
-            : undefined,
-        description:
-          economy.code === 'MULTI_ACCOUNT_BLOCKED'
-            ? MULTI_ACCOUNT_USER_MESSAGE.message
-            : undefined,
-        detail:
-          economy.code === 'MULTI_ACCOUNT_BLOCKED'
-            ? MULTI_ACCOUNT_USER_MESSAGE.detail
-            : undefined,
         user: stored ? toPublicUser(stored) : undefined,
       })
       return
@@ -789,29 +740,6 @@ app.post(
       return
     }
 
-    if (result.blocked || user.blocked || result.antiAbuse?.code === 'MULTI_ACCOUNT_BLOCKED') {
-      res.status(403).json({
-        success: false,
-        code: 'MULTI_ACCOUNT_BLOCKED',
-        message: MULTI_ACCOUNT_USER_MESSAGE.title,
-        title: MULTI_ACCOUNT_USER_MESSAGE.title,
-        description: MULTI_ACCOUNT_USER_MESSAGE.message,
-        detail: MULTI_ACCOUNT_USER_MESSAGE.detail,
-        user: toPublicUser(user),
-      })
-      return
-    }
-
-    if (result.antiAbuse && !result.antiAbuse.allowed) {
-      res.status(403).json({
-        success: false,
-        code: result.antiAbuse.code || 'REGISTRATION_INCOMPLETE',
-        message: result.antiAbuse.message || 'Не удалось завершить регистрацию.',
-        user: toPublicUser(user),
-      })
-      return
-    }
-
     const session = createWebSession(user.telegramId, {
       userAgent: String(req.headers['user-agent'] || ''),
       ip,
@@ -924,47 +852,21 @@ app.post(
       activationReason: result.activation?.reason || null,
       activationRewarded: Boolean(result.activation?.rewarded),
       referredByUserId: user?.referredByUserId || null,
-      antiAbuseCode: result.antiAbuse?.code || null,
-      blocked: Boolean(user?.blocked),
     })
 
-    if (result.blocked || user?.blocked || result.antiAbuse?.code === 'MULTI_ACCOUNT_BLOCKED') {
+    if (!user) {
       const body = {
         success: false,
-        code: 'MULTI_ACCOUNT_BLOCKED',
-        message: MULTI_ACCOUNT_USER_MESSAGE.title,
-        title: MULTI_ACCOUNT_USER_MESSAGE.title,
-        description: MULTI_ACCOUNT_USER_MESSAGE.message,
-        detail: MULTI_ACCOUNT_USER_MESSAGE.detail,
-        user: toPublicUser(user),
+        code: 'REGISTRATION_INCOMPLETE',
+        message: 'Не удалось создать пользователя.',
       }
       mark('response_prepare')
-      res.status(403).json(body)
+      res.status(500).json(body)
       mark('response_sent')
       console.info('[SESSION TIMING]', {
         ...timing,
         total_ms: Math.round(performance.now() - t0),
-        status: 403,
-        external_api_ms: 0,
-        telegram_bot_api_ms: 0,
-      })
-      return
-    }
-
-    if (result.antiAbuse && !result.antiAbuse.allowed) {
-      const body = {
-        success: false,
-        code: result.antiAbuse.code || 'REGISTRATION_INCOMPLETE',
-        message: result.antiAbuse.message || 'Не удалось завершить регистрацию.',
-        user: toPublicUser(user),
-      }
-      mark('response_prepare')
-      res.status(403).json(body)
-      mark('response_sent')
-      console.info('[SESSION TIMING]', {
-        ...timing,
-        total_ms: Math.round(performance.now() - t0),
-        status: 403,
+        status: 500,
         external_api_ms: 0,
         telegram_bot_api_ms: 0,
       })
@@ -1224,14 +1126,6 @@ app.post(
         success: false,
         code: economy.code,
         message: economy.message,
-        title:
-          economy.code === 'MULTI_ACCOUNT_BLOCKED' ? MULTI_ACCOUNT_USER_MESSAGE.title : undefined,
-        description:
-          economy.code === 'MULTI_ACCOUNT_BLOCKED'
-            ? MULTI_ACCOUNT_USER_MESSAGE.message
-            : undefined,
-        detail:
-          economy.code === 'MULTI_ACCOUNT_BLOCKED' ? MULTI_ACCOUNT_USER_MESSAGE.detail : undefined,
         user: stored ? toPublicUser(stored) : undefined,
       })
       return
@@ -1346,14 +1240,6 @@ app.post(
         success: false,
         code: economy.code,
         message: economy.message,
-        title:
-          economy.code === 'MULTI_ACCOUNT_BLOCKED' ? MULTI_ACCOUNT_USER_MESSAGE.title : undefined,
-        description:
-          economy.code === 'MULTI_ACCOUNT_BLOCKED'
-            ? MULTI_ACCOUNT_USER_MESSAGE.message
-            : undefined,
-        detail:
-          economy.code === 'MULTI_ACCOUNT_BLOCKED' ? MULTI_ACCOUNT_USER_MESSAGE.detail : undefined,
         user: stored ? toPublicUser(stored) : undefined,
       })
       return
