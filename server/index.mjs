@@ -10,6 +10,7 @@ import { createCorsMiddleware } from './cors.mjs'
 import { asyncHandler, HttpError, sendSafeError } from './errors.mjs'
 import { extractReferralCode, toPublicUser } from './users.mjs'
 import { bootstrapUser, activateReferral, readReferralMe } from './referrals.mjs'
+import { getOnlineCount, touchPresence } from './presence.mjs'
 import { checkTelegramSubscribe, claimInviteFriendsTask, checkLaunchBot } from './tasks.mjs'
 import {
   buildKickResultRedirect,
@@ -918,6 +919,11 @@ app.post(
       return
     }
 
+    touchPresence(auth.user.id, {
+      username: user?.username || auth.user.username,
+      firstName: user?.firstName || auth.user.first_name,
+    })
+
     res.json({
       success: true,
       user: toPublicUser(user),
@@ -931,6 +937,22 @@ app.post(
             level: result.levelRewards.level,
           }
         : null,
+      onlineCount: getOnlineCount(),
+    })
+  }),
+)
+
+app.post(
+  '/api/presence/ping',
+  withUser(async (_req, res, telegramUser) => {
+    const user = getUser(telegramUser.id)
+    const result = touchPresence(telegramUser.id, {
+      username: user?.username || telegramUser.username,
+      firstName: user?.firstName || telegramUser.first_name,
+    })
+    res.json({
+      success: true,
+      onlineCount: result.onlineCount ?? getOnlineCount(),
     })
   }),
 )
@@ -939,6 +961,10 @@ app.get(
   '/api/me',
   withUser(async (_req, res, telegramUser) => {
     const result = bootstrapUser(telegramUser, '')
+    touchPresence(telegramUser.id, {
+      username: getUser(telegramUser.id)?.username || telegramUser.username,
+      firstName: getUser(telegramUser.id)?.firstName || telegramUser.first_name,
+    })
     res.json({
       success: true,
       user: toPublicUser(getUser(telegramUser.id)),

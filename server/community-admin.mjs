@@ -13,6 +13,7 @@ import {
   listAdminCommunityAccess,
   rejectCommunityAccess,
 } from './community-access.mjs'
+import { getOnlineCount, listOnlineUsers } from './presence.mjs'
 import { resolveCommunityScreenshotPath } from './uploads.mjs'
 
 /** Admin awaiting rejection reason text. Keys are string telegram user ids. */
@@ -93,6 +94,7 @@ export function buildCommunityAdminMenuKeyboard() {
 export function buildAdminRootKeyboard() {
   return {
     inline_keyboard: [
+      [{ text: '🟢 Онлайн', callback_data: 'admin:online' }],
       [{ text: '🎁 Розыгрыши', callback_data: 'gw:menu' }],
       [{ text: '🔒 Заявки на доступ', callback_data: 'ca:menu' }],
       [{ text: '🎟 Промокоды', callback_data: 'promo:menu' }],
@@ -193,11 +195,56 @@ export async function sendAdminRootMenu(ctx) {
   if (!adminId) {
     return true
   }
+  const online = getOnlineCount()
   await replyHtml(
     ctx,
-    ['🛠 <b>Админ-меню</b>', '', 'Выберите раздел:'].join('\n'),
+    [
+      '🛠 <b>Админ-меню</b>',
+      '',
+      `🟢 Онлайн в Mini App: <b>${online}</b>`,
+      '',
+      'Выберите раздел:',
+    ].join('\n'),
     { reply_markup: buildAdminRootKeyboard() },
   )
+  return true
+}
+
+export async function sendAdminOnlineStats(ctx) {
+  const adminId = await requireAdminCtx(ctx)
+  if (!adminId) {
+    return true
+  }
+  const online = listOnlineUsers()
+  const lines = [
+    '🟢 <b>Онлайн в Mini App</b>',
+    '',
+    `Сейчас: <b>${online.length}</b>`,
+    '',
+  ]
+  if (!online.length) {
+    lines.push('Никого нет в приложении.')
+  } else {
+    const preview = online.slice(0, 30)
+    for (const user of preview) {
+      const name = user.username
+        ? `@${escapeHtml(user.username)}`
+        : escapeHtml(user.firstName || 'без имени')
+      lines.push(`• ${name} — <code>${user.telegramId}</code>`)
+    }
+    if (online.length > preview.length) {
+      lines.push('', `…и ещё ${online.length - preview.length}`)
+    }
+  }
+  lines.push('', 'Обновляется по heartbeat из Mini App (~1.5 мин).')
+  await replyHtml(ctx, lines.join('\n'), {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '🔄 Обновить', callback_data: 'admin:online' }],
+        [{ text: '◀️ Назад', callback_data: 'admin:root' }],
+      ],
+    },
+  })
   return true
 }
 
@@ -387,6 +434,12 @@ export async function handleCommunityAdminCallback(ctx) {
   if (data === 'admin:root') {
     await answerCommunityCallback(ctx)
     await sendAdminRootMenu(ctx)
+    return true
+  }
+
+  if (data === 'admin:online') {
+    await answerCommunityCallback(ctx)
+    await sendAdminOnlineStats(ctx)
     return true
   }
 

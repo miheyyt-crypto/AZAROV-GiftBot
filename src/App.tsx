@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom'
 
 import { AuthGate } from '@/components/AuthGate'
+import { PresenceHeartbeat } from '@/components/PresenceHeartbeat'
 import { ServerNotificationToasts } from '@/components/ServerNotificationToasts'
 import { WelvuraPopup } from '@/components/WelvuraPopup'
 import { useAppSession } from '@/hooks/useAppSession'
@@ -27,6 +28,7 @@ export default function App() {
 
   return (
     <AuthGate>
+      <PresenceHeartbeat />
       <ServerNotificationToasts />
       <WelvuraPopup />
       <Routes>
