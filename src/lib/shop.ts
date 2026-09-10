@@ -77,6 +77,9 @@ export async function purchaseProduct(
   if (fulfillment.trackUrl) {
     metadata.trackUrl = fulfillment.trackUrl
   }
+  if (fulfillment.welvuraId) {
+    metadata.welvuraId = fulfillment.welvuraId
+  }
 
   try {
     const result = await purchaseProductRequest(productId, requestId, metadata)

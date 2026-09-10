@@ -108,6 +108,9 @@ function formatMetadataLines(metadata) {
   if (meta.trackUrl) {
     lines.push(`Ссылка на трек: <code>${escapeHtml(meta.trackUrl)}</code>`)
   }
+  if (meta.welvuraId) {
+    lines.push(`Welvura ID: <code>${escapeHtml(meta.welvuraId)}</code>`)
+  }
   for (const [key, value] of Object.entries(meta)) {
     if (
       key === 'telegramUsername' ||
@@ -115,7 +118,8 @@ function formatMetadataLines(metadata) {
       key === 'kickUsername' ||
       key === 'donateNickname' ||
       key === 'donateText' ||
-      key === 'trackUrl'
+      key === 'trackUrl' ||
+      key === 'welvuraId'
     ) {
       continue
     }

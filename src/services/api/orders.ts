@@ -41,6 +41,7 @@ export function mapShopOrderToOrder(order: ShopOrder): Order {
     donateNickname: order.metadata?.donateNickname,
     donateText: order.metadata?.donateText,
     trackUrl: order.metadata?.trackUrl,
+    welvuraId: order.metadata?.welvuraId,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt ?? order.completedAt ?? order.createdAt,
   }

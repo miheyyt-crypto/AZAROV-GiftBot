@@ -1,11 +1,11 @@
 import cashImage from '@/assets/shop/cash.png'
-import diamondImage from '@/assets/shop/diamond.png'
 import donateImage from '@/assets/shop/donate.png'
 import freezeImage from '@/assets/shop/freeze.png'
 import musicImage from '@/assets/shop/music.png'
 import premium6mImage from '@/assets/shop/premium-6m.png'
 import premium12mImage from '@/assets/shop/premium-12m.png'
 import vipImage from '@/assets/shop/vip.png'
+import welvura200Image from '@/assets/shop/welvura-200.png'
 import type { ProductCategory, ShopProduct } from '@/types/shop'
 
 export const shopCategories: Array<{ id: ProductCategory | 'all'; label: string }> = [
@@ -28,19 +28,24 @@ const TELEGRAM_USERNAME_FIELD = {
 
 export const products: ShopProduct[] = [
   {
-    id: 'diamond-autograph',
-    name: 'Подарок Алмаз Роспись',
+    id: 'welvura-balance-200',
+    name: '200 рублей на Welvura',
     price: 5555,
     currency: 'coins',
-    category: 'other',
-    image: diamondImage,
-    imageClassName: 'object-contain scale-[0.85]',
-    description: 'Настоящий подарок Telegram за 100 звёзд.',
+    category: 'money',
+    image: welvura200Image,
+    imageClassName: 'object-contain scale-[0.92]',
+    description: '200 рублей на твой баланс Welvura, с вагером х1.',
     detailText:
-      'Настоящий подарок Telegram за 100 звёзд. Бот пришлёт его тебе сам, на аккаунт, с которого ты покупаешь — ник вводить не нужно. Отправляем сразу после проверки заказа. Алмаз после получения — на звёзды обменять нельзя.',
-    infoText:
-      'Бот пришлёт подарок тебе сам — на этот же аккаунт, с которого покупаешь. Ник вводить не нужно, отправим сразу после проверки заказа.',
-    checkoutField: null,
+      '200 рублей на твой баланс Welvura, с вагером х1. Покупай товар и получай 200 рублей себе на баланс! Для получения укажи свой ID аккаунта Welvura ниже, после чего деньги уже совсем скоро прийдут тебе на баланс!',
+    infoText: ADMIN_ORDERS_INFO,
+    checkoutField: {
+      type: 'welvura_id',
+      label: 'ID аккаунта Welvura',
+      placeholder: 'Например: 12345678',
+      hint: 'Только цифры — ID из твоего аккаунта Welvura.',
+      maxLength: 32,
+    },
     available: true,
   },
   {

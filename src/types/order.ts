@@ -26,6 +26,7 @@ export interface Order {
   donateNickname?: string
   donateText?: string
   trackUrl?: string
+  welvuraId?: string
   createdAt: string
   updatedAt: string
 }

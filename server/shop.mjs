@@ -4,7 +4,7 @@ import { STREAK_FREEZE_PRODUCT_ID } from './constants.mjs'
 import { grantStreakFreezeInventoryOnStore, publicInventoryItem } from './inventory.mjs'
 import { findProduct } from './products.mjs'
 import { withStore, withStoreRead } from './store.mjs'
-import { sanitizePurchaseMetadata } from './validate.mjs'
+import { assertRequiredPurchaseMetadata, sanitizePurchaseMetadata } from './validate.mjs'
 import { addCoins, spendCoins, TX_TYPE, utcNow } from './wallet.mjs'
 import {
   notifyOrderApprovedOnStore,
@@ -164,6 +164,14 @@ export function purchaseProduct(userId, productId, requestId, metadata = {}) {
     }
 
     const safeMetadata = sanitizePurchaseMetadata(metadata)
+    const required = assertRequiredPurchaseMetadata(product, safeMetadata)
+    if (!required.ok) {
+      return {
+        success: false,
+        code: required.code,
+        message: required.message,
+      }
+    }
     user.orderIds = user.orderIds || []
     const orderId = generateOrderId(store)
     const createdAt = utcNow()

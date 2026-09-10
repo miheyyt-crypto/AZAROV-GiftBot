@@ -15,6 +15,7 @@ const METADATA_LIMITS = {
   donateNickname: 20,
   donateText: 300,
   trackUrl: 500,
+  welvuraId: 32,
 }
 
 const FORBIDDEN_CLIENT_KEYS = new Set([
@@ -157,7 +158,32 @@ export function sanitizePurchaseMetadata(metadata) {
     }
   }
 
+  if (safe.welvuraId) {
+    const digits = String(safe.welvuraId).replace(/\D/g, '')
+    if (digits) {
+      safe.welvuraId = digits.slice(0, 32)
+    } else {
+      delete safe.welvuraId
+    }
+  }
+
   return safe
+}
+
+/** Shop products that require a numeric Welvura account id. */
+export function assertRequiredPurchaseMetadata(product, metadata) {
+  if (!product?.requireWelvuraId) {
+    return { ok: true }
+  }
+  const welvuraId = String(metadata?.welvuraId || '').trim()
+  if (!/^\d{1,32}$/.test(welvuraId)) {
+    return {
+      ok: false,
+      code: 'INVALID_WELVURA_ID',
+      message: 'Укажи свой ID аккаунта Welvura (только цифры).',
+    }
+  }
+  return { ok: true }
 }
 
 export function parsePositiveIntAmount(value, fieldName = 'amount') {

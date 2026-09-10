@@ -80,6 +80,13 @@ function validateField(field: ProductCheckoutField, value: string): string | nul
     return null
   }
 
+  if (field.type === 'welvura_id') {
+    if (!/^\d{1,32}$/.test(trimmed)) {
+      return 'Укажи ID Welvura — только цифры.'
+    }
+    return null
+  }
+
   return null
 }
 
@@ -101,6 +108,9 @@ function fieldToFulfillment(
   }
   if (field.type === 'donate_text') {
     return { donateText: value.trim() }
+  }
+  if (field.type === 'welvura_id') {
+    return { welvuraId: value.trim().replace(/\D/g, '') }
   }
   return { trackUrl: value.trim() }
 }

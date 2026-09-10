@@ -151,6 +151,12 @@ export function OrderDetailSheet({ order, onClose }: OrderDetailSheetProps) {
               <dd className="break-all text-right font-medium text-white">{order.trackUrl}</dd>
             </div>
           )}
+          {order.welvuraId && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">Welvura ID</dt>
+              <dd className="font-medium text-white">{order.welvuraId}</dd>
+            </div>
+          )}
         </dl>
 
         {order.comment && (

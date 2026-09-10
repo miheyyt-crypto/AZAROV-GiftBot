@@ -21,6 +21,7 @@ export type ProductFulfillmentField =
   | 'donate_nickname'
   | 'donate_text'
   | 'track_url'
+  | 'welvura_id'
 
 export interface ProductCheckoutField {
   type: ProductFulfillmentField
@@ -72,4 +73,5 @@ export interface PurchaseFulfillmentData {
   donateNickname?: string
   donateText?: string
   trackUrl?: string
+  welvuraId?: string
 }
