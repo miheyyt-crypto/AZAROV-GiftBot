@@ -1,6 +1,6 @@
 import { ChevronRight } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { CoinBalance } from '@/components/BalanceCard'
 import { GamesBannerGrid } from '@/components/GamesBannerGrid'
@@ -15,10 +15,17 @@ import { ROUTES } from '@/lib/constants'
 import { CasesPage } from '@/pages/CasesPage'
 import type { ProductCategory, ShopOrder, ShopProduct, ShopSection } from '@/types/shop'
 
+function resolveShopSection(value: string | null): ShopSection {
+  return value === 'cases' ? 'cases' : 'shop'
+}
+
 export function Shop() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { amount } = useBalance()
-  const [section, setSection] = useState<ShopSection>('shop')
+  const [section, setSection] = useState<ShopSection>(() =>
+    resolveShopSection(searchParams.get('section')),
+  )
   const [category, setCategory] = useState<ProductCategory | 'all'>('all')
   const [selectedProduct, setSelectedProduct] = useState<ShopProduct | null>(null)
   const [successOrder, setSuccessOrder] = useState<ShopOrder | null>(null)
@@ -28,6 +35,21 @@ export function Shop() {
     () => filterProducts(products, category),
     [products, category],
   )
+
+  function handleSectionChange(next: ShopSection) {
+    setSection(next)
+    const params = new URLSearchParams(searchParams)
+    if (next === 'cases') {
+      params.set('section', 'cases')
+    } else {
+      params.delete('section')
+    }
+    setSearchParams(params, { replace: true })
+  }
+
+  useEffect(() => {
+    setSection(resolveShopSection(searchParams.get('section')))
+  }, [searchParams])
 
   return (
     <div className="ui-page">
@@ -39,7 +61,7 @@ export function Shop() {
       </header>
 
       <div className="mb-4">
-        <ShopSectionTabs active={section} onChange={setSection} />
+        <ShopSectionTabs active={section} onChange={handleSectionChange} />
       </div>
 
       {section === 'cases' ? (

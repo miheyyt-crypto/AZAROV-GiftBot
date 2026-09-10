@@ -1,9 +1,11 @@
 import { X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 
 import { CoinIcon } from '@/components/CoinIcon'
 import type { DailyFreeCaseReward } from '@/data/daily-free-case'
+import { ROUTES } from '@/lib/constants'
 
 interface DailyFreeCaseResultModalProps {
   reward: DailyFreeCaseReward
@@ -11,6 +13,7 @@ interface DailyFreeCaseResultModalProps {
 }
 
 export function DailyFreeCaseResultModal({ reward, onClose }: DailyFreeCaseResultModalProps) {
+  const navigate = useNavigate()
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
@@ -22,6 +25,11 @@ export function DailyFreeCaseResultModal({ reward, onClose }: DailyFreeCaseResul
       document.body.style.overflow = previousOverflow
     }
   }, [])
+
+  function openCasesShop() {
+    onClose()
+    navigate(`${ROUTES.shop}?section=cases`)
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center">
@@ -90,14 +98,14 @@ export function DailyFreeCaseResultModal({ reward, onClose }: DailyFreeCaseResul
         <div className="mt-5 rounded-[20px] border border-neon-purple/35 bg-neon-purple/5 px-4 py-4 text-left">
           <p className="text-sm font-semibold text-white">Хочешь шанс на приз больше?</p>
           <p className="mt-1.5 text-xs leading-relaxed text-white/55">
-            Попробуй платный розыгрыш от 25 монет. Пополнение откроется сразу здесь.
+            Попробуй кейсы за монеты. Более ценные призы уже ждут тебя!
           </p>
           <button
             type="button"
-            disabled
-            className="mt-3 flex min-h-12 w-full cursor-not-allowed items-center justify-center rounded-full bg-gradient-to-r from-[#a8ff4a] via-[#5dffb0] to-[#3de8ff] text-sm font-bold text-[#07120c] opacity-80"
+            onClick={openCasesShop}
+            className="mt-3 flex min-h-12 w-full items-center justify-center rounded-full bg-gradient-to-r from-[#a8ff4a] via-[#5dffb0] to-[#3de8ff] text-sm font-bold text-[#07120c] transition-transform duration-150 active:scale-[0.98]"
           >
-            Попробовать за ⭐ 25
+            Открыть сейчас
           </button>
           <div className="mt-3 flex min-h-10 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3">
             <p className="text-xs font-semibold text-emerald-300">
