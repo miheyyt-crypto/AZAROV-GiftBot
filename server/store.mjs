@@ -300,6 +300,27 @@ function migrateStore(store) {
     store.version = 16
   }
 
+  // v17: one-shot purge of completed giveaways (empty "Завершённые" for a clean slate).
+  if (Number(store.version) < 17) {
+    store.giveaways = store.giveaways || {}
+    store.giveawayParticipants = store.giveawayParticipants || {}
+    const completedIds = new Set()
+    for (const [id, row] of Object.entries(store.giveaways)) {
+      if (row && row.status === 'completed') {
+        completedIds.add(id)
+        delete store.giveaways[id]
+      }
+    }
+    for (const key of Object.keys(store.giveawayParticipants)) {
+      const row = store.giveawayParticipants[key]
+      const giveawayId = row?.giveawayId != null ? String(row.giveawayId) : String(key).split(':')[0]
+      if (completedIds.has(giveawayId)) {
+        delete store.giveawayParticipants[key]
+      }
+    }
+    store.version = 17
+  }
+
   return store
 }
 
