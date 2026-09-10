@@ -30,6 +30,7 @@ export interface UserAccount {
   lastDailyFreeCaseAt?: string | null
   dailyFreeCaseAvailable?: boolean
   dailyFreeCaseAvailableAt?: string | null
+  gramBalance?: number
   chatMessages?: number
   watchSeconds?: number
   streamHours?: number

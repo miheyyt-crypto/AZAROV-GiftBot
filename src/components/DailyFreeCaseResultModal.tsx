@@ -89,10 +89,8 @@ export function DailyFreeCaseResultModal({ reward, onClose }: DailyFreeCaseResul
         <p className="mt-1 text-sm text-white/55">Ты выиграл</p>
 
         <div className="mx-auto mt-3 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/40 px-3 py-1.5">
-          <CoinIcon className="size-4" />
-          <span className="text-sm font-semibold text-gold">
-            {new Intl.NumberFormat('ru-RU').format(reward.amount)}
-          </span>
+          {reward.rewardType === 'COINS' ? <CoinIcon className="size-4" /> : null}
+          <span className="text-sm font-semibold text-gold">{reward.valueLabel}</span>
         </div>
 
         <div className="mt-5 rounded-[20px] border border-neon-purple/35 bg-neon-purple/5 px-4 py-4 text-left">
@@ -109,7 +107,11 @@ export function DailyFreeCaseResultModal({ reward, onClose }: DailyFreeCaseResul
           </button>
           <div className="mt-3 flex min-h-10 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3">
             <p className="text-xs font-semibold text-emerald-300">
-              ⭐ Монеты зачислены на баланс!
+              {reward.rewardType === 'COINS'
+                ? '⭐ Монеты зачислены на баланс!'
+                : reward.rewardType === 'GRAM'
+                  ? '💠 GRAM зачислен на баланс!'
+                  : '🎁 Предмет добавлен в коллекцию!'}
             </p>
           </div>
         </div>

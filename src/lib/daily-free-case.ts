@@ -1,9 +1,9 @@
+import type { DailyFreeCaseReward } from '@/data/daily-free-case'
 import { applyAccountSnapshot } from '@/lib/account'
 import { openDailyFreeCaseRequest, getDailyFreeCaseStatusRequest } from '@/lib/api'
 import { hydrateBalanceFromAccount } from '@/lib/balance'
 import { mapRemoteAccount } from '@/lib/session'
 import { createPurchaseRequestId } from '@/lib/shop'
-import type { DailyFreeCaseReward } from '@/data/daily-free-case'
 
 export interface DailyFreeCaseOpenResult {
   success: boolean
@@ -64,9 +64,22 @@ export async function openDailyFreeCase(
         }
       }
 
-      const raw = (result as { reward?: { id: string; name: string; amount: number; emoji?: string } })
-        .reward
-      if (!raw || !Number.isFinite(Number(raw.amount))) {
+      const raw = (
+        result as {
+          reward?: {
+            id: string
+            name: string
+            amount: number
+            emoji?: string
+            rewardType?: DailyFreeCaseReward['rewardType']
+            valueLabel?: string
+            rarity?: DailyFreeCaseReward['rarity']
+            rarityName?: string
+            rarityChance?: number
+          }
+        }
+      ).reward
+      if (!raw || typeof raw.id !== 'string') {
         return {
           success: false,
           message: 'Некорректный ответ сервера.',
@@ -81,9 +94,14 @@ export async function openDailyFreeCase(
         reward: {
           id: String(raw.id),
           name: String(raw.name),
-          amount: Math.floor(Number(raw.amount)),
+          amount: Number(raw.amount) || 0,
           weight: 0,
           emoji: raw.emoji || '⭐',
+          rewardType: raw.rewardType || 'COINS',
+          valueLabel: raw.valueLabel || String(raw.name),
+          rarity: raw.rarity,
+          rarityName: raw.rarityName,
+          rarityChance: raw.rarityChance,
         },
       }
     } catch {

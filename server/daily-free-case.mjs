@@ -8,6 +8,8 @@ import {
   DAILY_FREE_CASE_REWARDS,
   getDailyFreeCaseAvailability,
   getDailyFreeCaseRewardById,
+  getDailyFreeCaseRewardsFlat,
+  listDailyFreeCaseRarities,
   rollDailyFreeCaseReward,
 } from './daily-free-case-config.mjs'
 
@@ -19,16 +21,34 @@ function rewardEventKey(openingId) {
   return `${openingId}:reward`
 }
 
-function cryptoRoll() {
-  const total = DAILY_FREE_CASE_REWARDS.reduce((sum, item) => sum + item.weight, 0)
+function pickWeightedInt(items, weightOf) {
+  const total = items.reduce((sum, item) => sum + weightOf(item), 0)
+  if (total <= 0) {
+    return items[items.length - 1] || null
+  }
   let cursor = randomInt(total)
-  for (const item of DAILY_FREE_CASE_REWARDS) {
-    cursor -= item.weight
+  for (const item of items) {
+    cursor -= weightOf(item)
     if (cursor < 0) {
       return item
     }
   }
-  return DAILY_FREE_CASE_REWARDS[DAILY_FREE_CASE_REWARDS.length - 1]
+  return items[items.length - 1] || null
+}
+
+function cryptoRoll() {
+  const rarities = listDailyFreeCaseRarities()
+  const rarity = pickWeightedInt(rarities, (item) => item.chance)
+  if (!rarity?.rewards?.length) {
+    return getDailyFreeCaseRewardsFlat()[0]
+  }
+  const reward = pickWeightedInt(rarity.rewards, (item) => item.weight)
+  return {
+    ...reward,
+    rarity: rarity.id,
+    rarityName: rarity.name,
+    rarityChance: rarity.chance,
+  }
 }
 
 function publicReward(reward) {
@@ -37,7 +57,77 @@ function publicReward(reward) {
     name: reward.name,
     amount: reward.amount,
     emoji: reward.emoji,
+    rewardType: reward.rewardType,
+    valueLabel: reward.valueLabel,
+    rarity: reward.rarity,
+    rarityName: reward.rarityName,
+    rarityChance: reward.rarityChance,
   }
+}
+
+function roundGram(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 1e6) / 1e6
+}
+
+function grantDailyFreeCaseReward(store, user, reward, openingId) {
+  const type = String(reward.rewardType || '').toUpperCase()
+
+  if (type === 'COINS') {
+    const amount = Math.floor(Number(reward.amount) || 0)
+    if (amount < 1) {
+      return { ok: false, reason: 'invalid_coins' }
+    }
+    const credit = addCoins(store, user, amount, TX_TYPE.CASE_REWARD, rewardEventKey(openingId), {
+      referenceId: openingId,
+      source: 'daily_free_case',
+      rewardId: reward.id,
+    })
+    if (!credit.granted && credit.reason !== 'duplicate') {
+      return { ok: false, reason: credit.reason || 'credit_failed' }
+    }
+    return { ok: true, credited: 'COINS', amount }
+  }
+
+  if (type === 'GRAM') {
+    const amount = Number(reward.amount)
+    if (!(amount > 0)) {
+      return { ok: false, reason: 'invalid_gram' }
+    }
+    user.gramBalance = roundGram((Number(user.gramBalance) || 0) + amount)
+    store.events = store.events || {}
+    store.events[rewardEventKey(openingId)] = {
+      eventId: rewardEventKey(openingId),
+      done: true,
+      type: 'DAILY_FREE_CASE_GRAM',
+      userId: user.telegramId,
+      amount,
+      rewardId: reward.id,
+      createdAt: new Date().toISOString(),
+    }
+    return { ok: true, credited: 'GRAM', amount }
+  }
+
+  if (type === 'ITEM') {
+    user.dailyCaseItems = Array.isArray(user.dailyCaseItems) ? user.dailyCaseItems : []
+    user.dailyCaseItems.push({
+      itemId: `${openingId}:item`,
+      rewardId: reward.id,
+      name: reward.name,
+      createdAt: new Date().toISOString(),
+    })
+    store.events = store.events || {}
+    store.events[rewardEventKey(openingId)] = {
+      eventId: rewardEventKey(openingId),
+      done: true,
+      type: 'DAILY_FREE_CASE_ITEM',
+      userId: user.telegramId,
+      rewardId: reward.id,
+      createdAt: new Date().toISOString(),
+    }
+    return { ok: true, credited: 'ITEM', amount: 0 }
+  }
+
+  return { ok: false, reason: 'unknown_type' }
 }
 
 function buildStatusPayload(user) {
@@ -46,7 +136,7 @@ function buildStatusPayload(user) {
     available: availability.available,
     availableAt: availability.availableAt,
     cooldownMs: DAILY_FREE_CASE_COOLDOWN_MS,
-    rewards: DAILY_FREE_CASE_REWARDS.map((item) => publicReward(item)),
+    rewards: getDailyFreeCaseRewardsFlat().map((item) => publicReward(item)),
   }
 }
 
@@ -66,8 +156,8 @@ export function getDailyFreeCaseStatus(userId) {
 
 /**
  * Server-authoritative free daily spin:
- * - rolls reward
- * - credits coins once
+ * - rolls reward by rarity chance + item weight
+ * - grants coins / gram / item
  * - starts 24h cooldown
  * - idempotent by requestId
  */
@@ -109,6 +199,7 @@ export function openDailyFreeCase(userId, requestId) {
       .digest('hex')
       .slice(0, 24)}`
 
+    const previousLastAt = user.lastDailyFreeCaseAt || null
     user.lastDailyFreeCaseAt = nowIso
     user.dailyFreeCaseOpenings = Array.isArray(user.dailyFreeCaseOpenings)
       ? user.dailyFreeCaseOpenings
@@ -116,20 +207,18 @@ export function openDailyFreeCase(userId, requestId) {
     user.dailyFreeCaseOpenings.push({
       openingId,
       rewardId: reward.id,
+      rewardType: reward.rewardType,
       amount: reward.amount,
       requestId,
       createdAt: nowIso,
     })
 
-    const credit = addCoins(store, user, reward.amount, TX_TYPE.CASE_REWARD, rewardEventKey(openingId), {
-      referenceId: openingId,
-      source: 'daily_free_case',
-      rewardId: reward.id,
-    })
-
-    if (!credit.granted && credit.reason !== 'duplicate') {
-      // Roll back cooldown if ledger refused (e.g. unbound) so user can retry later.
-      user.lastDailyFreeCaseAt = null
+    const grant = grantDailyFreeCaseReward(store, user, reward, openingId)
+    if (!grant.ok) {
+      user.lastDailyFreeCaseAt = previousLastAt
+      user.dailyFreeCaseOpenings = user.dailyFreeCaseOpenings.filter(
+        (item) => item.openingId !== openingId,
+      )
       return {
         success: false,
         code: 'REWARD_FAILED',
@@ -157,7 +246,7 @@ export function openDailyFreeCase(userId, requestId) {
       success: true,
       alreadyProcessed: false,
       ...result,
-      rewards: DAILY_FREE_CASE_REWARDS.map((item) => publicReward(item)),
+      rewards: getDailyFreeCaseRewardsFlat().map((item) => publicReward(item)),
       user: toPublicUser(store.users[String(userId)], store),
     }
   })

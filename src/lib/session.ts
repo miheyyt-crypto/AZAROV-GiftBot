@@ -51,6 +51,7 @@ export function mapRemoteAccount(remote: UserAccount): UserAccount {
     dailyFreeCaseAvailable:
       remote.dailyFreeCaseAvailable == null ? true : Boolean(remote.dailyFreeCaseAvailable),
     dailyFreeCaseAvailableAt: remote.dailyFreeCaseAvailableAt ?? null,
+    gramBalance: Number(remote.gramBalance) || 0,
     chatMessages: remote.chatMessages ?? 0,
     watchSeconds: remote.watchSeconds ?? 0,
     streamHours: remote.streamHours ?? 0,

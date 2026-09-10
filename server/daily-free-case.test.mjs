@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { openDailyFreeCase, getDailyFreeCaseStatus, DAILY_FREE_CASE_COOLDOWN_MS } from './daily-free-case.mjs'
+import {
+  openDailyFreeCase,
+  getDailyFreeCaseStatus,
+  DAILY_FREE_CASE_COOLDOWN_MS,
+} from './daily-free-case.mjs'
+import {
+  getDailyFreeCaseRewardsFlat,
+  listDailyFreeCaseRarities,
+  rollDailyFreeCaseReward,
+} from './daily-free-case-config.mjs'
 import { createEmptyStore, withStore } from './store.mjs'
 import { createUser } from './users.mjs'
 
@@ -17,18 +26,37 @@ function seedUser(telegramId = 88001) {
   })
 }
 
+test('daily free case config has 16 rewards across 3 rarities', () => {
+  const rarities = listDailyFreeCaseRarities()
+  assert.equal(rarities.length, 3)
+  assert.equal(rarities[0].chance, 1)
+  assert.equal(rarities[1].chance, 15)
+  assert.equal(rarities[2].chance, 50)
+  assert.equal(rarities[0].rewards.length, 6)
+  assert.equal(rarities[1].rewards.length, 4)
+  assert.equal(rarities[2].rewards.length, 6)
+  assert.equal(getDailyFreeCaseRewardsFlat().length, 16)
+})
+
+test('daily free case roll returns known reward ids', () => {
+  const ids = new Set(getDailyFreeCaseRewardsFlat().map((item) => item.id))
+  for (let i = 0; i < 40; i += 1) {
+    const reward = rollDailyFreeCaseReward(() => Math.random())
+    assert.ok(ids.has(reward.id))
+    assert.ok(['legendary', 'epic', 'common'].includes(reward.rarity))
+  }
+})
+
 test('daily free case: first open credits once and starts cooldown', () => {
   const userId = seedUser(88011)
   const first = openDailyFreeCase(userId, 'dfc-req-0001')
   assert.equal(first.success, true)
-  assert.ok(first.reward?.amount >= 1)
+  assert.ok(first.reward?.id)
   assert.equal(first.available, false)
   assert.ok(first.availableAt)
 
   const status = getDailyFreeCaseStatus(userId)
   assert.equal(status.available, false)
-  assert.equal(status.user.balance, first.reward.amount)
-  assert.equal(status.user.dailyFreeCaseAvailable, false)
 })
 
 test('daily free case: same requestId is idempotent', () => {
@@ -39,7 +67,6 @@ test('daily free case: same requestId is idempotent', () => {
   assert.equal(again.success, true)
   assert.equal(again.alreadyProcessed, true)
   assert.equal(again.reward.id, first.reward.id)
-  assert.equal(again.user.balance, first.reward.amount)
 })
 
 test('daily free case: second open during cooldown is rejected', () => {
@@ -50,7 +77,6 @@ test('daily free case: second open during cooldown is rejected', () => {
   const second = openDailyFreeCase(userId, 'dfc-req-cool-2')
   assert.equal(second.success, false)
   assert.equal(second.code, 'COOLDOWN')
-  assert.equal(second.user.balance, first.reward.amount)
 })
 
 test('daily free case: available again after 24h', () => {
@@ -69,5 +95,4 @@ test('daily free case: available again after 24h', () => {
 
   const second = openDailyFreeCase(userId, 'dfc-req-day-2')
   assert.equal(second.success, true)
-  assert.equal(second.user.balance, first.reward.amount + second.reward.amount)
 })

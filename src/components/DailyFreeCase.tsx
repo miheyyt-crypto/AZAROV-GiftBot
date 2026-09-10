@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { CoinIcon } from '@/components/CoinIcon'
+import { DailyFreeCaseContentsSheet } from '@/components/DailyFreeCaseContentsSheet'
 import { DailyFreeCaseResultModal } from '@/components/DailyFreeCaseResultModal'
 import { DAILY_FREE_CASE_REWARDS, type DailyFreeCaseReward } from '@/data/daily-free-case'
 import { useUserAccount } from '@/hooks/useUserAccount'
@@ -64,8 +65,8 @@ function RewardCard({
           {reward.name}
         </p>
         <p className="mt-0.5 inline-flex items-center justify-center gap-0.5 text-[10px] font-semibold text-gold">
-          <CoinIcon className="size-3" />
-          {new Intl.NumberFormat('ru-RU').format(reward.amount)}
+          {reward.rewardType === 'COINS' ? <CoinIcon className="size-3" /> : null}
+          {reward.valueLabel}
         </p>
       </div>
     </article>
@@ -77,6 +78,7 @@ export function DailyFreeCase() {
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [phase, setPhase] = useState<UiPhase>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [showContents, setShowContents] = useState(false)
   const [availableAt, setAvailableAt] = useState<string | null>(
     account.dailyFreeCaseAvailableAt ?? null,
   )
@@ -347,6 +349,14 @@ export function DailyFreeCase() {
             : '🔥 БЕСПЛАТНО'}
       </button>
 
+      <button
+        type="button"
+        onClick={() => setShowContents(true)}
+        className="mt-2.5 flex min-h-11 w-full items-center justify-center rounded-full border border-white/12 bg-white/[0.04] text-sm font-semibold text-white/85 transition-colors active:bg-white/[0.08]"
+      >
+        Что внутри
+      </button>
+
       <p className="mt-2.5 text-center text-[10px] font-semibold tracking-[0.14em] text-white/40 uppercase">
         Вы можете выиграть
       </p>
@@ -356,6 +366,8 @@ export function DailyFreeCase() {
           {error}
         </p>
       ) : null}
+
+      {showContents ? <DailyFreeCaseContentsSheet onClose={() => setShowContents(false)} /> : null}
 
       {phase === 'result' && winner ? (
         <DailyFreeCaseResultModal reward={winner} onClose={handleCloseResult} />

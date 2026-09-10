@@ -59,6 +59,11 @@ export function resolveDailyFreeCaseReward(payload: {
   name: string
   amount: number
   emoji?: string
+  rewardType?: DailyFreeCaseReward['rewardType']
+  valueLabel?: string
+  rarity?: DailyFreeCaseReward['rarity']
+  rarityName?: string
+  rarityChance?: number
 }): DailyFreeCaseReward {
   const known = getDailyFreeCaseRewardById(payload.id)
   if (known) {
@@ -70,5 +75,10 @@ export function resolveDailyFreeCaseReward(payload: {
     amount: payload.amount,
     weight: 0,
     emoji: payload.emoji || '⭐',
+    rewardType: payload.rewardType || 'COINS',
+    valueLabel: payload.valueLabel || payload.name,
+    rarity: payload.rarity,
+    rarityName: payload.rarityName,
+    rarityChance: payload.rarityChance,
   }
 }

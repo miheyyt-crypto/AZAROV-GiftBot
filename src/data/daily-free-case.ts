@@ -1,28 +1,250 @@
 import coinImage from '@/assets/cases/reward-coins.png'
 
+export type DailyFreeCaseRarityId = 'legendary' | 'epic' | 'common'
+export type DailyFreeCaseRewardType = 'GRAM' | 'COINS' | 'ITEM'
+
 export interface DailyFreeCaseReward {
   id: string
   name: string
+  rewardType: DailyFreeCaseRewardType
   amount: number
   weight: number
   emoji: string
-  /** Optional image; falls back to coin art. */
+  valueLabel: string
+  /** Optional image; emoji used when absent. */
   image?: string
+  rarity?: DailyFreeCaseRarityId
+  rarityName?: string
+  rarityChance?: number
 }
 
-/** Keep weights/ids in sync with server/daily-free-case-config.mjs */
+export interface DailyFreeCaseRarityConfig {
+  id: DailyFreeCaseRarityId
+  name: string
+  /** Display / selection chance for the category (do not invent extra %). */
+  chance: number
+  rewards: DailyFreeCaseReward[]
+}
+
+/** Keep in sync with server/daily-free-case-config.mjs */
 export const DAILY_FREE_CASE_COOLDOWN_MS = 24 * 60 * 60 * 1000
 
-export const DAILY_FREE_CASE_REWARDS: DailyFreeCaseReward[] = [
-  { id: 'dfc-1', name: '1 Coin', amount: 1, weight: 35, emoji: '⭐', image: coinImage },
-  { id: 'dfc-3', name: '3 Coins', amount: 3, weight: 22, emoji: '⭐', image: coinImage },
-  { id: 'dfc-15', name: '15 Coins', amount: 15, weight: 15, emoji: '🌟', image: coinImage },
-  { id: 'dfc-50', name: 'Valentine Heart', amount: 50, weight: 12, emoji: '💝', image: coinImage },
-  { id: 'dfc-500', name: 'Party Sparkler', amount: 500, weight: 8, emoji: '🎇', image: coinImage },
-  { id: 'dfc-600', name: 'Snow Globe', amount: 600, weight: 5, emoji: '🔮', image: coinImage },
-  { id: 'dfc-1100', name: 'Top Hat', amount: 1100, weight: 3, emoji: '🎩', image: coinImage },
+export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCaseRarityConfig> = {
+  legendary: {
+    id: 'legendary',
+    name: 'Легендарный',
+    chance: 1,
+    rewards: [
+      {
+        id: 'dfc-gram-100',
+        name: '100 Gram',
+        rewardType: 'GRAM',
+        amount: 100,
+        weight: 1,
+        emoji: '💠',
+        valueLabel: '100 GRAM',
+      },
+      {
+        id: 'dfc-gram-50',
+        name: '50 Gram',
+        rewardType: 'GRAM',
+        amount: 50,
+        weight: 1,
+        emoji: '💠',
+        valueLabel: '50 GRAM',
+      },
+      {
+        id: 'dfc-durov-glass',
+        name: "Durov's Glass",
+        rewardType: 'ITEM',
+        amount: 0,
+        weight: 1,
+        emoji: '🕶️',
+        valueLabel: 'NFT',
+      },
+      {
+        id: 'dfc-loot-bag',
+        name: 'Loot Bag',
+        rewardType: 'ITEM',
+        amount: 0,
+        weight: 1,
+        emoji: '👜',
+        valueLabel: 'NFT',
+      },
+      {
+        id: 'dfc-diamond-ring',
+        name: 'Diamond Ring',
+        rewardType: 'ITEM',
+        amount: 0,
+        weight: 1,
+        emoji: '💍',
+        valueLabel: 'NFT',
+      },
+      {
+        id: 'dfc-swiss-watch',
+        name: 'Swiss Watch',
+        rewardType: 'ITEM',
+        amount: 0,
+        weight: 1,
+        emoji: '⌚',
+        valueLabel: 'NFT',
+      },
+    ],
+  },
+  epic: {
+    id: 'epic',
+    name: 'Эпический',
+    chance: 15,
+    rewards: [
+      {
+        id: 'dfc-gram-2',
+        name: '2 Gram',
+        rewardType: 'GRAM',
+        amount: 2,
+        weight: 1,
+        emoji: '💎',
+        valueLabel: '2 GRAM',
+      },
+      {
+        id: 'dfc-gram-1',
+        name: '1 Gram',
+        rewardType: 'GRAM',
+        amount: 1,
+        weight: 1,
+        emoji: '💎',
+        valueLabel: '1 GRAM',
+      },
+      {
+        id: 'dfc-gram-0-5',
+        name: '0.5 Gram',
+        rewardType: 'GRAM',
+        amount: 0.5,
+        weight: 1,
+        emoji: '💎',
+        valueLabel: '0.5 GRAM',
+      },
+      {
+        id: 'dfc-gram-0-2',
+        name: '0.2 Gram',
+        rewardType: 'GRAM',
+        amount: 0.2,
+        weight: 1,
+        emoji: '💎',
+        valueLabel: '0.2 GRAM',
+      },
+    ],
+  },
+  common: {
+    id: 'common',
+    name: 'Обычный',
+    chance: 50,
+    rewards: [
+      {
+        id: 'dfc-gram-0-01',
+        name: '0.01 Gram',
+        rewardType: 'GRAM',
+        amount: 0.01,
+        weight: 1,
+        emoji: '🔹',
+        valueLabel: '0.01 GRAM',
+      },
+      {
+        id: 'dfc-gram-0-005',
+        name: '0.005 Gram',
+        rewardType: 'GRAM',
+        amount: 0.005,
+        weight: 1,
+        emoji: '🔹',
+        valueLabel: '0.005 GRAM',
+      },
+      {
+        id: 'dfc-gram-0-001',
+        name: '0.001 Gram',
+        rewardType: 'GRAM',
+        amount: 0.001,
+        weight: 1,
+        emoji: '🔹',
+        valueLabel: '0.001 GRAM',
+      },
+      {
+        id: 'dfc-coins-100',
+        name: '100 монет',
+        rewardType: 'COINS',
+        amount: 100,
+        weight: 1,
+        emoji: '🪙',
+        valueLabel: '100 монет',
+        image: coinImage,
+      },
+      {
+        id: 'dfc-coins-50',
+        name: '50 монет',
+        rewardType: 'COINS',
+        amount: 50,
+        weight: 1,
+        emoji: '🪙',
+        valueLabel: '50 монет',
+        image: coinImage,
+      },
+      {
+        id: 'dfc-coins-25',
+        name: '25 монет',
+        rewardType: 'COINS',
+        amount: 25,
+        weight: 1,
+        emoji: '🪙',
+        valueLabel: '25 монет',
+        image: coinImage,
+      },
+    ],
+  },
+}
+
+export const DAILY_FREE_CASE_RARITY_ORDER: DailyFreeCaseRarityId[] = [
+  'legendary',
+  'epic',
+  'common',
 ]
 
+export function listDailyFreeCaseRarities(): DailyFreeCaseRarityConfig[] {
+  return DAILY_FREE_CASE_RARITY_ORDER.map((id) => DAILY_FREE_CASE_RARITIES[id])
+}
+
+export function getDailyFreeCaseRewardsFlat(): DailyFreeCaseReward[] {
+  return listDailyFreeCaseRarities().flatMap((rarity) =>
+    rarity.rewards.map((reward) => ({
+      ...reward,
+      rarity: rarity.id,
+      rarityName: rarity.name,
+      rarityChance: rarity.chance,
+    })),
+  )
+}
+
+/** Flat pool for spin reel — same source as contents modal. */
+export const DAILY_FREE_CASE_REWARDS = getDailyFreeCaseRewardsFlat()
+
 export function getDailyFreeCaseRewardById(id: string): DailyFreeCaseReward | null {
-  return DAILY_FREE_CASE_REWARDS.find((item) => item.id === id) ?? null
+  return getDailyFreeCaseRewardsFlat().find((item) => item.id === id) ?? null
+}
+
+export function formatGiftCountLabel(count: number): string {
+  const mod10 = count % 10
+  const mod100 = count % 100
+  if (mod10 === 1 && mod100 !== 11) {
+    return `${count} подарок`
+  }
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    return `${count} подарка`
+  }
+  return `${count} подарков`
+}
+
+export function formatEachChanceLabel(rarityChance: number, count: number): string {
+  if (count <= 0) {
+    return '0%'
+  }
+  const each = rarityChance / count
+  const text = Number.isInteger(each) ? String(each) : each.toFixed(2).replace(/\.?0+$/, '')
+  return `${text}%`
 }
