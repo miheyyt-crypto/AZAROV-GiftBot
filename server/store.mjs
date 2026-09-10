@@ -103,6 +103,7 @@ export function createEmptyStore() {
     promoCodes: {},
     promoUsages: {},
     withdrawals: {},
+    broadcasts: {},
     partnerSubmissions: {},
     partnerAccountBinds: {},
     webSessions: {},
@@ -162,6 +163,7 @@ function migrateStore(store) {
   store.antiAbuseAudit = store.antiAbuseAudit || {}
   store.pendingBotStarts = store.pendingBotStarts || {}
   store.botLaunchStarts = store.botLaunchStarts || {}
+  store.broadcasts = store.broadcasts || {}
 
   // One-shot upgrade: pending streak-freeze orders → inventory (strategy B).
   if (Number(store.version) < 5) {

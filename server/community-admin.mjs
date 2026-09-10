@@ -96,6 +96,7 @@ export function buildAdminRootKeyboard() {
       [{ text: '🎁 Розыгрыши', callback_data: 'gw:menu' }],
       [{ text: '🔒 Заявки на доступ', callback_data: 'ca:menu' }],
       [{ text: '🎟 Промокоды', callback_data: 'promo:menu' }],
+      [{ text: '📢 Рассылка', callback_data: 'bc:menu' }],
     ],
   }
 }

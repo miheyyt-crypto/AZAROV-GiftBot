@@ -35,6 +35,14 @@ import {
   startPromoCreateWizard,
 } from './promo-admin.mjs'
 import {
+  answerBroadcastCallback,
+  handleBroadcastAdminCallback,
+  handleBroadcastCancelCommand,
+  handleBroadcastWizardMessage,
+  handleBroadcastWizardPhoto,
+} from './broadcast-admin.mjs'
+import { startBroadcastScheduler } from './broadcasts.mjs'
+import {
   answerWithdrawalCallback,
   handleWithdrawalModerationCallback,
 } from './withdrawal-admin.mjs'
@@ -217,6 +225,10 @@ export function createBot() {
 
   bot.command('cancel', async (ctx) => {
     try {
+      const broadcastCancelled = await handleBroadcastCancelCommand(ctx)
+      if (broadcastCancelled) {
+        return
+      }
       const promoCancelled = await handlePromoCancelCommand(ctx)
       if (promoCancelled) {
         return
@@ -413,6 +425,22 @@ export function createBot() {
 
   bot.action(/^promo:/i, onPromoAdminAction)
 
+  async function onBroadcastAdminAction(ctx) {
+    try {
+      const handled = await handleBroadcastAdminCallback(ctx)
+      if (!handled) {
+        await answerBroadcastCallback(ctx)
+      }
+    } catch (error) {
+      console.error('[Telegram Bot] broadcast admin action failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+      await answerBroadcastCallback(ctx, 'Ошибка обработки', true)
+    }
+  }
+
+  bot.action(/^bc:/i, onBroadcastAdminAction)
+
   bot.on('text', async (ctx) => {
     const raw = String(ctx.message?.text || '')
     // Ignore /commands — only consume plain text as wizard / rejection reasons.
@@ -420,6 +448,10 @@ export function createBot() {
       return
     }
     try {
+      const broadcastHandled = await handleBroadcastWizardMessage(ctx)
+      if (broadcastHandled) {
+        return
+      }
       const promoHandled = await handlePromoWizardMessage(ctx)
       if (promoHandled) {
         return
@@ -446,6 +478,10 @@ export function createBot() {
 
   bot.on('photo', async (ctx) => {
     try {
+      const broadcastHandled = await handleBroadcastWizardPhoto(ctx)
+      if (broadcastHandled) {
+        return
+      }
       await handleGiveawayWizardPhoto(ctx)
     } catch (error) {
       console.error('[Telegram Bot] photo handler failed', {
@@ -534,6 +570,7 @@ export async function startBot(options = {}) {
       allowedUpdates: ['message', 'callback_query'],
       dropPendingUpdates: true,
     })
+    startBroadcastScheduler()
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown_error'
     botRuntimeDiagnostics = {

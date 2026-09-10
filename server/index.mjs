@@ -115,6 +115,7 @@ import {
   startGiveawayScheduler,
   updateGiveaway,
 } from './giveaways.mjs'
+import { startBroadcastScheduler } from './broadcasts.mjs'
 import { fetchTelegramFileById } from './telegram-files.mjs'
 import { getLeaderboard, getRecentCaseDrops } from './home.mjs'
 import {
@@ -2426,6 +2427,7 @@ export function startHttpServer() {
       console.log(`[boot] Serving frontend from ${distDir}`)
     }
     startGiveawayScheduler()
+    startBroadcastScheduler()
     void bootstrapKickFollowInfrastructure().then((result) => {
       if (result?.ok) {
         console.info('[kick-follow] webhook subscription ready', {

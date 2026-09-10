@@ -83,11 +83,15 @@ export async function telegramApi(method, payload, options = {}) {
   }
 
   if (!response.ok || !body?.ok) {
+    const retryAfterRaw = body?.parameters?.retry_after
+    const retryAfter = Number(retryAfterRaw)
     return {
       ok: false,
       error: 'telegram_api_error',
       status: response.status,
       description: body?.description || null,
+      errorCode: body?.error_code == null ? null : Number(body.error_code),
+      retryAfter: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
     }
   }
 
@@ -100,8 +104,24 @@ export async function sendTelegramMessage(chatId, text, extra = {}, options = {}
     {
       chat_id: chatId,
       text,
-      parse_mode: 'HTML',
+      parse_mode: extra.parse_mode === undefined ? 'HTML' : extra.parse_mode,
       disable_web_page_preview: true,
+      ...extra,
+    },
+    options,
+  )
+}
+
+/**
+ * Copy an existing Telegram message to another chat (preserves media + entities).
+ */
+export async function copyTelegramMessage(toChatId, fromChatId, messageId, extra = {}, options = {}) {
+  return telegramApi(
+    'copyMessage',
+    {
+      chat_id: toChatId,
+      from_chat_id: fromChatId,
+      message_id: messageId,
       ...extra,
     },
     options,
@@ -145,6 +165,21 @@ export async function editTelegramReplyMarkup(chatId, messageId, replyMarkup = {
       chat_id: chatId,
       message_id: messageId,
       reply_markup: replyMarkup,
+    },
+    options,
+  )
+}
+
+export async function editTelegramMessageText(chatId, messageId, text, extra = {}, options = {}) {
+  return telegramApi(
+    'editMessageText',
+    {
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      parse_mode: extra.parse_mode === undefined ? 'HTML' : extra.parse_mode,
+      disable_web_page_preview: true,
+      ...extra,
     },
     options,
   )
