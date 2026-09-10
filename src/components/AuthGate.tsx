@@ -18,6 +18,7 @@ import {
   subscribeAuth,
 } from '@/lib/auth'
 import { MultiAccountBlockedError } from '@/lib/api'
+import { armBootSplashWatchdog, signalAppBootReady } from '@/lib/boot-splash'
 import { captureStartParam } from '@/lib/startParam'
 import { bootstrapSession } from '@/lib/session'
 import { initTelegramWebApp } from '@/lib/telegram'
@@ -81,6 +82,17 @@ export function AuthGate({ children }: AuthGateProps) {
   const [, setTick] = useState(0)
 
   useEffect(() => subscribeAuth(() => setTick((value) => value + 1)), [])
+
+  useEffect(() => {
+    armBootSplashWatchdog()
+  }, [])
+
+  // Hide branded HTML splash once we reach a stable UI path (not while still loading).
+  useEffect(() => {
+    if (sessionReady || status === 'unauthenticated' || status === 'blocked') {
+      signalAppBootReady()
+    }
+  }, [sessionReady, status])
 
   useEffect(() => {
     let cancelled = false
@@ -212,18 +224,9 @@ export function AuthGate({ children }: AuthGateProps) {
     [status, sessionReady, logout],
   )
 
-  // Full-screen spinner only when we cannot show a shell yet (website / no initData).
+  // Web / no initData: splash covers the wait — do not show technical "Загрузка…" spinner.
   if (status === 'loading') {
-    return (
-      <div
-        className="flex min-h-full flex-col items-center justify-center gap-3 bg-bg-dark px-6"
-        role="status"
-        aria-live="polite"
-      >
-        <div className="size-10 animate-spin rounded-full border-2 border-neon-purple/30 border-t-neon-purple" />
-        <p className="text-sm text-muted">Загрузка…</p>
-      </div>
-    )
+    return null
   }
 
   if (status === 'blocked') {

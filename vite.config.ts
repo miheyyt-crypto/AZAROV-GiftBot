@@ -3,14 +3,23 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-/** Busts cache for public/ assets (e.g. welvura-popup.webp) after each deploy. */
+/** Busts cache for public/ assets (e.g. welvura-popup.webp, splash-azarov.jpg) after each deploy. */
 const assetBuildId =
   process.env.RAILWAY_GIT_COMMIT_SHA ||
   process.env.SOURCE_VERSION ||
   Date.now().toString(36)
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    {
+      name: 'html-asset-build-id',
+      transformIndexHtml(html) {
+        return html.replaceAll('%ASSET_BUILD_ID%', assetBuildId)
+      },
+    },
+  ],
   define: {
     'import.meta.env.VITE_ASSET_BUILD_ID': JSON.stringify(assetBuildId),
   },

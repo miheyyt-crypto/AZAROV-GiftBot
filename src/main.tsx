@@ -5,11 +5,13 @@ import { BrowserRouter } from 'react-router-dom'
 import App from '@/App'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { NotificationProvider } from '@/components/NotificationProvider'
+import { armBootSplashWatchdog } from '@/lib/boot-splash'
 import { captureStartParam } from '@/lib/startParam'
 import '@/index.css'
 
 // Persist Telegram start_param before React mounts / WebApp.ready().
 captureStartParam()
+armBootSplashWatchdog()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
