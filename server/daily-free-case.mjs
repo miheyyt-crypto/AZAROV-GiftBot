@@ -7,6 +7,8 @@ import {
   DAILY_FREE_CASE_COOLDOWN_MS,
   DAILY_FREE_CASE_REWARDS,
   getDailyFreeCaseAvailability,
+  getDailyFreeCaseRequirementDenial,
+  getDailyFreeCaseRequirements,
   getDailyFreeCaseRewardById,
   getDailyFreeCaseRewardsFlat,
   listDailyFreeCaseRarities,
@@ -132,10 +134,18 @@ function grantDailyFreeCaseReward(store, user, reward, openingId) {
 
 function buildStatusPayload(user) {
   const availability = getDailyFreeCaseAvailability(user)
+  const requirements = getDailyFreeCaseRequirements(user)
   return {
     available: availability.available,
     availableAt: availability.availableAt,
+    canOpen: requirements.canOpen,
     cooldownMs: DAILY_FREE_CASE_COOLDOWN_MS,
+    requirements: {
+      kickLinked: requirements.kickLinked,
+      telegramTaskCompleted: requirements.telegramTaskCompleted,
+      cooldownExpired: requirements.cooldownExpired,
+      canOpen: requirements.canOpen,
+    },
     rewards: getDailyFreeCaseRewardsFlat().map((item) => publicReward(item)),
   }
 }
@@ -180,11 +190,22 @@ export function openDailyFreeCase(userId, requestId) {
       }
     }
 
+    const denial = getDailyFreeCaseRequirementDenial(user)
+    if (denial) {
+      return {
+        ...denial,
+        ...buildStatusPayload(user),
+        user: toPublicUser(user, store),
+      }
+    }
+
     const availability = getDailyFreeCaseAvailability(user)
     if (!availability.available) {
       return {
         success: false,
+        canOpen: false,
         code: 'COOLDOWN',
+        reason: 'COOLDOWN',
         message: 'Бесплатный кейс будет доступен позже.',
         availableAt: availability.availableAt,
         ...buildStatusPayload(user),
@@ -256,6 +277,8 @@ export {
   DAILY_FREE_CASE_COOLDOWN_MS,
   DAILY_FREE_CASE_REWARDS,
   getDailyFreeCaseAvailability,
+  getDailyFreeCaseRequirementDenial,
+  getDailyFreeCaseRequirements,
   getDailyFreeCaseRewardById,
   rollDailyFreeCaseReward,
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { CoinIcon } from '@/components/CoinIcon'
 import { AchievementsSheet } from '@/components/AchievementsSheet'
@@ -27,6 +27,7 @@ import type { ProfileMenuId } from '@/types/profile'
 
 export function Profile() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { logout, isWebSession } = useAuth()
   const { formatted } = useBalance()
   const {
@@ -42,9 +43,27 @@ export function Profile() {
   const [showWelvuraModal, setShowWelvuraModal] = useState(false)
   const [logoutBusy, setLogoutBusy] = useState(false)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
+  const [highlightKick, setHighlightKick] = useState(false)
 
   const welvuraPartner = getPartnerById('dragonmoney')
   const showLogout = isWebSession || (!isMiniAppAuthAvailable() && !isDemo)
+
+  useEffect(() => {
+    const section = String(searchParams.get('section') || '').trim().toLowerCase()
+    if (section !== 'kick') {
+      return
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const node = document.getElementById('kick-connect-section')
+      node?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setHighlightKick(true)
+      window.setTimeout(() => setHighlightKick(false), 2400)
+    })
+    const next = new URLSearchParams(searchParams)
+    next.delete('section')
+    setSearchParams(next, { replace: true })
+    return () => window.cancelAnimationFrame(frame)
+  }, [searchParams, setSearchParams])
 
   useEffect(() => {
     let cancelled = false
@@ -156,7 +175,13 @@ export function Profile() {
         <PromoCodeCard />
       </div>
 
-      <div className="mb-4">
+      <div
+        id="kick-connect-section"
+        className={[
+          'mb-4 rounded-[22px] transition-[box-shadow,ring] duration-500',
+          highlightKick ? 'ring-2 ring-kick/70 shadow-[0_0_24px_rgb(83_204_24/25%)]' : '',
+        ].join(' ')}
+      >
         <KickConnectCard />
       </div>
 

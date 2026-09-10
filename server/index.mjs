@@ -2166,7 +2166,17 @@ app.post(
     const requestId = parseRequestId(req.body?.requestId)
     bootstrapUser(telegramUser, '')
     const result = openDailyFreeCase(telegramUser.id, requestId)
-    const status = result.success === false && result.code === 'COOLDOWN' ? 429 : 200
+    const status =
+      result.success === false && result.code === 'COOLDOWN'
+        ? 429
+        : result.success === false &&
+            [
+              'KICK_NOT_LINKED',
+              'TELEGRAM_TASK_NOT_COMPLETED',
+              'REQUIREMENTS_NOT_MET',
+            ].includes(result.code)
+          ? 403
+          : 200
     res.status(status).json({
       ...result,
       user: result.user || toPublicUser(getUser(telegramUser.id)),

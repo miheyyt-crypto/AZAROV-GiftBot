@@ -8,9 +8,11 @@ import {
 } from './daily-free-case.mjs'
 import {
   getDailyFreeCaseRewardsFlat,
+  getDailyFreeCaseRequirements,
   listDailyFreeCaseRarities,
   rollDailyFreeCaseReward,
 } from './daily-free-case-config.mjs'
+import { TELEGRAM_SUBSCRIBE_TASK_ID } from './constants.mjs'
 import { createEmptyStore, withStore } from './store.mjs'
 import { createUser } from './users.mjs'
 
@@ -23,6 +25,17 @@ function seedUser(telegramId = 88001) {
       first_name: 'Daily',
     })
     return user.telegramId
+  })
+}
+
+function unlockFreeCaseGates(telegramId) {
+  withStore((store) => {
+    const user = store.users[String(telegramId)]
+    user.kickVerified = true
+    user.kickUserId = `kick-${telegramId}`
+    user.completedTasks = [
+      ...new Set([...(user.completedTasks || []), TELEGRAM_SUBSCRIBE_TASK_ID]),
+    ]
   })
 }
 
@@ -56,6 +69,7 @@ test('daily free case roll returns known reward ids', () => {
 
 test('daily free case: first open credits once and starts cooldown', () => {
   const userId = seedUser(88011)
+  unlockFreeCaseGates(userId)
   const first = openDailyFreeCase(userId, 'dfc-req-0001')
   assert.equal(first.success, true)
   assert.ok(first.reward?.id)
@@ -64,10 +78,12 @@ test('daily free case: first open credits once and starts cooldown', () => {
 
   const status = getDailyFreeCaseStatus(userId)
   assert.equal(status.available, false)
+  assert.equal(status.canOpen, false)
 })
 
 test('daily free case: same requestId is idempotent', () => {
   const userId = seedUser(88012)
+  unlockFreeCaseGates(userId)
   const first = openDailyFreeCase(userId, 'dfc-req-idem-1')
   const again = openDailyFreeCase(userId, 'dfc-req-idem-1')
   assert.equal(first.success, true)
@@ -78,6 +94,7 @@ test('daily free case: same requestId is idempotent', () => {
 
 test('daily free case: second open during cooldown is rejected', () => {
   const userId = seedUser(88013)
+  unlockFreeCaseGates(userId)
   const first = openDailyFreeCase(userId, 'dfc-req-cool-1')
   assert.equal(first.success, true)
 
@@ -88,6 +105,7 @@ test('daily free case: second open during cooldown is rejected', () => {
 
 test('daily free case: available again after 24h', () => {
   const userId = seedUser(88014)
+  unlockFreeCaseGates(userId)
   const first = openDailyFreeCase(userId, 'dfc-req-day-1')
   assert.equal(first.success, true)
 
@@ -98,8 +116,48 @@ test('daily free case: available again after 24h', () => {
 
   const status = getDailyFreeCaseStatus(userId)
   assert.equal(status.available, true)
+  assert.equal(status.canOpen, true)
   assert.equal(status.user.dailyFreeCaseAvailable, true)
+  assert.equal(status.user.freeCase.canOpen, true)
 
   const second = openDailyFreeCase(userId, 'dfc-req-day-2')
   assert.equal(second.success, true)
+})
+
+test('daily free case: rejects without Kick', () => {
+  const userId = seedUser(88021)
+  withStore((store) => {
+    const user = store.users[String(userId)]
+    user.completedTasks = [TELEGRAM_SUBSCRIBE_TASK_ID]
+  })
+  const result = openDailyFreeCase(userId, 'dfc-no-kick')
+  assert.equal(result.success, false)
+  assert.equal(result.code, 'KICK_NOT_LINKED')
+  assert.equal(result.canOpen, false)
+  assert.equal(result.requirements.kickLinked, false)
+  assert.equal(result.requirements.telegramTaskCompleted, true)
+})
+
+test('daily free case: rejects without telegram subscribe task', () => {
+  const userId = seedUser(88022)
+  withStore((store) => {
+    const user = store.users[String(userId)]
+    user.kickVerified = true
+    user.kickUserId = 'kick-88022'
+  })
+  const result = openDailyFreeCase(userId, 'dfc-no-tg')
+  assert.equal(result.success, false)
+  assert.equal(result.code, 'TELEGRAM_TASK_NOT_COMPLETED')
+  assert.equal(result.requirements.kickLinked, true)
+  assert.equal(result.requirements.telegramTaskCompleted, false)
+})
+
+test('daily free case: rejects when both requirements missing', () => {
+  const userId = seedUser(88023)
+  const result = openDailyFreeCase(userId, 'dfc-no-both')
+  assert.equal(result.success, false)
+  assert.equal(result.code, 'REQUIREMENTS_NOT_MET')
+  const requirements = getDailyFreeCaseRequirements(result.user || { completedTasks: [] })
+  assert.equal(result.requirements.canOpen, false)
+  assert.equal(requirements.kickLinked, false)
 })

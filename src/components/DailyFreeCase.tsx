@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { CoinIcon } from '@/components/CoinIcon'
 import { DailyFreeCaseContentsSheet } from '@/components/DailyFreeCaseContentsSheet'
+import { DailyFreeCaseRequirementsModal } from '@/components/DailyFreeCaseRequirementsModal'
 import { DailyFreeCaseResultModal } from '@/components/DailyFreeCaseResultModal'
 import { DAILY_FREE_CASE_REWARDS, type DailyFreeCaseReward } from '@/data/daily-free-case'
 import { useUserAccount } from '@/hooks/useUserAccount'
@@ -13,6 +14,7 @@ import {
   resolveDailyFreeCaseReward,
   type DailyFreeCaseReelItem,
 } from '@/lib/daily-free-case-reel'
+import { getFreeCaseRequirements } from '@/lib/free-case-requirements'
 import { formatCountdown } from '@/lib/giveaways'
 import { createPurchaseRequestId } from '@/lib/shop'
 
@@ -88,6 +90,7 @@ export function DailyFreeCase() {
   const [phase, setPhase] = useState<UiPhase>('idle')
   const [error, setError] = useState<string | null>(null)
   const [showContents, setShowContents] = useState(false)
+  const [showRequirements, setShowRequirements] = useState(false)
   const [availableAt, setAvailableAt] = useState<string | null>(
     account.dailyFreeCaseAvailableAt ?? null,
   )
@@ -130,11 +133,15 @@ export function DailyFreeCase() {
     return () => observer.disconnect()
   }, [phase, reel])
 
+  const requirements = getFreeCaseRequirements(account, nowMs)
+  const requirementsMet = requirements.kickLinked && requirements.telegramTaskCompleted
+  const cooldownOk = isAvailable(availableAt, nowMs)
   const available =
     phase !== 'spinning' &&
     phase !== 'requesting' &&
     phase !== 'result' &&
-    isAvailable(availableAt, nowMs)
+    requirementsMet &&
+    cooldownOk
   const busy = phase === 'requesting' || phase === 'spinning'
 
   useEffect(() => {
@@ -229,9 +236,19 @@ export function DailyFreeCase() {
   }, [dims, phase, reel])
 
   async function handleOpen() {
-    if (inFlightRef.current || !available) {
+    if (inFlightRef.current || busy || phase === 'result') {
       return
     }
+
+    if (!requirementsMet) {
+      setShowRequirements(true)
+      return
+    }
+
+    if (!cooldownOk) {
+      return
+    }
+
     inFlightRef.current = true
     setError(null)
     setHighlighted(false)
@@ -242,6 +259,16 @@ export function DailyFreeCase() {
 
     const result = await openDailyFreeCase(requestId)
     if (!result.success || !result.reward) {
+      if (
+        result.code === 'KICK_NOT_LINKED' ||
+        result.code === 'TELEGRAM_TASK_NOT_COMPLETED' ||
+        result.code === 'REQUIREMENTS_NOT_MET'
+      ) {
+        setShowRequirements(true)
+        setPhase('idle')
+        inFlightRef.current = false
+        return
+      }
       setError(result.message || 'Не удалось открыть кейс.')
       if (result.availableAt) {
         setAvailableAt(result.availableAt)
@@ -269,9 +296,10 @@ export function DailyFreeCase() {
 
   const showSpinTrack = phase === 'spinning' && reel
   const cooldownLabel =
-    availableAt && !isAvailable(availableAt, nowMs)
+    requirementsMet && availableAt && !isAvailable(availableAt, nowMs)
       ? formatCountdown(availableAt, nowMs)
       : null
+  const buttonEnabled = (!requirementsMet && !busy) || (available && !busy)
 
   return (
     <section className="w-full" aria-label="Бесплатный ежедневный кейс">
@@ -341,21 +369,25 @@ export function DailyFreeCase() {
         onClick={() => {
           void handleOpen()
         }}
-        disabled={!available || busy}
+        disabled={!buttonEnabled}
         className={[
           'mt-3 flex min-h-[52px] w-full items-center justify-center rounded-full',
           'text-[15px] font-extrabold tracking-wide',
           'transition-transform duration-150 active:scale-[0.98]',
-          available && !busy
-            ? 'bg-gradient-to-r from-[#fff6c8] via-[#ffd84a] to-[#f0a512] text-[#1a1200] shadow-[0_8px_28px_rgb(244_201_93/35%)]'
+          buttonEnabled
+            ? available
+              ? 'bg-gradient-to-r from-[#fff6c8] via-[#ffd84a] to-[#f0a512] text-[#1a1200] shadow-[0_8px_28px_rgb(244_201_93/35%)]'
+              : 'border border-white/12 bg-white/[0.08] text-white/85'
             : 'cursor-not-allowed bg-white/10 text-white/45',
         ].join(' ')}
       >
         {busy
           ? 'Открываем…'
-          : cooldownLabel
-            ? `Следующий кейс через ${cooldownLabel}`
-            : '🔥 БЕСПЛАТНО'}
+          : !requirementsMet
+            ? '🔒 Выполните условия'
+            : cooldownLabel
+              ? `Следующий кейс через ${cooldownLabel}`
+              : '🔥 БЕСПЛАТНО'}
       </button>
 
       <button
@@ -377,6 +409,13 @@ export function DailyFreeCase() {
       ) : null}
 
       {showContents ? <DailyFreeCaseContentsSheet onClose={() => setShowContents(false)} /> : null}
+
+      {showRequirements ? (
+        <DailyFreeCaseRequirementsModal
+          requirements={requirements}
+          onClose={() => setShowRequirements(false)}
+        />
+      ) : null}
 
       {phase === 'result' && winner ? (
         <DailyFreeCaseResultModal reward={winner} onClose={handleCloseResult} />

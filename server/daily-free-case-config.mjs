@@ -1,6 +1,50 @@
 /** Shared reward config for daily free case (server). Keep in sync with src/data/daily-free-case.ts */
 
+import { TELEGRAM_SUBSCRIBE_TASK_ID } from './constants.mjs'
+
 export const DAILY_FREE_CASE_COOLDOWN_MS = 24 * 60 * 60 * 1000
+
+export function isDailyFreeCaseKickLinked(user) {
+  return Boolean(user?.kickVerified || user?.kickUserId)
+}
+
+export function isDailyFreeCaseTelegramTaskCompleted(user) {
+  const tasks = Array.isArray(user?.completedTasks) ? user.completedTasks : []
+  return tasks.includes(TELEGRAM_SUBSCRIBE_TASK_ID)
+}
+
+/**
+ * Server-authoritative free-case gates.
+ * Cooldown is separate from Kick / Telegram subscription requirements.
+ */
+export function getDailyFreeCaseRequirements(user, nowMs = Date.now()) {
+  const availability = getDailyFreeCaseAvailability(user, nowMs)
+  const kickLinked = isDailyFreeCaseKickLinked(user)
+  const telegramTaskCompleted = isDailyFreeCaseTelegramTaskCompleted(user)
+  const cooldownExpired = availability.available
+  const canOpen = kickLinked && telegramTaskCompleted && cooldownExpired
+
+  let reason = null
+  if (!kickLinked && !telegramTaskCompleted) {
+    reason = 'REQUIREMENTS_NOT_MET'
+  } else if (!kickLinked) {
+    reason = 'KICK_NOT_LINKED'
+  } else if (!telegramTaskCompleted) {
+    reason = 'TELEGRAM_TASK_NOT_COMPLETED'
+  } else if (!cooldownExpired) {
+    reason = 'COOLDOWN'
+  }
+
+  return {
+    kickLinked,
+    telegramTaskCompleted,
+    cooldownExpired,
+    canOpen,
+    reason,
+    availableAt: availability.availableAt,
+    remainingMs: availability.remainingMs,
+  }
+}
 
 /**
  * `chance` — display % in UI ("Что внутри").
@@ -253,5 +297,50 @@ export function getDailyFreeCaseAvailability(user, nowMs = Date.now()) {
     available: remainingMs <= 0,
     availableAt: new Date(availableAtMs).toISOString(),
     remainingMs,
+  }
+}
+
+export function getDailyFreeCaseRequirementDenial(user, nowMs = Date.now()) {
+  const requirements = getDailyFreeCaseRequirements(user, nowMs)
+  if (requirements.canOpen) {
+    return null
+  }
+  if (requirements.reason === 'COOLDOWN') {
+    return {
+      success: false,
+      canOpen: false,
+      code: 'COOLDOWN',
+      reason: 'COOLDOWN',
+      message: 'Бесплатный кейс будет доступен позже.',
+      availableAt: requirements.availableAt,
+      requirements: {
+        kickLinked: requirements.kickLinked,
+        telegramTaskCompleted: requirements.telegramTaskCompleted,
+        cooldownExpired: requirements.cooldownExpired,
+        canOpen: false,
+      },
+    }
+  }
+  const messages = {
+    KICK_NOT_LINKED: 'Привяжи Kick аккаунт, чтобы открыть бесплатный кейс.',
+    TELEGRAM_TASK_NOT_COMPLETED:
+      'Выполни задание с подпиской на Telegram-канал, чтобы открыть бесплатный кейс.',
+    REQUIREMENTS_NOT_MET:
+      'Чтобы открыть бесплатный кейс, привяжи Kick и выполни задание с подпиской на Telegram-канал.',
+  }
+  const code = requirements.reason || 'REQUIREMENTS_NOT_MET'
+  return {
+    success: false,
+    canOpen: false,
+    code,
+    reason: code,
+    message: messages[code] || messages.REQUIREMENTS_NOT_MET,
+    availableAt: requirements.availableAt,
+    requirements: {
+      kickLinked: requirements.kickLinked,
+      telegramTaskCompleted: requirements.telegramTaskCompleted,
+      cooldownExpired: requirements.cooldownExpired,
+      canOpen: false,
+    },
   }
 }

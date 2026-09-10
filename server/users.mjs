@@ -381,6 +381,11 @@ export function toPublicUser(user, store = null) {
     }
   }
 
+  const kickConnected = Boolean(user.kickVerified || user.kickUserId)
+  const completedTasks = Array.isArray(user.completedTasks) ? user.completedTasks : []
+  const telegramTaskCompleted = completedTasks.includes('telegram-subscribe')
+  const freeCaseCanOpen = kickConnected && telegramTaskCompleted && dailyFreeCaseAvailable
+
   return {
     telegramId: user.telegramId,
     username: user.username,
@@ -396,7 +401,7 @@ export function toPublicUser(user, store = null) {
     activeReferrals: activeCount,
     pendingCount,
     referralEarnings: user.referralEarnings,
-    kickConnected: Boolean(user.kickVerified || user.kickUserId),
+    kickConnected,
     kickUserId: user.kickUserId || null,
     kickUsername: user.kickUsername || null,
     kickDisplayName: user.kickDisplayName || null,
@@ -413,6 +418,12 @@ export function toPublicUser(user, store = null) {
     lastDailyFreeCaseAt,
     dailyFreeCaseAvailable,
     dailyFreeCaseAvailableAt,
+    freeCase: {
+      kickLinked: kickConnected,
+      telegramTaskCompleted,
+      cooldownExpired: dailyFreeCaseAvailable,
+      canOpen: freeCaseCanOpen,
+    },
     gramBalance: Number(user.gramBalance) || 0,
     referralLink: buildReferralLink(user.referralCode),
     chatMessages: levelSnap.chatMessages,

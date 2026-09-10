@@ -51,6 +51,14 @@ export function mapRemoteAccount(remote: UserAccount): UserAccount {
     dailyFreeCaseAvailable:
       remote.dailyFreeCaseAvailable == null ? true : Boolean(remote.dailyFreeCaseAvailable),
     dailyFreeCaseAvailableAt: remote.dailyFreeCaseAvailableAt ?? null,
+    freeCase: remote.freeCase
+      ? {
+          kickLinked: Boolean(remote.freeCase.kickLinked),
+          telegramTaskCompleted: Boolean(remote.freeCase.telegramTaskCompleted),
+          cooldownExpired: Boolean(remote.freeCase.cooldownExpired),
+          canOpen: Boolean(remote.freeCase.canOpen),
+        }
+      : undefined,
     gramBalance: Number(remote.gramBalance) || 0,
     chatMessages: remote.chatMessages ?? 0,
     watchSeconds: remote.watchSeconds ?? 0,

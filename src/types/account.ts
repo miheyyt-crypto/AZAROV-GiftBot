@@ -30,6 +30,12 @@ export interface UserAccount {
   lastDailyFreeCaseAt?: string | null
   dailyFreeCaseAvailable?: boolean
   dailyFreeCaseAvailableAt?: string | null
+  freeCase?: {
+    kickLinked: boolean
+    telegramTaskCompleted: boolean
+    cooldownExpired: boolean
+    canOpen: boolean
+  }
   gramBalance?: number
   chatMessages?: number
   watchSeconds?: number
