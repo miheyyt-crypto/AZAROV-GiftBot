@@ -610,6 +610,7 @@ function withAdmin(handler) {
 app.get('/api/health', (_req, res) => {
   const store = getStoreDiagnostics()
   const deploy = getDeploymentReplicaDiagnostics()
+  const bot = getBotRuntimeDiagnostics()
   res.json({
     ok: true,
     store: {
@@ -626,6 +627,12 @@ app.get('/api/health', (_req, res) => {
       multiReplicaSafe: false,
       singleReplicaRequired: deploy.singleReplicaRequired,
       railwayReplicaId: deploy.railwayReplicaId,
+    },
+    bot: {
+      pollingActive: Boolean(bot.pollingActive),
+      username: bot.botUsername || null,
+      launchMode: bot.launchMode || null,
+      lastLaunchError: bot.lastLaunchError || null,
     },
   })
 })

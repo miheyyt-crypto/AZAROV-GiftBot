@@ -721,10 +721,17 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
  */
 export function registerBotStart(telegramUser, startPayload) {
   return withStore((store) => {
-    migrateAllReferrals(store)
     store.pendingBotStarts = store.pendingBotStarts || {}
     const payload = String(startPayload || '').trim()
     const existing = store.users[String(telegramUser.id)]
+    const beforeSnap = JSON.stringify({
+      pending: store.pendingBotStarts[String(telegramUser.id)] || null,
+      userPending: existing?.pendingStartParam ?? null,
+      username: existing?.username ?? null,
+      firstName: existing?.firstName ?? null,
+      lastName: existing?.lastName ?? null,
+      photoUrl: existing?.photoUrl ?? null,
+    })
 
     if (existing) {
       const user = ensureUser(store, telegramUser)
@@ -735,12 +742,21 @@ export function registerBotStart(telegramUser, startPayload) {
           codePrefix: extractReferralCode(payload)?.slice(0, 2) || null,
         })
       }
+      const afterSnap = JSON.stringify({
+        pending: store.pendingBotStarts[String(telegramUser.id)] || null,
+        userPending: user.pendingStartParam ?? null,
+        username: user.username ?? null,
+        firstName: user.firstName ?? null,
+        lastName: user.lastName ?? null,
+        photoUrl: user.photoUrl ?? null,
+      })
       return {
         telegramId: user.telegramId,
         firstName: user.firstName,
         pendingStartParam: user.pendingStartParam || null,
         referralCode: formatReferralCode(user.referralCode),
         created: false,
+        __storeDirty: beforeSnap !== afterSnap,
       }
     }
 
@@ -753,15 +769,26 @@ export function registerBotStart(telegramUser, startPayload) {
         telegramId: telegramUser.id,
         codePrefix: extractReferralCode(payload)?.slice(0, 2) || null,
       })
+      return {
+        telegramId: Number(telegramUser.id),
+        firstName: telegramUser.first_name || '',
+        pendingStartParam: payload,
+        referralCode: '',
+        created: false,
+        deferred: true,
+        __storeDirty: true,
+      }
     }
 
+    // No payload and no existing user — nothing durable to write.
     return {
       telegramId: Number(telegramUser.id),
       firstName: telegramUser.first_name || '',
-      pendingStartParam: extractReferralCode(payload) ? payload : null,
+      pendingStartParam: null,
       referralCode: '',
       created: false,
       deferred: true,
+      __storeDirty: false,
     }
   })
 }

@@ -143,24 +143,6 @@ export function createBot() {
 
     const startPayload = String(ctx.startPayload || '').trim()
 
-    try {
-      const registered = registerBotStart(telegramUser, startPayload)
-      if (isLaunchBotStartPayload(startPayload)) {
-        markBotLaunchStart(telegramUser.id)
-      }
-      console.info('[Telegram Bot] /start', {
-        telegramId: registered.telegramId,
-        username: ctx.from?.username || null,
-        hasStartPayload: Boolean(startPayload),
-        launchBotTask: isLaunchBotStartPayload(startPayload),
-      })
-    } catch (error) {
-      console.error('[Telegram Bot] Failed to register /start user', {
-        telegramId: telegramUser.id,
-        message: error instanceof Error ? error.message : 'unknown_error',
-      })
-    }
-
     const text = buildWelcomeText()
     let openUrl = webappUrl
     if (webappUrl && extractReferralCode(startPayload)) {
@@ -172,6 +154,7 @@ export function createBot() {
       ? Markup.inlineKeyboard([Markup.button.webApp('ЗАПУСТИТЬ', openUrl)])
       : undefined
 
+    // Reply first — never block welcome on store.json I/O.
     try {
       const hasWelcomePhoto = existsSync(WELCOME_PHOTO_PATH)
       if (keyboard && hasWelcomePhoto) {
@@ -207,6 +190,24 @@ export function createBot() {
       }
     } catch (error) {
       console.error('[Telegram Bot] Failed to reply to /start', {
+        telegramId: telegramUser.id,
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+    }
+
+    try {
+      const registered = registerBotStart(telegramUser, startPayload)
+      if (isLaunchBotStartPayload(startPayload)) {
+        markBotLaunchStart(telegramUser.id)
+      }
+      console.info('[Telegram Bot] /start', {
+        telegramId: registered.telegramId,
+        username: ctx.from?.username || null,
+        hasStartPayload: Boolean(startPayload),
+        launchBotTask: isLaunchBotStartPayload(startPayload),
+      })
+    } catch (error) {
+      console.error('[Telegram Bot] Failed to register /start user', {
         telegramId: telegramUser.id,
         message: error instanceof Error ? error.message : 'unknown_error',
       })
@@ -515,6 +516,11 @@ export function createBot() {
  */
 export async function startBot(options = {}) {
   const registerSignals = options.registerSignals !== false
+  if (botRuntimeDiagnostics.pollingActive) {
+    console.info('[Telegram Bot] Long polling already active — skip duplicate start')
+    return null
+  }
+
   const bot = createBot()
   if (!bot) {
     botRuntimeDiagnostics = {
@@ -525,6 +531,9 @@ export async function startBot(options = {}) {
     }
     return null
   }
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+  const maxAttempts = 8
 
   try {
     // Probe Telegram before launch (safe fields only — no token).
@@ -554,12 +563,39 @@ export async function startBot(options = {}) {
       maxConnections: webhookInfo?.max_connections ?? null,
     })
 
-    // Long polling only — Telegraf deletes any existing webhook before getUpdates.
-    // Explicitly include callback_query so moderation buttons always deliver.
-    await bot.launch({
-      dropPendingUpdates: true,
-      allowedUpdates: ['message', 'callback_query'],
-    })
+    let launched = false
+    let lastErrorMessage = null
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        // Clear webhook explicitly; Railway rolling deploys often leave a sibling
+        // getUpdates session → 409 Conflict unless we retry after the old process dies.
+        await bot.telegram.deleteWebhook({ drop_pending_updates: attempt === 1 })
+        await bot.launch({
+          dropPendingUpdates: attempt === 1,
+          allowedUpdates: ['message', 'callback_query'],
+        })
+        launched = true
+        break
+      } catch (error) {
+        lastErrorMessage = error instanceof Error ? error.message : 'unknown_error'
+        const conflict = /409|Conflict|getUpdates/i.test(lastErrorMessage)
+        console.warn('[Telegram Bot] launch attempt failed', {
+          attempt,
+          maxAttempts,
+          conflict,
+          message: lastErrorMessage.slice(0, 200),
+        })
+        if (!conflict || attempt === maxAttempts) {
+          throw error
+        }
+        await sleep(1500 * attempt)
+      }
+    }
+
+    if (!launched) {
+      throw new Error(lastErrorMessage || 'bot_launch_failed')
+    }
+
     botRuntimeDiagnostics = {
       ...botRuntimeDiagnostics,
       pollingActive: true,

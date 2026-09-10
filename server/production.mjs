@@ -17,17 +17,36 @@ if (!process.env.NODE_ENV) {
 }
 
 const { startHttpServer } = await import('./index.mjs')
-const { startBot } = await import('./bot.mjs')
+const { startBot, getBotRuntimeDiagnostics } = await import('./bot.mjs')
 
 const server = startHttpServer()
-const bot = await startBot({ registerSignals: false })
+let bot = await startBot({ registerSignals: false })
 
 if (!bot) {
-  // index.mjs assertProductionEnv already requires BOT_TOKEN in production and exits.
-  // This branch covers non-strict local experiments with NODE_ENV=production unset wrongly.
+  // Common during Railway rolling restart: previous replica still holds getUpdates (409).
+  // Keep API up and retry bot attach until polling is active.
   console.error(
-    '[production] Telegram Bot did not start (BOT_TOKEN missing or launch failed). API may still be running.',
+    '[production] Telegram Bot did not start yet — retrying in background (API stays up).',
+    getBotRuntimeDiagnostics(),
   )
+  const retryMs = 5_000
+  const retryTimer = setInterval(() => {
+    void (async () => {
+      if (bot || getBotRuntimeDiagnostics().pollingActive) {
+        clearInterval(retryTimer)
+        return
+      }
+      console.info('[production] retrying Telegram Bot launch…')
+      bot = await startBot({ registerSignals: false })
+      if (bot) {
+        console.info('[production] Telegram Bot attached after retry (long polling).')
+        clearInterval(retryTimer)
+      }
+    })()
+  }, retryMs)
+  if (typeof retryTimer.unref === 'function') {
+    retryTimer.unref()
+  }
 } else {
   console.info('[production] Telegram Bot attached to this process (long polling).')
 }
