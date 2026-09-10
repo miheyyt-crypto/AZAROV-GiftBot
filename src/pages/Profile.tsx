@@ -145,6 +145,11 @@ export function Profile() {
             label={'сообщений в\nчате'}
           />
         </div>
+
+        <p className="mt-4 text-center text-[12px] leading-relaxed text-white/55">
+          Опыт начисляется за каждое сообщение в чате Kick и за каждую минуту
+          просмотра стрима.
+        </p>
       </section>
 
       <div className="mb-4">
