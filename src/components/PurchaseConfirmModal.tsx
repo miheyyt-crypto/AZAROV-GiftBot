@@ -3,10 +3,12 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { CoinIcon } from '@/components/CoinIcon'
 import { useNotifications } from '@/components/NotificationProvider'
+import { WelvuraReferralRequiredModal } from '@/components/WelvuraReferralRequiredModal'
 import { useUserProfile } from '@/hooks/useUserProfile'
 import { formatBalance } from '@/lib/balance'
 import { createAppError, getUserFacingError } from '@/lib/errors'
 import { createPurchaseRequestId, purchaseProduct } from '@/lib/shop'
+import { WELVURA_REFERRAL_REQUIRED_CODE } from '@/lib/welvura-referral'
 import type {
   ProductCheckoutField,
   PurchaseFulfillmentData,
@@ -156,6 +158,7 @@ export function PurchaseConfirmModal({
   }, [fields, user.username])
 
   const [fieldValues, setFieldValues] = useState(initialValues)
+  const [showReferralGate, setShowReferralGate] = useState(false)
   const canAfford = balance >= product.price
 
   useEffect(() => {
@@ -217,6 +220,10 @@ export function PurchaseConfirmModal({
           ? 'INSUFFICIENT_BALANCE'
           : 'UNKNOWN_ERROR',
       )
+      if (result.code === WELVURA_REFERRAL_REQUIRED_CODE) {
+        setShowReferralGate(true)
+        return
+      }
       showNotification({
         type: 'error',
         title: 'Не удалось оформить покупку',
@@ -239,6 +246,17 @@ export function PurchaseConfirmModal({
     : isSubmitting
       ? 'Оформляем...'
       : 'Купить'
+
+  if (showReferralGate) {
+    return (
+      <WelvuraReferralRequiredModal
+        onClose={() => {
+          setShowReferralGate(false)
+          close()
+        }}
+      />
+    )
+  }
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center">

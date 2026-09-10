@@ -4,14 +4,17 @@ import { X } from 'lucide-react'
 
 import freezeImage from '@/assets/shop/freeze.png'
 import { ProfileSheet } from '@/components/ProfileSheet'
+import { WelvuraReferralRequiredModal } from '@/components/WelvuraReferralRequiredModal'
 import { WithdrawCashModal } from '@/components/WithdrawCashModal'
 import { rewardImageForPrize } from '@/data/cases'
+import { useUserAccount } from '@/hooks/useUserAccount'
 import { formatBalance } from '@/lib/balance'
 import {
   claimInventoryCoins,
   fetchInventory,
   formatTransactionDate,
 } from '@/lib/profile'
+import { hasCompletedWelvuraTask1 } from '@/lib/welvura-referral'
 import type { CaseOpeningItem, InventoryItem } from '@/types/profile'
 
 interface InventorySheetProps {
@@ -324,11 +327,13 @@ function InventoryDetailModal({
 }
 
 export function InventorySheet({ onClose }: InventorySheetProps) {
+  const account = useUserAccount()
   const [items, setItems] = useState<InventoryItem[]>([])
   const [caseOpenings, setCaseOpenings] = useState<CaseOpeningItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selected, setSelected] = useState<InventoryTile | null>(null)
   const [withdrawItem, setWithdrawItem] = useState<CaseOpeningItem | null>(null)
+  const [showReferralGate, setShowReferralGate] = useState(false)
   const [claiming, setClaiming] = useState(false)
   const [claimError, setClaimError] = useState<string | null>(null)
 
@@ -453,12 +458,20 @@ export function InventorySheet({ onClose }: InventorySheetProps) {
             setSelected(null)
           }}
           onWithdraw={(item) => {
+            if (!hasCompletedWelvuraTask1(account)) {
+              setShowReferralGate(true)
+              return
+            }
             setWithdrawItem(item)
           }}
           onClaimCoins={(item) => {
             void handleClaimCoins(item)
           }}
         />
+      ) : null}
+
+      {showReferralGate ? (
+        <WelvuraReferralRequiredModal onClose={() => setShowReferralGate(false)} />
       ) : null}
 
       {withdrawItem ? (

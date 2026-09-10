@@ -14,6 +14,7 @@ import {
   rejectWithdrawalOnStore,
   WITHDRAWAL_STATUS,
 } from './withdrawals.mjs'
+import { WELVURA_TASK_1_ID } from './giveaway-eligibility.mjs'
 
 const VALID_WELVURA = '12345678'
 
@@ -31,13 +32,17 @@ function withTempStore(run) {
     })
 }
 
-function seedUser(store, telegramId) {
+function seedUser(store, telegramId, { welvuraReferral = true } = {}) {
   createUser(store, {
     id: telegramId,
     first_name: `User${telegramId}`,
     username: `u${telegramId}`,
   })
-  return store.users[String(telegramId)]
+  const user = store.users[String(telegramId)]
+  if (welvuraReferral) {
+    user.completedTasks = [WELVURA_TASK_1_ID]
+  }
+  return user
 }
 
 function seedRubOpening(store, user, { openingId, amount = 5000 }) {
@@ -224,6 +229,21 @@ test('accepts legacy walletAddress field as Welvura ID', async () => {
     assert.equal(created.success, true)
     assert.equal(created.withdrawal.welvuraId, VALID_WELVURA)
     assert.equal(created.withdrawal.walletAddress, VALID_WELVURA)
+  })
+})
+
+test('cannot withdraw without Welvura task-1 referral', async () => {
+  await withTempStore(async () => {
+    const denied = withStore((store) => {
+      const user = seedUser(store, 601, { welvuraReferral: false })
+      seedRubOpening(store, user, { openingId: 'open-no-ref', amount: 1000 })
+      return createWithdrawalOnStore(store, 601, {
+        itemId: 'open-no-ref',
+        welvuraId: VALID_WELVURA,
+      })
+    })
+    assert.equal(denied.success, false)
+    assert.equal(denied.code, 'NOT_WELVURA_REFERRAL')
   })
 })
 

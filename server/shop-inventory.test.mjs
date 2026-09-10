@@ -28,6 +28,7 @@ import {
 } from './shop-admin.mjs'
 import { createEmptyStore, withStore } from './store.mjs'
 import { createUser } from './users.mjs'
+import { WELVURA_TASK_1_ID } from './giveaway-eligibility.mjs'
 
 function withTempStore(run) {
   const dir = mkdtempSync(path.join(tmpdir(), 'azarov-shop-inv-'))
@@ -42,9 +43,12 @@ function withTempStore(run) {
   }
 }
 
-function fundUser(store, id, balance = 50_000) {
+function fundUser(store, id, balance = 50_000, { welvuraReferral = false } = {}) {
   const user = createUser(store, { id, first_name: 'U', username: `u${id}` })
   user.balance = balance
+  if (welvuraReferral) {
+    user.completedTasks = [WELVURA_TASK_1_ID]
+  }
   return user
 }
 
@@ -171,7 +175,7 @@ test('admin reject → rejected + idempotent refund', () => {
 test('approve vs reject race — only one wins', () => {
   withTempStore(() => {
     withStore((store) => {
-      fundUser(store, 804, 250_000)
+      fundUser(store, 804, 250_000, { welvuraReferral: true })
       return true
     })
     const bought = purchaseProduct(804, 'cash-5000', 'req-cash-804', {
@@ -190,6 +194,40 @@ test('approve vs reject race — only one wins', () => {
       assert.equal(store.users['804'].balance, 250_000 - 199999)
       return true
     })
+  })
+})
+
+test('money products require Welvura task-1 referral', () => {
+  withTempStore(() => {
+    withStore((store) => {
+      fundUser(store, 820, 250_000, { welvuraReferral: false })
+      return true
+    })
+    const deniedCash = purchaseProduct(820, 'cash-5000', 'req-cash-820', {
+      welvuraId: '12345678',
+    })
+    assert.equal(deniedCash.success, false)
+    assert.equal(deniedCash.code, 'NOT_WELVURA_REFERRAL')
+
+    withStore((store) => {
+      fundUser(store, 821, 20_000, { welvuraReferral: false })
+      return true
+    })
+    const denied200 = purchaseProduct(821, 'welvura-balance-200', 'req-200-821', {
+      welvuraId: '12345678',
+    })
+    assert.equal(denied200.success, false)
+    assert.equal(denied200.code, 'NOT_WELVURA_REFERRAL')
+
+    withStore((store) => {
+      fundUser(store, 822, 20_000, { welvuraReferral: true })
+      return true
+    })
+    const ok200 = purchaseProduct(822, 'welvura-balance-200', 'req-200-822', {
+      welvuraId: '12345678',
+    })
+    assert.equal(ok200.success, true)
+    assert.equal(ok200.order.status, 'pending')
   })
 })
 

@@ -141,6 +141,17 @@ function userHasCompletedTask(user, taskId) {
   return list.includes(taskId)
 }
 
+/** First Welvura partner task approved → user counts as referral for money payouts. */
+export function hasCompletedWelvuraTask1(user) {
+  return userHasCompletedTask(user, WELVURA_TASK_1_ID)
+}
+
+export const WELVURA_REFERRAL_REQUIRED = {
+  code: 'NOT_WELVURA_REFERRAL',
+  message:
+    'Ты не являешься рефералом Welvura. Выполни первое задание Welvura, чтобы выводить деньги и покупать денежные товары.',
+}
+
 /**
  * Backend eligibility gate. Never trust the client.
  * Uses completedTasks (set only after server-side partner task approval).

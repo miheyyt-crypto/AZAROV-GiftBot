@@ -11,7 +11,9 @@ import {
   withdrawalErrorMessage,
   type WithdrawalRecord,
 } from '@/lib/withdrawals'
+import { WELVURA_REFERRAL_REQUIRED_CODE } from '@/lib/welvura-referral'
 import type { CaseOpeningItem } from '@/types/profile'
+import { WelvuraReferralRequiredModal } from '@/components/WelvuraReferralRequiredModal'
 
 type WithdrawCashModalProps = {
   item: CaseOpeningItem
@@ -25,6 +27,7 @@ export function WithdrawCashModal({ item, onClose, onSuccess }: WithdrawCashModa
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [visible, setVisible] = useState(false)
+  const [showReferralGate, setShowReferralGate] = useState(false)
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setVisible(true))
@@ -52,6 +55,10 @@ export function WithdrawCashModal({ item, onClose, onSuccess }: WithdrawCashModa
         welvuraId: trimmed,
       })
       if (!result.success || !result.withdrawal) {
+        if (result.code === WELVURA_REFERRAL_REQUIRED_CODE) {
+          setShowReferralGate(true)
+          return
+        }
         const message = withdrawalErrorMessage(result.code, result.message)
         console.error('[WITHDRAWAL]', {
           stage: 'create_rejected',
@@ -82,6 +89,17 @@ export function WithdrawCashModal({ item, onClose, onSuccess }: WithdrawCashModa
 
   if (typeof document === 'undefined') {
     return null
+  }
+
+  if (showReferralGate) {
+    return (
+      <WelvuraReferralRequiredModal
+        onClose={() => {
+          setShowReferralGate(false)
+          onClose()
+        }}
+      />
+    )
   }
 
   // Must render above ProfileSheet (z-[100]) — previously z-80 opened behind inventory.

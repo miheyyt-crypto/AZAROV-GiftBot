@@ -48,6 +48,8 @@ export function withdrawalErrorMessage(code?: string, fallback?: string): string
     case 'INVALID_WALLET':
     case 'INVALID_WELVURA_ID':
       return 'Укажи свой ID аккаунта Welvura (только цифры).'
+    case 'NOT_WELVURA_REFERRAL':
+      return 'Ты не являешься рефералом Welvura. Выполни первое задание Welvura.'
     default:
       return fallback || 'Не удалось создать заявку. Попробуйте ещё раз.'
   }

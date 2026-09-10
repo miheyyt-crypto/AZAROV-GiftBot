@@ -1,6 +1,10 @@
 import crypto from 'node:crypto'
 
 import { STREAK_FREEZE_PRODUCT_ID } from './constants.mjs'
+import {
+  hasCompletedWelvuraTask1,
+  WELVURA_REFERRAL_REQUIRED,
+} from './giveaway-eligibility.mjs'
 import { grantStreakFreezeInventoryOnStore, publicInventoryItem } from './inventory.mjs'
 import { findProduct } from './products.mjs'
 import { withStore, withStoreRead } from './store.mjs'
@@ -125,6 +129,14 @@ export function purchaseProduct(userId, productId, requestId, metadata = {}) {
     const product = findProduct(productId)
     if (!product || product.available === false) {
       return { success: false, message: 'Товар не найден.' }
+    }
+
+    if (product.requireWelvuraId && !hasCompletedWelvuraTask1(user)) {
+      return {
+        success: false,
+        code: WELVURA_REFERRAL_REQUIRED.code,
+        message: WELVURA_REFERRAL_REQUIRED.message,
+      }
     }
 
     const price = Number(product.price)

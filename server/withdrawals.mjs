@@ -1,5 +1,9 @@
 import crypto from 'node:crypto'
 
+import {
+  hasCompletedWelvuraTask1,
+  WELVURA_REFERRAL_REQUIRED,
+} from './giveaway-eligibility.mjs'
 import { withStore, withStoreRead } from './store.mjs'
 import { utcNow } from './wallet.mjs'
 
@@ -170,6 +174,14 @@ export function createWithdrawalOnStore(store, userId, input = {}) {
       success: false,
       code: 'USER_NOT_FOUND',
       message: 'Пользователь не найден.',
+    }
+  }
+
+  if (!hasCompletedWelvuraTask1(user)) {
+    return {
+      success: false,
+      code: WELVURA_REFERRAL_REQUIRED.code,
+      message: WELVURA_REFERRAL_REQUIRED.message,
     }
   }
 

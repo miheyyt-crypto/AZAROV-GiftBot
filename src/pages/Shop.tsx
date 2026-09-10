@@ -9,9 +9,15 @@ import { PurchaseConfirmModal } from '@/components/PurchaseConfirmModal'
 import { PurchaseSuccessModal } from '@/components/PurchaseSuccessModal'
 import { ShopCategoryFilter } from '@/components/ShopCategoryFilter'
 import { ShopSectionTabs } from '@/components/ShopSectionTabs'
+import { WelvuraReferralRequiredModal } from '@/components/WelvuraReferralRequiredModal'
 import { filterProducts, getProducts } from '@/data/products'
 import { useBalance } from '@/hooks/useBalance'
+import { useUserAccount } from '@/hooks/useUserAccount'
 import { ROUTES } from '@/lib/constants'
+import {
+  hasCompletedWelvuraTask1,
+  productRequiresWelvuraReferral,
+} from '@/lib/welvura-referral'
 import { CasesPage } from '@/pages/CasesPage'
 import type { ProductCategory, ShopOrder, ShopProduct, ShopSection } from '@/types/shop'
 
@@ -23,18 +29,28 @@ export function Shop() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { amount } = useBalance()
+  const account = useUserAccount()
   const [section, setSection] = useState<ShopSection>(() =>
     resolveShopSection(searchParams.get('section')),
   )
   const [category, setCategory] = useState<ProductCategory | 'all'>('all')
   const [selectedProduct, setSelectedProduct] = useState<ShopProduct | null>(null)
   const [successOrder, setSuccessOrder] = useState<ShopOrder | null>(null)
+  const [showReferralGate, setShowReferralGate] = useState(false)
 
   const products = useMemo(() => getProducts(), [])
   const visibleProducts = useMemo(
     () => filterProducts(products, category),
     [products, category],
   )
+
+  function handleBuy(product: ShopProduct) {
+    if (productRequiresWelvuraReferral(product) && !hasCompletedWelvuraTask1(account)) {
+      setShowReferralGate(true)
+      return
+    }
+    setSelectedProduct(product)
+  }
 
   function handleSectionChange(next: ShopSection) {
     setSection(next)
@@ -90,12 +106,16 @@ export function Shop() {
               <ProductCard
                 key={product.id}
                 product={product}
-                onBuy={setSelectedProduct}
+                onBuy={handleBuy}
               />
             ))}
           </div>
         </>
       )}
+
+      {showReferralGate ? (
+        <WelvuraReferralRequiredModal onClose={() => setShowReferralGate(false)} />
+      ) : null}
 
       {selectedProduct && !successOrder && (
         <PurchaseConfirmModal
