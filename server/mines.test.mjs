@@ -194,6 +194,8 @@ test('safe reveal then cashout pays once; double cashout is idempotent', async (
       // Mines on 20..24, safe 0..19
       store.minesGames[gameId].mineIndices = [20, 21, 22, 23, 24]
       store.minesGames[gameId].revealed = []
+      // Disable extra hazard so this cashout path stays deterministic.
+      store.minesGames[gameId].difficultyMultiplier = 1
     })
 
     const safe = withStore((store) =>
