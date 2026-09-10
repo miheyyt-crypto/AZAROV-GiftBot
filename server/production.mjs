@@ -23,22 +23,28 @@ const { startBot, getBotRuntimeDiagnostics } = await import('./bot.mjs')
  // Telegraf getUpdates is stuck on a 409 Conflict from a previous replica.
 const server = startHttpServer()
 let bot = null
+let attachInFlight = false
 
 async function attachBot(reason = 'boot') {
-  if (bot || getBotRuntimeDiagnostics().pollingActive) {
+  if (bot || getBotRuntimeDiagnostics().pollingActive || attachInFlight) {
     return bot
   }
-  console.info('[production] attaching Telegram Bot…', { reason })
-  const next = await startBot({ registerSignals: false })
-  if (next) {
-    bot = next
-    console.info('[production] Telegram Bot attached (long polling).', {
-      username: getBotRuntimeDiagnostics().botUsername,
-    })
-  } else {
-    console.error('[production] Telegram Bot attach failed', getBotRuntimeDiagnostics())
+  attachInFlight = true
+  try {
+    console.info('[production] attaching Telegram Bot…', { reason })
+    const next = await startBot({ registerSignals: false })
+    if (next) {
+      bot = next
+      console.info('[production] Telegram Bot attached (long polling).', {
+        username: getBotRuntimeDiagnostics().botUsername,
+      })
+    } else {
+      console.error('[production] Telegram Bot attach failed', getBotRuntimeDiagnostics())
+    }
+    return bot
+  } finally {
+    attachInFlight = false
   }
-  return bot
 }
 
 // Never block API boot on bot.launch — previous replica can hold getUpdates for minutes.

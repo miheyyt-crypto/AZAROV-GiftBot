@@ -510,11 +510,24 @@ export function createBot() {
   return bot
 }
 
+/** Prevent overlapping startBot() calls from production retry loop. */
+let startBotInFlight = null
+
 /**
  * @param {{ registerSignals?: boolean }} [options]
  * When started from production.mjs, pass registerSignals: false so only one shutdown owner exists.
  */
 export async function startBot(options = {}) {
+  if (startBotInFlight) {
+    return startBotInFlight
+  }
+  startBotInFlight = startBotInner(options).finally(() => {
+    startBotInFlight = null
+  })
+  return startBotInFlight
+}
+
+async function startBotInner(options = {}) {
   const registerSignals = options.registerSignals !== false
   if (botRuntimeDiagnostics.pollingActive) {
     console.info('[Telegram Bot] Long polling already active — skip duplicate start')
