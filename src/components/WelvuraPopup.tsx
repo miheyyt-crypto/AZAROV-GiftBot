@@ -259,13 +259,13 @@ export function WelvuraPopup() {
                   onClick={openFirstWelvuraTask}
                   className={[
                     'press-none mt-2.5 box-border flex min-h-12 w-full shrink-0 items-center justify-center rounded-[16px]',
-                    'border border-[#7ae045]/35 bg-gradient-to-b from-[#6ad62a] to-[#3fad12]',
-                    'text-[15px] font-bold tracking-[0.06em] text-[#071205]',
-                    'shadow-[0_10px_28px_rgb(0_0_0/35%),0_0_24px_rgb(83_204_24/28%)]',
+                    'border border-[#c8ff6a]/50 bg-gradient-to-b from-[#b8ff3d] to-[#7dff1a]',
+                    'text-[15px] font-bold tracking-[0.06em] text-white',
+                    'shadow-[0_10px_28px_rgb(0_0_0/35%),0_0_28px_rgb(170_255_40/40%)]',
                     'transition-[transform,box-shadow] duration-150 ease-out',
-                    'active:scale-[0.97] active:shadow-[0_6px_18px_rgb(0_0_0/30%),0_0_18px_rgb(83_204_24/35%)]',
+                    'active:scale-[0.97] active:shadow-[0_6px_18px_rgb(0_0_0/30%),0_0_22px_rgb(170_255_40/50%)]',
                     'motion-reduce:transition-none motion-reduce:active:scale-100',
-                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-kick-light/70',
+                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#b8ff3d]/80',
                   ].join(' ')}
                 >
                   ПРИВЯЗАТЬ
