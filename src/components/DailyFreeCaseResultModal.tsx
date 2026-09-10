@@ -79,10 +79,19 @@ export function DailyFreeCaseResultModal({ reward, onClose }: DailyFreeCaseResul
           Поздравляем!
         </h2>
 
-        <div className="mx-auto mt-5 flex size-[7.5rem] items-center justify-center rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_50%_30%,rgb(244_201_93/18%),transparent_65%),#121018]">
-          <span className="text-5xl" aria-hidden>
-            {reward.emoji}
-          </span>
+        <div className="mx-auto mt-5 flex size-[7.5rem] items-center justify-center rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_50%_30%,rgb(244_201_93/18%),transparent_65%),#121018] p-3">
+          {reward.image ? (
+            <img
+              src={reward.image}
+              alt=""
+              className="max-h-full max-w-full object-contain"
+              draggable={false}
+            />
+          ) : (
+            <span className="text-5xl" aria-hidden>
+              {reward.emoji}
+            </span>
+          )}
         </div>
 
         <p className="mt-4 text-lg font-bold text-white">{reward.name}</p>

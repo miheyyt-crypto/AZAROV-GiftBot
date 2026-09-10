@@ -55,10 +55,19 @@ function RewardCard({
       ].join(' ')}
       style={{ width: ITEM_WIDTH, height: 124 }}
     >
-      <div className="flex flex-1 items-center justify-center">
-        <span className="text-[34px] leading-none" aria-hidden>
-          {reward.emoji}
-        </span>
+      <div className="flex flex-1 items-center justify-center p-2">
+        {reward.image ? (
+          <img
+            src={reward.image}
+            alt=""
+            className="max-h-[68%] max-w-[68%] object-contain"
+            draggable={false}
+          />
+        ) : (
+          <span className="text-[34px] leading-none" aria-hidden>
+            {reward.emoji}
+          </span>
+        )}
       </div>
       <div className="border-t border-white/5 px-1.5 py-1.5 text-center">
         <p className="truncate text-[10px] font-semibold leading-tight text-white/90">

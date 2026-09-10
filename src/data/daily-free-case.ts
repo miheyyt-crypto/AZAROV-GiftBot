@@ -1,4 +1,5 @@
 import coinImage from '@/assets/cases/reward-coins.png'
+import gramImage from '@/assets/cases/reward-gram.webp'
 
 export type DailyFreeCaseRarityId = 'legendary' | 'epic' | 'common'
 export type DailyFreeCaseRewardType = 'GRAM' | 'COINS' | 'ITEM'
@@ -49,6 +50,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         weight: 1,
         emoji: '💠',
         valueLabel: '100 GRAM',
+        image: gramImage,
       },
       {
         id: 'dfc-gram-50',
@@ -58,6 +60,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         weight: 1,
         emoji: '💠',
         valueLabel: '50 GRAM',
+        image: gramImage,
       },
       {
         id: 'dfc-durov-glass',
@@ -111,6 +114,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         weight: 1,
         emoji: '💎',
         valueLabel: '2 GRAM',
+        image: gramImage,
       },
       {
         id: 'dfc-gram-1',
@@ -120,6 +124,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         weight: 1,
         emoji: '💎',
         valueLabel: '1 GRAM',
+        image: gramImage,
       },
       {
         id: 'dfc-gram-0-5',
@@ -129,6 +134,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         weight: 1,
         emoji: '💎',
         valueLabel: '0.5 GRAM',
+        image: gramImage,
       },
       {
         id: 'dfc-gram-0-2',
@@ -138,6 +144,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         weight: 1,
         emoji: '💎',
         valueLabel: '0.2 GRAM',
+        image: gramImage,
       },
     ],
   },
@@ -155,6 +162,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         weight: 1,
         emoji: '🔹',
         valueLabel: '0.01 GRAM',
+        image: gramImage,
       },
       {
         id: 'dfc-gram-0-005',
@@ -164,6 +172,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         weight: 1,
         emoji: '🔹',
         valueLabel: '0.005 GRAM',
+        image: gramImage,
       },
       {
         id: 'dfc-gram-0-001',
@@ -173,6 +182,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         weight: 1,
         emoji: '🔹',
         valueLabel: '0.001 GRAM',
+        image: gramImage,
       },
       {
         id: 'dfc-coins-100',
