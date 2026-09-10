@@ -19,11 +19,11 @@ export function Home() {
       <HomeUserHeader />
 
       <div className="mt-4">
-        <DailyFreeCase />
+        <HomeBannerSlider banners={banners} />
       </div>
 
       <div className="mt-5">
-        <HomeBannerSlider banners={banners} />
+        <DailyFreeCase />
       </div>
 
       <div className="mt-6">
