@@ -1,32 +1,15 @@
 import { useSessionReady } from '@/components/AuthGate'
 import { getCurrentAccount, subscribeAccount } from '@/lib/account'
-import { bootstrapSession } from '@/lib/session'
-import { useTelegramWebApp } from '@/hooks/useTelegramWebApp'
 import type { UserAccount } from '@/types/account'
 import { useEffect, useState } from 'react'
 
 export function useUserAccount() {
-  const { isAvailable } = useTelegramWebApp()
   // Must not use throwing useAuth() — App historically calls useAppSession() above AuthGate.
   const sessionReady = useSessionReady()
   const [account, setAccount] = useState<UserAccount>(() => getCurrentAccount())
 
-  useEffect(() => {
-    let cancelled = false
-
-    void bootstrapSession().then((result) => {
-      if (!cancelled && result.confirmed) {
-        setAccount(result.account)
-      }
-    })
-
-    const unsubscribe = subscribeAccount(setAccount)
-
-    return () => {
-      cancelled = true
-      unsubscribe()
-    }
-  }, [isAvailable])
+  // AuthGate owns bootstrapSession(). Parallel mounts here raced StrictMode and aborted /api/session.
+  useEffect(() => subscribeAccount(setAccount), [])
 
   useEffect(() => {
     if (sessionReady) {

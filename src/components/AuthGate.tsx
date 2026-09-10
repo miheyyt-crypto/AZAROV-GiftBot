@@ -20,7 +20,7 @@ import {
 import { MultiAccountBlockedError } from '@/lib/api'
 import { armBootSplashWatchdog, signalAppBootReady } from '@/lib/boot-splash'
 import { captureStartParam } from '@/lib/startParam'
-import { bootstrapSession } from '@/lib/session'
+import { bootstrapSession, sessionBootLog } from '@/lib/session'
 import { initTelegramWebApp } from '@/lib/telegram'
 import type { AuthStatus, TelegramLoginWidgetUser } from '@/types/auth'
 
@@ -89,18 +89,21 @@ export function AuthGate({ children }: AuthGateProps) {
 
   // Hide branded HTML splash once we reach a stable UI path (not while still loading).
   useEffect(() => {
+    sessionBootLog('sessionReady/status', { sessionReady, status })
     if (sessionReady || status === 'unauthenticated' || status === 'blocked') {
+      sessionBootLog('appBootReady signal')
       signalAppBootReady()
     }
   }, [sessionReady, status])
 
   useEffect(() => {
     let cancelled = false
+    sessionBootLog('AuthGate boot effect start', { miniAppAtBoot })
 
     async function boot() {
       setError(null)
       setBlockCopy(null)
-      setSessionReady(false)
+      // Do not clear sessionReady here — StrictMode remount would flash/race a confirmed session.
 
       if (!miniAppAtBoot) {
         setStatus('loading')
@@ -108,6 +111,7 @@ export function AuthGate({ children }: AuthGateProps) {
 
       const timeout = window.setTimeout(() => {
         if (!cancelled) {
+          sessionBootLog('AuthGate boot timeout')
           setSessionReady(false)
           setStatus((current) => (current === 'loading' || miniAppAtBoot ? 'unauthenticated' : current))
           setError('Не удалось проверить сессию. Попробуй войти снова.')
@@ -117,6 +121,7 @@ export function AuthGate({ children }: AuthGateProps) {
       try {
         const result = await bootstrapSession()
         if (cancelled) {
+          sessionBootLog('AuthGate boot ignored (cancelled after StrictMode remount)')
           return
         }
 
@@ -130,6 +135,7 @@ export function AuthGate({ children }: AuthGateProps) {
         if (isMiniAppAuthAvailable()) {
           setStatus('authenticated')
           setSessionReady(true)
+          sessionBootLog('sessionReady changed', { sessionReady: true })
           return
         }
 
@@ -137,12 +143,14 @@ export function AuthGate({ children }: AuthGateProps) {
         if (webUser && webUser.id > 0 && !webUser.isDemo) {
           setStatus('authenticated')
           setSessionReady(true)
+          sessionBootLog('sessionReady changed', { sessionReady: true, path: 'web' })
         } else {
           setSessionReady(false)
           setStatus('unauthenticated')
         }
       } catch (err) {
         if (cancelled) {
+          sessionBootLog('AuthGate boot error ignored (cancelled)')
           return
         }
         if (err instanceof MultiAccountBlockedError) {
@@ -166,6 +174,7 @@ export function AuthGate({ children }: AuthGateProps) {
     void boot()
 
     return () => {
+      sessionBootLog('AuthGate boot effect cleanup')
       cancelled = true
     }
   }, [miniAppAtBoot])

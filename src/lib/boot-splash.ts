@@ -3,6 +3,8 @@
  * Min display avoids flash; max display prevents infinite hang on API failure.
  */
 
+import { sessionBootLog } from '@/lib/session-boot-log'
+
 const MIN_DISPLAY_MS = 650
 const FADE_MS = 280
 const MAX_DISPLAY_MS = 10_000
@@ -25,6 +27,7 @@ function removeSplashElement(): void {
   el.setAttribute('aria-hidden', 'true')
   el.style.pointerEvents = 'none'
   el.classList.add('is-hiding')
+  sessionBootLog('splash hidden')
   window.setTimeout(() => {
     el.remove()
   }, FADE_MS + 40)
@@ -38,6 +41,7 @@ export function signalAppBootReady(): void {
     return
   }
   readySignaled = true
+  sessionBootLog('appBootReady changed', { ready: true })
   if (maxTimer != null) {
     window.clearTimeout(maxTimer)
     maxTimer = null
@@ -54,6 +58,7 @@ export function armBootSplashWatchdog(): void {
     return
   }
   maxTimer = window.setTimeout(() => {
+    sessionBootLog('splash watchdog fired')
     signalAppBootReady()
   }, MAX_DISPLAY_MS)
 }

@@ -12,6 +12,7 @@ import { hydrateBalanceFromAccount } from '@/lib/balance'
 import { emitLevelUpCelebration } from '@/lib/level-up-events'
 import { parseLevelRewardGrants } from '@/lib/level-rewards'
 import { clearStoredStartParam, getStartParam } from '@/lib/referral'
+import { sessionBootLog } from '@/lib/session-boot-log'
 import { captureStartParam } from '@/lib/startParam'
 import { initTelegramWebApp } from '@/lib/telegram'
 import { getTelegramUser } from '@/lib/user'
@@ -79,11 +80,24 @@ export function mapRemoteAccount(remote: UserAccount): UserAccount {
   }
 }
 
-export async function bootstrapSession(): Promise<{
+/** Temporary boot diagnostics — correlate with Railway `[referral] session_*` + ECONNABORTED. */
+export { sessionBootLog } from '@/lib/session-boot-log'
+
+/**
+ * In-flight dedupe: React StrictMode remount + parallel callers (AuthGate / account hooks)
+ * must share one POST /api/session. Without this, cleanup discards the first success while a
+ * sibling request is aborted (server logs ECONNABORTED) and sessionReady never flips.
+ */
+let bootstrapInflight: Promise<BootstrapSessionResult> | null = null
+
+export type BootstrapSessionResult = {
   account: UserAccount
   /** True only when the server confirmed the session (not local/cache fallback). */
   confirmed: boolean
-}> {
+}
+
+async function runBootstrapSession(): Promise<BootstrapSessionResult> {
+  sessionBootLog('request started')
   // Capture launch start_param BEFORE ready() — hash/query can disappear afterward.
   const startParam = captureStartParam() || getStartParam()
 
@@ -99,6 +113,11 @@ export async function bootstrapSession(): Promise<{
 
     try {
       const response = await bootstrapRemoteSession(resolvedStartParam)
+      sessionBootLog('response parsed', {
+        success: response.success,
+        hasUser: Boolean(response.user),
+        code: response.code || null,
+      })
       if (response.user) {
         applyAccountSnapshot(
           mapRemoteAccount({
@@ -133,8 +152,16 @@ export async function bootstrapSession(): Promise<{
       }
 
       hydrateBalanceFromAccount()
-      return { account: getCurrentAccount(), confirmed: Boolean(response.user) }
+      const confirmed = Boolean(response.user)
+      sessionBootLog('request finished', { confirmed, path: 'miniapp' })
+      return { account: getCurrentAccount(), confirmed }
     } catch (error) {
+      sessionBootLog('request finished', {
+        confirmed: false,
+        path: 'miniapp',
+        error: error instanceof Error ? error.name : 'unknown',
+        message: error instanceof Error ? error.message : String(error),
+      })
       if (error instanceof MultiAccountBlockedError) {
         throw error
       }
@@ -146,9 +173,22 @@ export async function bootstrapSession(): Promise<{
   // Website: restore HttpOnly cookie session if present.
   const webUser = await restoreWebSession()
   if (webUser) {
+    sessionBootLog('request finished', { confirmed: true, path: 'web' })
     return { account: getCurrentAccount(), confirmed: true }
   }
 
   hydrateBalanceFromAccount()
+  sessionBootLog('request finished', { confirmed: false, path: 'web' })
   return { account: getCurrentAccount(), confirmed: false }
+}
+
+export function bootstrapSession(): Promise<BootstrapSessionResult> {
+  if (!bootstrapInflight) {
+    bootstrapInflight = runBootstrapSession().finally(() => {
+      bootstrapInflight = null
+    })
+  } else {
+    sessionBootLog('request joined inflight')
+  }
+  return bootstrapInflight
 }
