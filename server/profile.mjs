@@ -9,6 +9,7 @@ import { withStore, withStoreRead } from './store.mjs'
 import { getReferralsByReferrer } from './users.mjs'
 import { addCoins, hasEvent, listUserTransactions, normalizeTxType, TX_TYPE } from './wallet.mjs'
 import { resolveItemWithdrawalStatus } from './withdrawals.mjs'
+import { caseCoinPrizeEventId } from './cases.mjs'
 
 const CASE_NAMES = {
   poor: 'Нищий кейс',
@@ -179,6 +180,21 @@ export function getInventory(userId) {
       const activeWithdrawal = activeWithdrawalId
         ? store.withdrawals?.[activeWithdrawalId] || null
         : null
+      const currency = String(opening.rewardCurrency || '').toUpperCase()
+      const amount = Math.floor(Number(opening.rewardAmount) || 0)
+      const prizeEventId = caseCoinPrizeEventId(opening.openingId)
+      const legacyCredited = currency === 'COINS' && hasEvent(store, prizeEventId)
+      let coinClaimStatus = String(opening.coinClaimStatus || '').toUpperCase()
+      if (currency === 'COINS') {
+        if (coinClaimStatus === 'CLAIMED' || legacyCredited) {
+          coinClaimStatus = 'CLAIMED'
+        } else {
+          coinClaimStatus = 'AVAILABLE'
+        }
+      } else {
+        coinClaimStatus = ''
+      }
+
       return {
         id: opening.openingId,
         name: opening.prize?.name || `${opening.rewardAmount}`,
@@ -191,9 +207,11 @@ export function getInventory(userId) {
         withdrawalStatus,
         activeWithdrawalId,
         canWithdraw:
-          String(opening.rewardCurrency || '').toUpperCase() === 'RUB' &&
+          currency === 'RUB' &&
           withdrawalStatus === 'AVAILABLE' &&
-          Math.floor(Number(opening.rewardAmount) || 0) >= 1,
+          amount >= 1,
+        coinClaimStatus: coinClaimStatus || null,
+        canClaim: currency === 'COINS' && coinClaimStatus === 'AVAILABLE' && amount >= 1,
         withdrawal: activeWithdrawal
           ? {
               id: activeWithdrawal.id,

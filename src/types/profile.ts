@@ -25,6 +25,9 @@ export interface CaseOpeningItem {
   withdrawalStatus?: string
   activeWithdrawalId?: string | null
   canWithdraw?: boolean
+  /** AVAILABLE | CLAIMED — for COINS prizes */
+  coinClaimStatus?: string | null
+  canClaim?: boolean
   withdrawal?: {
     id: string
     status: string

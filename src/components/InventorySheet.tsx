@@ -7,7 +7,11 @@ import { ProfileSheet } from '@/components/ProfileSheet'
 import { WithdrawCashModal } from '@/components/WithdrawCashModal'
 import { rewardImageForPrize } from '@/data/cases'
 import { formatBalance } from '@/lib/balance'
-import { fetchInventory, formatTransactionDate } from '@/lib/profile'
+import {
+  claimInventoryCoins,
+  fetchInventory,
+  formatTransactionDate,
+} from '@/lib/profile'
 import type { CaseOpeningItem, InventoryItem } from '@/types/profile'
 
 interface InventorySheetProps {
@@ -44,6 +48,7 @@ type InventoryTile =
       item: CaseOpeningItem
       isRub: boolean
       canWithdraw: boolean
+      canClaim: boolean
       statusLabel: string | null
     }
 
@@ -71,6 +76,14 @@ function withdrawalButtonLabel(item: CaseOpeningItem): string {
     return 'Выведено'
   }
   return 'Вывести'
+}
+
+function coinClaimButtonLabel(item: CaseOpeningItem): string {
+  const status = String(item.coinClaimStatus || 'AVAILABLE').toUpperCase()
+  if (status === 'CLAIMED') {
+    return 'Получено'
+  }
+  return 'Получить'
 }
 
 function buildTiles(
@@ -108,17 +121,26 @@ function buildTiles(
 
   for (const item of caseOpenings) {
     const status = String(item.withdrawalStatus || 'AVAILABLE').toUpperCase()
+    const coinStatus = String(item.coinClaimStatus || 'AVAILABLE').toUpperCase()
     const isRub = String(item.currency || '').toUpperCase() === 'RUB'
     const canWithdraw =
       typeof item.canWithdraw === 'boolean'
         ? item.canWithdraw
         : isRub && !['PENDING_WITHDRAWAL', 'WITHDRAWN'].includes(status) && Number(item.amount) >= 1
+    const canClaim =
+      typeof item.canClaim === 'boolean'
+        ? item.canClaim
+        : !isRub && coinStatus !== 'CLAIMED' && Number(item.amount) >= 1
 
     let statusLabel: string | null = null
-    if (status === 'PENDING_WITHDRAWAL') {
-      statusLabel = 'На проверке'
-    } else if (status === 'WITHDRAWN') {
-      statusLabel = 'Выведено'
+    if (isRub) {
+      if (status === 'PENDING_WITHDRAWAL') {
+        statusLabel = 'На проверке'
+      } else if (status === 'WITHDRAWN') {
+        statusLabel = 'Выведено'
+      }
+    } else if (coinStatus === 'CLAIMED') {
+      statusLabel = 'Получено'
     }
 
     tiles.push({
@@ -132,6 +154,7 @@ function buildTiles(
       item,
       isRub,
       canWithdraw,
+      canClaim,
       statusLabel,
     })
   }
@@ -141,11 +164,21 @@ function buildTiles(
 
 type DetailModalProps = {
   tile: InventoryTile
+  claiming: boolean
+  claimError: string | null
   onClose: () => void
   onWithdraw: (item: CaseOpeningItem) => void
+  onClaimCoins: (item: CaseOpeningItem) => void
 }
 
-function InventoryDetailModal({ tile, onClose, onWithdraw }: DetailModalProps) {
+function InventoryDetailModal({
+  tile,
+  claiming,
+  claimError,
+  onClose,
+  onWithdraw,
+  onClaimCoins,
+}: DetailModalProps) {
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
@@ -225,11 +258,20 @@ function InventoryDetailModal({ tile, onClose, onWithdraw }: DetailModalProps) {
           <p
             className={[
               'mt-3 text-center text-xs font-medium',
-              caseTile.statusLabel === 'Выведено' ? 'text-kick' : 'text-amber-300',
+              caseTile.statusLabel === 'Выведено' || caseTile.statusLabel === 'Получено'
+                ? 'text-kick'
+                : 'text-amber-300',
             ].join(' ')}
           >
-            {caseTile.statusLabel === 'Выведено' ? '🟢' : '🟡'} {caseTile.statusLabel}
+            {caseTile.statusLabel === 'Выведено' || caseTile.statusLabel === 'Получено'
+              ? '🟢'
+              : '🟡'}{' '}
+            {caseTile.statusLabel}
           </p>
+        ) : null}
+
+        {claimError ? (
+          <p className="mt-3 text-center text-xs text-red-300">{claimError}</p>
         ) : null}
 
         {caseTile?.isRub ? (
@@ -253,6 +295,28 @@ function InventoryDetailModal({ tile, onClose, onWithdraw }: DetailModalProps) {
             {withdrawalButtonLabel(caseTile.item)}
           </button>
         ) : null}
+
+        {caseTile && !caseTile.isRub ? (
+          <button
+            type="button"
+            disabled={!caseTile.canClaim || claiming}
+            onClick={() => {
+              if (!caseTile.canClaim || claiming) {
+                return
+              }
+              onClaimCoins(caseTile.item)
+            }}
+            className={[
+              'mt-5 flex min-h-12 w-full items-center justify-center rounded-full px-4',
+              'text-sm font-bold transition active:scale-[0.98]',
+              caseTile.canClaim && !claiming
+                ? 'bg-kick text-[#0b1208] shadow-[0_0_16px_rgb(83_204_24/30%)]'
+                : 'cursor-not-allowed border border-white/10 bg-white/[0.04] text-muted',
+            ].join(' ')}
+          >
+            {claiming ? 'Начисляем…' : coinClaimButtonLabel(caseTile.item)}
+          </button>
+        ) : null}
       </div>
     </div>,
     document.body,
@@ -265,11 +329,14 @@ export function InventorySheet({ onClose }: InventorySheetProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [selected, setSelected] = useState<InventoryTile | null>(null)
   const [withdrawItem, setWithdrawItem] = useState<CaseOpeningItem | null>(null)
+  const [claiming, setClaiming] = useState(false)
+  const [claimError, setClaimError] = useState<string | null>(null)
 
   async function reload() {
     const result = await fetchInventory()
     setItems(result.items)
     setCaseOpenings(result.caseOpenings)
+    return result
   }
 
   useEffect(() => {
@@ -278,6 +345,32 @@ export function InventorySheet({ onClose }: InventorySheetProps) {
 
   const tiles = useMemo(() => buildTiles(items, caseOpenings), [items, caseOpenings])
   const empty = !isLoading && tiles.length === 0
+
+  async function handleClaimCoins(item: CaseOpeningItem) {
+    setClaimError(null)
+    setClaiming(true)
+    try {
+      const result = await claimInventoryCoins(item.id)
+      if (!result.success) {
+        setClaimError(result.message || 'Не удалось получить монеты.')
+        return
+      }
+      const next = await reload()
+      const updated = next.caseOpenings.find((row) => row.id === item.id)
+      if (updated) {
+        const rebuilt = buildTiles(next.items, next.caseOpenings).find(
+          (tile) => tile.kind === 'case' && tile.item.id === item.id,
+        )
+        setSelected(rebuilt || null)
+      } else {
+        setSelected(null)
+      }
+    } catch {
+      setClaimError('Не удалось получить монеты. Попробуй ещё раз.')
+    } finally {
+      setClaiming(false)
+    }
+  }
 
   return (
     <>
@@ -292,7 +385,10 @@ export function InventorySheet({ onClose }: InventorySheetProps) {
               <button
                 key={tile.key}
                 type="button"
-                onClick={() => setSelected(tile)}
+                onClick={() => {
+                  setClaimError(null)
+                  setSelected(tile)
+                }}
                 className={[
                   'group relative aspect-square overflow-hidden rounded-[20px]',
                   'border border-white/10 bg-[#121018] text-left',
@@ -325,12 +421,14 @@ export function InventorySheet({ onClose }: InventorySheetProps) {
                   <span
                     className={[
                       'absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                      tile.statusLabel === 'Выведено'
+                      tile.statusLabel === 'Выведено' || tile.statusLabel === 'Получено'
                         ? 'bg-kick/20 text-kick'
                         : 'bg-amber-400/20 text-amber-200',
                     ].join(' ')}
                   >
-                    {tile.statusLabel === 'Выведено' ? '✓' : '…'}
+                    {tile.statusLabel === 'Выведено' || tile.statusLabel === 'Получено'
+                      ? '✓'
+                      : '…'}
                   </span>
                 ) : null}
 
@@ -348,9 +446,17 @@ export function InventorySheet({ onClose }: InventorySheetProps) {
       {selected && !withdrawItem ? (
         <InventoryDetailModal
           tile={selected}
-          onClose={() => setSelected(null)}
+          claiming={claiming}
+          claimError={claimError}
+          onClose={() => {
+            setClaimError(null)
+            setSelected(null)
+          }}
           onWithdraw={(item) => {
             setWithdrawItem(item)
+          }}
+          onClaimCoins={(item) => {
+            void handleClaimCoins(item)
           }}
         />
       ) : null}

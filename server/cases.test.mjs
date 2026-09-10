@@ -6,7 +6,7 @@ import path from 'node:path'
 
 import dropTables from '../src/data/case-drops.json' with { type: 'json' }
 
-import { getChanceTotal, isDropTableValid, openCase } from './cases.mjs'
+import { claimCaseCoins, getChanceTotal, isDropTableValid, openCase } from './cases.mjs'
 import { withStore } from './store.mjs'
 import { createUser } from './users.mjs'
 
@@ -60,6 +60,104 @@ test('openCase heals corrupt array fields instead of 500', () => {
       },
       { readOnly: true },
     )
+  } finally {
+    if (prev === undefined) {
+      delete process.env.AZAROV_STORE_DIR
+    } else {
+      process.env.AZAROV_STORE_DIR = prev
+    }
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('COINS from case stay in inventory until claimCaseCoins', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'azarov-case-claim-'))
+  const prev = process.env.AZAROV_STORE_DIR
+  process.env.AZAROV_STORE_DIR = dir
+
+  try {
+    withStore((store) => {
+      const user = createUser(store, { id: 201, first_name: 'Claim', username: 'claim' })
+      user.balance = 50_000
+      return true
+    })
+
+    let openingId = ''
+    let rewardAmount = 0
+    // Force a COINS drop by opening until we get one (or inject opening).
+    for (let i = 0; i < 40; i += 1) {
+      withStore((store) => {
+        store.users['201'].balance = 50_000
+      })
+      const result = openCase(201, 'poor', `claim-coins-open-${i}`)
+      assert.equal(result.success, true, result.message)
+      if (String(result.opening?.rewardCurrency || '').toUpperCase() === 'COINS') {
+        openingId = result.opening.openingId
+        rewardAmount = Number(result.opening.rewardAmount)
+        break
+      }
+    }
+
+    if (!openingId) {
+      // Deterministic fallback: inject a COINS opening if RNG never hit coins.
+      withStore((store) => {
+        const user = store.users['201']
+        openingId = 'case:manual:201:coins'
+        rewardAmount = 1500
+        const opening = {
+          openingId,
+          caseId: 'poor',
+          rewardId: 'manual-coins',
+          rewardAmount,
+          rewardCurrency: 'COINS',
+          pricePaid: 0,
+          prize: {
+            id: 'manual-coins',
+            name: '1500 монет',
+            title: '1500 монет',
+            amount: rewardAmount,
+            currency: 'COINS',
+            rarity: 'common',
+          },
+          createdAt: new Date().toISOString(),
+          coinClaimStatus: 'AVAILABLE',
+        }
+        user.caseOpenings = [...(user.caseOpenings || []), opening]
+        store.caseOpenings[openingId] = {
+          id: openingId,
+          userId: 201,
+          caseId: 'poor',
+          rewardId: 'manual-coins',
+          rewardAmount,
+          rewardCurrency: 'COINS',
+          pricePaid: 0,
+          createdAt: opening.createdAt,
+          coinClaimStatus: 'AVAILABLE',
+        }
+      })
+    }
+
+    const balanceBefore = withStore((store) => Number(store.users['201'].balance), {
+      readOnly: true,
+    })
+
+    const first = claimCaseCoins(201, openingId)
+    assert.equal(first.success, true, first.message)
+    assert.equal(first.alreadyClaimed, false)
+    assert.equal(first.reward, rewardAmount)
+
+    const balanceAfter = withStore((store) => Number(store.users['201'].balance), {
+      readOnly: true,
+    })
+    assert.equal(balanceAfter, balanceBefore + rewardAmount)
+
+    const second = claimCaseCoins(201, openingId)
+    assert.equal(second.success, true)
+    assert.equal(second.alreadyClaimed, true)
+    const balanceFinal = withStore((store) => Number(store.users['201'].balance), {
+      readOnly: true,
+    })
+    assert.equal(balanceFinal, balanceAfter)
   } finally {
     if (prev === undefined) {
       delete process.env.AZAROV_STORE_DIR

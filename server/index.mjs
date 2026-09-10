@@ -77,7 +77,7 @@ import {
   purchaseProduct,
   rejectShopOrder,
 } from './shop.mjs'
-import { openCase } from './cases.mjs'
+import { openCase, claimCaseCoins } from './cases.mjs'
 import {
   cashoutMines,
   getActiveMinesGame,
@@ -1772,6 +1772,19 @@ app.get(
     bootstrapUser(telegramUser, '')
     const result = getInventory(telegramUser.id)
     res.json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/inventory/claim-coins',
+  withEconomicUser(async (req, res, telegramUser) => {
+    assertNoClientFinancialOverrides(req.body)
+    bootstrapUser(telegramUser, '')
+    const result = claimCaseCoins(telegramUser.id, req.body?.itemId)
+    res.status(result.success ? 200 : 400).json({
       ...result,
       user: toPublicUser(getUser(telegramUser.id)),
     })

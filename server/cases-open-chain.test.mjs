@@ -140,6 +140,7 @@ test('empty reward pool is invalid drop table (controlled)', async () => {
 test('server/index.mjs imports openCase used by POST /api/cases/open', async () => {
   const { readFileSync } = await import('node:fs')
   const src = readFileSync(new URL('./index.mjs', import.meta.url), 'utf8')
-  assert.match(src, /import\s*\{\s*openCase\s*\}\s*from\s*['"]\.\/cases\.mjs['"]/)
+  assert.match(src, /import\s*\{[^}]*\bopenCase\b[^}]*\}\s*from\s*['"]\.\/cases\.mjs['"]/)
   assert.match(src, /\/api\/cases\/open[\s\S]*openCase\(/)
+  assert.match(src, /\/api\/inventory\/claim-coins[\s\S]*claimCaseCoins\(/)
 })

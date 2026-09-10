@@ -138,6 +138,27 @@ export async function fetchPendingOrders(): Promise<ShopOrder[]> {
   }
 }
 
+export async function claimInventoryCoins(itemId: string): Promise<{
+  success: boolean
+  message?: string
+  code?: string
+  reward?: number
+  alreadyClaimed?: boolean
+}> {
+  const result = await request('/api/inventory/claim-coins', {
+    method: 'POST',
+    body: JSON.stringify({ itemId }),
+  })
+  applyRemoteUser(result.user)
+  return {
+    success: Boolean(result.success),
+    message: result.message,
+    code: result.code,
+    reward: result.reward,
+    alreadyClaimed: result.alreadyClaimed,
+  }
+}
+
 function getCoinHistoryRequest(
   filter: CoinHistoryFilter = 'all',
 ): Promise<ProfileApiResponse> {

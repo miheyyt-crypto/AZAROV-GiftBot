@@ -88,6 +88,7 @@ function publicOpening(opening) {
     pricePaid: opening.pricePaid,
     prize: opening.prize,
     createdAt: opening.createdAt,
+    coinClaimStatus: opening.coinClaimStatus || null,
   }
 }
 
@@ -140,17 +141,15 @@ function saveOpeningRecord(store, user, opening) {
     rewardCurrency: opening.rewardCurrency,
     pricePaid: opening.pricePaid,
     createdAt: opening.createdAt,
+    ...(opening.coinClaimStatus ? { coinClaimStatus: opening.coinClaimStatus } : {}),
   }
   const openings = ensureArray(user.caseOpenings)
   user.caseOpenings = [...openings, opening]
 }
 
 function grantReward(store, user, reward, openingId) {
+  // COINS are deferred: stay in inventory until claimCaseCoins.
   if (reward.currency === 'COINS' && reward.amount > 0) {
-    addCoins(store, user, reward.amount, TX_TYPE.CASE_REWARD, `${openingId}:prize`, {
-      referenceId: openingId,
-      description: `Выигрыш из кейса: ${reward.name}`,
-    })
     return
   }
 
@@ -184,9 +183,161 @@ function createOpening(store, user, caseConfig, openingId, pricePaid) {
     createdAt: utcNow(),
   }
 
+  if (String(reward.currency || '').toUpperCase() === 'COINS' && Number(reward.amount) > 0) {
+    opening.coinClaimStatus = 'AVAILABLE'
+  }
+
   saveOpeningRecord(store, user, opening)
   grantReward(store, user, reward, openingId)
   return opening
+}
+
+function syncOpeningCoinClaimStatus(store, user, openingId, status) {
+  const list = ensureArray(user.caseOpenings)
+  const inUser = list.find((item) => item.openingId === openingId)
+  if (inUser) {
+    inUser.coinClaimStatus = status
+  }
+  store.caseOpenings = store.caseOpenings || {}
+  if (store.caseOpenings[openingId]) {
+    store.caseOpenings[openingId].coinClaimStatus = status
+  } else if (inUser) {
+    store.caseOpenings[openingId] = {
+      id: openingId,
+      userId: user.telegramId,
+      caseId: inUser.caseId,
+      rewardId: inUser.rewardId,
+      rewardAmount: inUser.rewardAmount,
+      rewardCurrency: inUser.rewardCurrency,
+      pricePaid: inUser.pricePaid,
+      createdAt: inUser.createdAt,
+      coinClaimStatus: status,
+    }
+  }
+}
+
+export function caseCoinPrizeEventId(openingId) {
+  return `${openingId}:prize`
+}
+
+/**
+ * Credit COINS from a case opening inventory item onto the user balance.
+ * Idempotent via `${openingId}:prize`.
+ */
+export function claimCaseCoinsOnStore(store, userId, itemId) {
+  const uid = Number(userId)
+  const openingId = String(itemId || '').trim()
+  const user = store.users[String(uid)]
+
+  if (!Number.isInteger(uid) || uid <= 0 || !user) {
+    return {
+      success: false,
+      code: 'UNAUTHORIZED',
+      message: 'Не удалось определить пользователя.',
+    }
+  }
+
+  if (!openingId) {
+    return {
+      success: false,
+      code: 'ITEM_NOT_FOUND',
+      message: 'Предмет недоступен.',
+    }
+  }
+
+  user.caseOpenings = ensureArray(user.caseOpenings)
+  const opening =
+    user.caseOpenings.find((item) => item.openingId === openingId) ||
+    (store.caseOpenings?.[openingId] &&
+    Number(store.caseOpenings[openingId].userId) === uid
+      ? store.caseOpenings[openingId]
+      : null)
+
+  if (!opening) {
+    return {
+      success: false,
+      code: 'ITEM_NOT_FOUND',
+      message: 'Предмет недоступен.',
+    }
+  }
+
+  const ownerId = Number(opening.userId != null ? opening.userId : uid)
+  if (ownerId !== uid) {
+    return {
+      success: false,
+      code: 'ITEM_NOT_FOUND',
+      message: 'Предмет недоступен.',
+    }
+  }
+
+  const currency = String(opening.rewardCurrency || opening.prize?.currency || '').toUpperCase()
+  if (currency !== 'COINS') {
+    return {
+      success: false,
+      code: 'NOT_CLAIMABLE',
+      message: 'Этот предмет нельзя получить на баланс.',
+    }
+  }
+
+  const amount = Math.floor(Number(opening.rewardAmount ?? opening.prize?.amount ?? 0))
+  if (!Number.isFinite(amount) || amount < 1) {
+    return {
+      success: false,
+      code: 'INVALID_AMOUNT',
+      message: 'Некорректная сумма награды.',
+    }
+  }
+
+  const eventId = caseCoinPrizeEventId(openingId)
+  const alreadyClaimed =
+    String(opening.coinClaimStatus || '').toUpperCase() === 'CLAIMED' || hasEvent(store, eventId)
+
+  if (alreadyClaimed) {
+    syncOpeningCoinClaimStatus(store, user, openingId, 'CLAIMED')
+    return {
+      success: true,
+      alreadyClaimed: true,
+      message: 'Монеты уже начислены на баланс.',
+      reward: amount,
+      opening: publicOpening({
+        ...opening,
+        openingId,
+        coinClaimStatus: 'CLAIMED',
+      }),
+    }
+  }
+
+  const prizeName = opening.prize?.name || `${amount} монет`
+  const grant = addCoins(store, user, amount, TX_TYPE.CASE_REWARD, eventId, {
+    referenceId: openingId,
+    description: `Выигрыш из кейса: ${prizeName}`,
+  })
+
+  if (!grant.granted && grant.reason !== 'already_granted') {
+    return {
+      success: false,
+      code: 'GRANT_FAILED',
+      message: grant.message || 'Не удалось начислить монеты.',
+    }
+  }
+
+  syncOpeningCoinClaimStatus(store, user, openingId, 'CLAIMED')
+
+  return {
+    success: true,
+    alreadyClaimed: Boolean(grant.reason === 'already_granted'),
+    message: 'Монеты зачислены на баланс.',
+    reward: amount,
+    opening: publicOpening({
+      ...opening,
+      openingId,
+      coinClaimStatus: 'CLAIMED',
+    }),
+  }
+}
+
+export function claimCaseCoins(userId, itemId) {
+  return withStore((store) => claimCaseCoinsOnStore(store, userId, itemId))
 }
 
 function existingOpening(store, user, openingId) {
