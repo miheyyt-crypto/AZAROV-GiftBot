@@ -29,7 +29,7 @@ function withTempStore(run) {
 
 test('store includes broadcasts map', () => {
   const store = createEmptyStore()
-  assert.equal(store.version, 16)
+  assert.equal(store.version, 18)
   assert.ok(store.broadcasts)
 })
 

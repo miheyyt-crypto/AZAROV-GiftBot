@@ -102,7 +102,7 @@ export function isPersistentStoreDir(dir = getDataDir()) {
 
 export function createEmptyStore() {
   return {
-    version: 16,
+    version: 18,
     users: {},
     referralIndex: {},
     referrals: {},
@@ -332,6 +332,46 @@ function migrateStore(store) {
       }
     }
     store.version = 17
+  }
+
+  // v18: one-shot full unban of accounts blocked by multi-account anti-abuse.
+  if (Number(store.version) < 18) {
+    store.deviceIndex = store.deviceIndex || {}
+    store.ipHashIndex = store.ipHashIndex || {}
+    store.antiAbuseAudit = store.antiAbuseAudit || {}
+    let unbannedCount = 0
+    for (const user of Object.values(store.users || {})) {
+      if (!user || typeof user !== 'object') {
+        continue
+      }
+      if (!user.blocked && user.blockReason !== 'MULTI_ACCOUNT') {
+        continue
+      }
+      user.blocked = false
+      user.blockReason = null
+      user.blockedAt = null
+      user.antiAbuseBound = true
+      user.antiAbuseLegacy = true
+      unbannedCount += 1
+    }
+    // Clear exclusive device/IP claims so twins are not immediately conflicted again.
+    store.deviceIndex = {}
+    store.ipHashIndex = {}
+    const auditId = `MULTI_ACCOUNT_UNBAN_ALL:0:${Date.now()}:migration`
+    store.antiAbuseAudit[auditId] = {
+      id: auditId,
+      type: 'MULTI_ACCOUNT_UNBAN_ALL',
+      telegramId: 0,
+      deviceId: null,
+      ipHash: null,
+      reason: 'store_migration_v18',
+      count: unbannedCount,
+      timestamp: new Date().toISOString(),
+    }
+    if (unbannedCount > 0) {
+      console.info('[anti-abuse] migration v18 unbanned users', { unbannedCount })
+    }
+    store.version = 18
   }
 
   return store

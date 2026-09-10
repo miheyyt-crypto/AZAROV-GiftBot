@@ -155,6 +155,7 @@ import {
   isMultiAccountCheckEnabled,
   MULTI_ACCOUNT_USER_MESSAGE,
   parseDeviceId,
+  unbanAllBlockedUsersOnStore,
   userCanUseAppEconomy,
 } from './anti-abuse.mjs'
 import { createHttpCompressionMiddleware } from './http-compression.mjs'
@@ -1547,6 +1548,34 @@ app.post(
     res.json({
       success: true,
       message: 'Все привязки Kick сброшены. Можно подключать аккаунты заново.',
+      summary,
+    })
+  }),
+)
+
+/**
+ * Unban every blocked account (MULTI_ACCOUNT and any other block flags).
+ * Body: { "confirm": "UNBAN_ALL_BLOCKED" }
+ */
+app.post(
+  '/api/admin/anti-abuse/unban-all',
+  withAdmin(async (req, res) => {
+    const confirm = String(req.body?.confirm || '').trim()
+    if (confirm !== 'UNBAN_ALL_BLOCKED') {
+      res.status(400).json({
+        success: false,
+        message: 'Передай confirm: "UNBAN_ALL_BLOCKED".',
+      })
+      return
+    }
+
+    const summary = withStore((store) => unbanAllBlockedUsersOnStore(store))
+    console.info('[admin] anti-abuse unban-all', {
+      unbannedCount: summary.unbannedCount,
+    })
+    res.json({
+      success: true,
+      message: `Разбанено пользователей: ${summary.unbannedCount}.`,
       summary,
     })
   }),

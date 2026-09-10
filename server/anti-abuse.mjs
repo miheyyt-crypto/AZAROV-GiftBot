@@ -608,3 +608,49 @@ export const MULTI_ACCOUNT_USER_MESSAGE = {
     'Обнаружена регистрация с устройства или сети, которая уже использовалась другим аккаунтом.',
   detail: 'Если это ошибка, обратитесь в техническую поддержку.',
 }
+
+/**
+ * Fully clear multi-account (and any) account blocks on the store.
+ * Grandfathers unbanned users as legacy so shared Wi-Fi reclaim cannot re-block them.
+ */
+export function unbanAllBlockedUsersOnStore(store) {
+  ensureAntiAbuseMaps(store)
+  const unbanned = []
+
+  for (const user of Object.values(store.users || {})) {
+    if (!user || typeof user !== 'object') {
+      continue
+    }
+    if (!user.blocked && user.blockReason !== BLOCK_REASON_MULTI_ACCOUNT) {
+      continue
+    }
+
+    unbanned.push({
+      telegramId: Number(user.telegramId) || null,
+      previousReason: user.blockReason || null,
+      previousBlockedAt: user.blockedAt || null,
+    })
+
+    user.blocked = false
+    user.blockReason = null
+    user.blockedAt = null
+    user.antiAbuseBound = true
+    user.antiAbuseLegacy = true
+  }
+
+  // Drop exclusive device/IP claims so unbanned twins are not tied to a conflicted index.
+  // They re-seed on next login via tryClaimFreeAssociations (legacy-safe).
+  store.deviceIndex = {}
+  store.ipHashIndex = {}
+
+  writeAudit(store, 'MULTI_ACCOUNT_UNBAN_ALL', {
+    telegramId: 0,
+    reason: `admin_or_migration_unban_all:${unbanned.length}`,
+    timestamp: new Date().toISOString(),
+  })
+
+  return {
+    unbannedCount: unbanned.length,
+    unbanned,
+  }
+}

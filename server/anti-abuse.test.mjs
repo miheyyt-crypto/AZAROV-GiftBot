@@ -249,7 +249,7 @@ test('migration v15→v16 grandfathers existing users without auto-block', async
       ipHashIndex: store.ipHashIndex,
     }))
 
-    assert.equal(snapshot.version, 16)
+    assert.equal(snapshot.version, 18)
     assert.equal(snapshot.u1.antiAbuseBound, true)
     assert.equal(snapshot.u2.antiAbuseBound, true)
     assert.equal(snapshot.u1.antiAbuseLegacy, true)
@@ -262,7 +262,7 @@ test('migration v15→v16 grandfathers existing users without auto-block', async
 
 test('createEmptyStore is v16 with anti-abuse maps', () => {
   const store = createEmptyStore()
-  assert.equal(store.version, 16)
+  assert.equal(store.version, 18)
   assert.deepEqual(store.deviceIndex, {})
   assert.deepEqual(store.ipHashIndex, {})
 })
