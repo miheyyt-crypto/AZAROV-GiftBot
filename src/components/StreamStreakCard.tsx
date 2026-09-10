@@ -1,6 +1,7 @@
 import { Lock } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { useAuth } from '@/components/AuthGate'
 import { fetchKickStreak } from '@/lib/kick'
 import type { KickStreakInfo } from '@/types/kick'
 
@@ -18,10 +19,16 @@ function streakHeadline(days: number): string {
 }
 
 export function StreamStreakCard() {
+  const { sessionReady } = useAuth()
   const [streak, setStreak] = useState<KickStreakInfo | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!sessionReady) {
+      setLoading(true)
+      return
+    }
+
     let cancelled = false
     void fetchKickStreak()
       .then((data) => {
@@ -37,7 +44,7 @@ export function StreamStreakCard() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [sessionReady])
 
   const connected = Boolean(streak?.kickConnected)
   const current = Number(streak?.currentStreak) || 0

@@ -79,7 +79,11 @@ export function mapRemoteAccount(remote: UserAccount): UserAccount {
   }
 }
 
-export async function bootstrapSession(): Promise<UserAccount> {
+export async function bootstrapSession(): Promise<{
+  account: UserAccount
+  /** True only when the server confirmed the session (not local/cache fallback). */
+  confirmed: boolean
+}> {
   // Capture launch start_param BEFORE ready() — hash/query can disappear afterward.
   const startParam = captureStartParam() || getStartParam()
 
@@ -88,7 +92,7 @@ export async function bootstrapSession(): Promise<UserAccount> {
   // Re-read after WebApp init in case initData became available only now.
   const resolvedStartParam = captureStartParam() || startParam
 
-  // Mini App: signed initData is the source of truth.
+  // Mini App: client initData is only a transport credential — server must confirm.
   if (isMiniAppAuthAvailable()) {
     const user = getTelegramUser()
     setCurrentTelegramId(user.id)
@@ -127,23 +131,24 @@ export async function bootstrapSession(): Promise<UserAccount> {
           clearStoredStartParam()
         }
       }
+
+      hydrateBalanceFromAccount()
+      return { account: getCurrentAccount(), confirmed: Boolean(response.user) }
     } catch (error) {
       if (error instanceof MultiAccountBlockedError) {
         throw error
       }
-      // Keep local snapshot + stored start_param if API is unavailable inside Telegram.
+      hydrateBalanceFromAccount()
+      return { account: getCurrentAccount(), confirmed: false }
     }
-
-    hydrateBalanceFromAccount()
-    return getCurrentAccount()
   }
 
   // Website: restore HttpOnly cookie session if present.
   const webUser = await restoreWebSession()
   if (webUser) {
-    return getCurrentAccount()
+    return { account: getCurrentAccount(), confirmed: true }
   }
 
   hydrateBalanceFromAccount()
-  return getCurrentAccount()
+  return { account: getCurrentAccount(), confirmed: false }
 }

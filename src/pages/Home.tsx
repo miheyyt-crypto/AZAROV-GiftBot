@@ -1,5 +1,3 @@
-import { useMemo } from 'react'
-
 import { CommunityAccessBanner } from '@/components/CommunityAccessBanner'
 import { DailyFreeCase } from '@/components/DailyFreeCase'
 import { FreeCaseRequirementNudges } from '@/components/FreeCaseRequirementNudges'
@@ -10,16 +8,20 @@ import { HomeUserHeader } from '@/components/HomeUserHeader'
 import { LeaderboardPodium } from '@/components/LeaderboardPodium'
 import { RecentDropsFeed } from '@/components/RecentDropsFeed'
 import { StreamStreakCard } from '@/components/StreamStreakCard'
+import { useAuth } from '@/components/AuthGate'
 import { getHomeBanners } from '@/data/banners'
 import { useUserAccount } from '@/hooks/useUserAccount'
 import { getFreeCaseRequirements } from '@/lib/free-case-requirements'
+import { useMemo } from 'react'
 
 export function Home() {
+  const { sessionReady } = useAuth()
   const banners = useMemo(() => getHomeBanners(), [])
   const account = useUserAccount()
   const requirements = getFreeCaseRequirements(account)
-  const nudgeCount =
-    Number(!requirements.kickLinked) + Number(!requirements.telegramTaskCompleted)
+  const nudgeCount = sessionReady
+    ? Number(!requirements.kickLinked) + Number(!requirements.telegramTaskCompleted)
+    : 0
 
   return (
     <div className="ui-page">
@@ -61,7 +63,7 @@ export function Home() {
         />
       ) : null}
 
-      <FreeCaseRequirementNudges />
+      {sessionReady ? <FreeCaseRequirementNudges /> : null}
     </div>
   )
 }

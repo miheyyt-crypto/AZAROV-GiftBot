@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { CoinIcon } from '@/components/CoinIcon'
+import { useAuth } from '@/components/AuthGate'
 import { DailyFreeCaseContentsSheet } from '@/components/DailyFreeCaseContentsSheet'
 import { DailyFreeCaseRequirementsModal } from '@/components/DailyFreeCaseRequirementsModal'
 import { DailyFreeCaseResultModal } from '@/components/DailyFreeCaseResultModal'
@@ -87,6 +88,7 @@ function RewardCard({
 }
 
 export function DailyFreeCase() {
+  const { sessionReady } = useAuth()
   const account = useUserAccount()
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [phase, setPhase] = useState<UiPhase>('idle')
@@ -302,6 +304,33 @@ export function DailyFreeCase() {
       ? formatCountdown(availableAt, nowMs)
       : null
   const buttonEnabled = (!requirementsMet && !busy) || (available && !busy)
+
+  if (!sessionReady) {
+    return (
+      <section className="w-full" aria-label="Бесплатный ежедневный кейс" aria-busy="true">
+        <div
+          className={[
+            'relative overflow-hidden rounded-[22px] border border-neon-purple/30',
+            'bg-[radial-gradient(ellipse_at_20%_0%,rgb(168_85_247/16%),transparent_55%),linear-gradient(180deg,#15101f_0%,#0d0b14_100%)]',
+          ].join(' ')}
+        >
+          <div className="animate-pulse" style={{ height: TRACK_HEIGHT }}>
+            <div className="flex h-full items-center gap-2.5 px-3">
+              {Array.from({ length: 4 }, (_, i) => (
+                <div
+                  key={i}
+                  className="h-[124px] w-[92px] shrink-0 rounded-[18px] border border-white/10 bg-white/[0.06]"
+                />
+              ))}
+            </div>
+          </div>
+          <div className="border-t border-white/8 px-4 py-3">
+            <div className="h-11 w-full animate-pulse rounded-[14px] bg-white/10" />
+          </div>
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section className="w-full" aria-label="Бесплатный ежедневный кейс">

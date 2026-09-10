@@ -1,15 +1,22 @@
 import { useEffect } from 'react'
 
+import { useAuth } from '@/components/AuthGate'
 import { pingPresence } from '@/lib/presence'
 
 const PRESENCE_PING_INTERVAL_MS = 30_000
 
 /**
  * Keeps the current Mini App / web session marked online for admin counters.
- * Mount only inside authenticated AuthGate children.
+ * Mount only inside authenticated AuthGate children; waits for server session.
  */
 export function usePresenceHeartbeat() {
+  const { sessionReady } = useAuth()
+
   useEffect(() => {
+    if (!sessionReady) {
+      return
+    }
+
     let cancelled = false
 
     function send() {
@@ -40,5 +47,5 @@ export function usePresenceHeartbeat() {
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onVisible)
     }
-  }, [])
+  }, [sessionReady])
 }

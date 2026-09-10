@@ -18,11 +18,15 @@ import {
   subscribeAuth,
 } from '@/lib/auth'
 import { MultiAccountBlockedError } from '@/lib/api'
+import { captureStartParam } from '@/lib/startParam'
 import { bootstrapSession } from '@/lib/session'
+import { initTelegramWebApp } from '@/lib/telegram'
 import type { AuthStatus, TelegramLoginWidgetUser } from '@/types/auth'
 
 interface AuthContextValue {
   status: AuthStatus
+  /** True only after server-confirmed session (not raw initData). */
+  sessionReady: boolean
   logout: () => Promise<void>
   isWebSession: boolean
 }
@@ -30,6 +34,16 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 const BOOTSTRAP_TIMEOUT_MS = 12_000
+
+function peekMiniAppAuth(): boolean {
+  try {
+    captureStartParam()
+    initTelegramWebApp()
+  } catch {
+    // ignore — AuthGate still boots normally
+  }
+  return isMiniAppAuthAvailable()
+}
 
 export function useAuth(): AuthContextValue {
   const value = useContext(AuthContext)
@@ -44,7 +58,11 @@ interface AuthGateProps {
 }
 
 export function AuthGate({ children }: AuthGateProps) {
-  const [status, setStatus] = useState<AuthStatus>('loading')
+  const miniAppAtBoot = useMemo(() => peekMiniAppAuth(), [])
+  const [status, setStatus] = useState<AuthStatus>(() =>
+    miniAppAtBoot ? 'authenticated' : 'loading',
+  )
+  const [sessionReady, setSessionReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [blockCopy, setBlockCopy] = useState<{
     title: string
@@ -60,32 +78,47 @@ export function AuthGate({ children }: AuthGateProps) {
     let cancelled = false
 
     async function boot() {
-      setStatus('loading')
       setError(null)
       setBlockCopy(null)
+      setSessionReady(false)
+
+      if (!miniAppAtBoot) {
+        setStatus('loading')
+      }
 
       const timeout = window.setTimeout(() => {
         if (!cancelled) {
-          setStatus((current) => (current === 'loading' ? 'unauthenticated' : current))
+          setSessionReady(false)
+          setStatus((current) => (current === 'loading' || miniAppAtBoot ? 'unauthenticated' : current))
           setError('Не удалось проверить сессию. Попробуй войти снова.')
         }
       }, BOOTSTRAP_TIMEOUT_MS)
 
       try {
-        await bootstrapSession()
+        const result = await bootstrapSession()
         if (cancelled) {
+          return
+        }
+
+        if (!result.confirmed) {
+          setSessionReady(false)
+          setStatus('unauthenticated')
+          setError('Не удалось проверить сессию. Попробуй войти снова.')
           return
         }
 
         if (isMiniAppAuthAvailable()) {
           setStatus('authenticated')
+          setSessionReady(true)
           return
         }
 
         const webUser = getWebAuthUser()
         if (webUser && webUser.id > 0 && !webUser.isDemo) {
           setStatus('authenticated')
+          setSessionReady(true)
         } else {
+          setSessionReady(false)
           setStatus('unauthenticated')
         }
       } catch (err) {
@@ -93,6 +126,7 @@ export function AuthGate({ children }: AuthGateProps) {
           return
         }
         if (err instanceof MultiAccountBlockedError) {
+          setSessionReady(false)
           setBlockCopy({
             title: err.title,
             message: err.description,
@@ -101,6 +135,7 @@ export function AuthGate({ children }: AuthGateProps) {
           setStatus('blocked')
           return
         }
+        setSessionReady(false)
         setStatus('unauthenticated')
         setError('Не удалось проверить сессию. Попробуй войти снова.')
       } finally {
@@ -113,12 +148,13 @@ export function AuthGate({ children }: AuthGateProps) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [miniAppAtBoot])
 
   const handleTelegramAuth = useCallback(async (payload: TelegramLoginWidgetUser) => {
     setLoginBusy(true)
     setError(null)
     setBlockCopy(null)
+    setSessionReady(false)
 
     try {
       if (!payload?.id || !payload?.hash || !payload?.auth_date) {
@@ -127,6 +163,7 @@ export function AuthGate({ children }: AuthGateProps) {
 
       await completeTelegramWebLogin(payload)
       setStatus('authenticated')
+      setSessionReady(true)
     } catch (err) {
       if (err instanceof MultiAccountBlockedError) {
         setBlockCopy({
@@ -143,6 +180,7 @@ export function AuthGate({ children }: AuthGateProps) {
           : 'Не удалось войти через Telegram. Попробуй ещё раз.'
       setError(message)
       setStatus('unauthenticated')
+      setSessionReady(false)
     } finally {
       setLoginBusy(false)
     }
@@ -152,18 +190,21 @@ export function AuthGate({ children }: AuthGateProps) {
     await logoutCurrentWebSession()
     setError(null)
     setBlockCopy(null)
+    setSessionReady(false)
     setStatus('unauthenticated')
   }, [])
 
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
+      sessionReady,
       logout,
       isWebSession: !isMiniAppAuthAvailable() && Boolean(getWebAuthUser()),
     }),
-    [status, logout],
+    [status, sessionReady, logout],
   )
 
+  // Full-screen spinner only when we cannot show a shell yet (website / no initData).
   if (status === 'loading') {
     return (
       <div

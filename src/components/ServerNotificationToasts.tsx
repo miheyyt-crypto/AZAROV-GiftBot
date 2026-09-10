@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { LevelUpCelebration } from '@/components/LevelUpCelebration'
 import { NotificationsSheet } from '@/components/NotificationsSheet'
 import { ServerNotificationToast } from '@/components/ServerNotificationToast'
+import { useAuth } from '@/components/AuthGate'
 import { emitNotificationsUpdated } from '@/lib/notification-events'
 import { fetchNotifications } from '@/lib/notifications'
 import {
@@ -40,6 +41,7 @@ interface LevelUpState {
  * LEVEL_UP opens a single celebration modal (no toast spam).
  */
 export function ServerNotificationToasts() {
+  const { sessionReady } = useAuth()
   const sessionRef = useRef(createServerToastSession())
   const queueRef = useRef<UserNotification[]>([])
   const dismissTimerRef = useRef<number | null>(null)
@@ -96,7 +98,9 @@ export function ServerNotificationToasts() {
     }
     seenLevelUpKeysRef.current.add(key)
     setLevelUp(detail)
-    void bootstrapSession()
+    void bootstrapSession().then((result) => {
+      void result
+    })
   }, [])
 
   useEffect(() => {
@@ -180,6 +184,10 @@ export function ServerNotificationToasts() {
   }, [enqueueNew])
 
   useEffect(() => {
+    if (!sessionReady) {
+      return
+    }
+
     let cancelled = false
 
     const clearPoll = () => {
@@ -218,7 +226,7 @@ export function ServerNotificationToasts() {
       clearDismissTimer()
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [pollOnce, clearDismissTimer])
+  }, [pollOnce, clearDismissTimer, sessionReady])
 
   const copy = current ? buildServerToastCopy(current) : null
 

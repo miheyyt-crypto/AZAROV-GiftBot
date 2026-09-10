@@ -156,6 +156,7 @@ import {
   parseDeviceId,
   userCanUseAppEconomy,
 } from './anti-abuse.mjs'
+import { createHttpCompressionMiddleware } from './http-compression.mjs'
 import {
   clearWebSessionCookie,
   createWebSession,
@@ -282,6 +283,7 @@ function partnerScreenshotUpload(req, res, next) {
 }
 
 app.disable('x-powered-by')
+app.use(createHttpCompressionMiddleware())
 app.use(
   express.json({
     limit: '256kb',

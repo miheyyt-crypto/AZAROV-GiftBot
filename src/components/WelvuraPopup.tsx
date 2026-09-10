@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { PartnerTaskModal } from '@/components/PartnerTaskModal'
+import { useAuth } from '@/components/AuthGate'
 import { getPartnerById } from '@/data/partners'
 import { useUserAccount } from '@/hooks/useUserAccount'
 import {
@@ -26,6 +27,7 @@ type LoadPhase = 'loading' | 'ready' | 'error'
  * Reads existing claimedTaskIds + submissions only — does not mutate task status.
  */
 export function WelvuraPopup() {
+  const { sessionReady } = useAuth()
   const account = useUserAccount()
   const [phase, setPhase] = useState<LoadPhase>('loading')
   const [submission, setSubmission] = useState<PartnerSubmission | null>(null)
@@ -39,7 +41,7 @@ export function WelvuraPopup() {
   const firstTask = partner?.tasks[0] ?? null
 
   useEffect(() => {
-    if (!partner || !firstTask || account.telegramId <= 0) {
+    if (!sessionReady || !partner || !firstTask || account.telegramId <= 0) {
       return
     }
 
@@ -62,10 +64,10 @@ export function WelvuraPopup() {
     return () => {
       cancelled = true
     }
-  }, [account.telegramId, firstTask, partner])
+  }, [account.telegramId, firstTask, partner, sessionReady])
 
   const taskStatus = useMemo(() => {
-    if (!firstTask || phase !== 'ready') {
+    if (!sessionReady || !firstTask || phase !== 'ready') {
       return null
     }
     return resolvePartnerTaskStatus(
@@ -81,10 +83,12 @@ export function WelvuraPopup() {
     account.startedPartnerTasks,
     firstTask,
     phase,
+    sessionReady,
     submission,
   ])
 
   const shouldShow =
+    sessionReady &&
     phase === 'ready' &&
     taskStatus !== null &&
     shouldShowWelvuraEntryPopup(taskStatus) &&
