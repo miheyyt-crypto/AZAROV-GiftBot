@@ -3,7 +3,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-/** Busts cache for public/ assets (e.g. welvura-popup.webp, splash-azarov.gif) after each deploy. */
+/** Busts cache for public/ assets (e.g. welvura-popup.webp, splash-azarov.webp) after each deploy. */
 const assetBuildId =
   process.env.RAILWAY_GIT_COMMIT_SHA ||
   process.env.SOURCE_VERSION ||
