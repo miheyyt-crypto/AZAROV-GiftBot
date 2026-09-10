@@ -1,5 +1,9 @@
 import coinImage from '@/assets/cases/reward-coins.png'
+import diamondRingImage from '@/assets/cases/reward-diamond-ring.webp'
+import durovGlassImage from '@/assets/cases/reward-durov-glass.webp'
 import gramImage from '@/assets/cases/reward-gram.webp'
+import lootBagImage from '@/assets/cases/reward-loot-bag.webp'
+import swissWatchImage from '@/assets/cases/reward-swiss-watch.webp'
 
 export type DailyFreeCaseRarityId = 'legendary' | 'epic' | 'common'
 export type DailyFreeCaseRewardType = 'GRAM' | 'COINS' | 'ITEM'
@@ -70,6 +74,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         weight: 1,
         emoji: '🕶️',
         valueLabel: 'NFT',
+        image: durovGlassImage,
       },
       {
         id: 'dfc-loot-bag',
@@ -79,6 +84,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         weight: 1,
         emoji: '👜',
         valueLabel: 'NFT',
+        image: lootBagImage,
       },
       {
         id: 'dfc-diamond-ring',
@@ -88,6 +94,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         weight: 1,
         emoji: '💍',
         valueLabel: 'NFT',
+        image: diamondRingImage,
       },
       {
         id: 'dfc-swiss-watch',
@@ -97,6 +104,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         weight: 1,
         emoji: '⌚',
         valueLabel: 'NFT',
+        image: swissWatchImage,
       },
     ],
   },
