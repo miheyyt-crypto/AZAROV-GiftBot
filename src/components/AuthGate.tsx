@@ -53,6 +53,14 @@ export function useAuth(): AuthContextValue {
   return value
 }
 
+/**
+ * Safe outside AuthGate (returns false). Use for hooks that may run above the provider
+ * (e.g. legacy callers) without throwing into ErrorBoundary.
+ */
+export function useSessionReady(): boolean {
+  return Boolean(useContext(AuthContext)?.sessionReady)
+}
+
 interface AuthGateProps {
   children: ReactNode
 }

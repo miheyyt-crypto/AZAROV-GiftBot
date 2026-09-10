@@ -1,4 +1,4 @@
-import { useAuth } from '@/components/AuthGate'
+import { useSessionReady } from '@/components/AuthGate'
 import { getCurrentAccount, subscribeAccount } from '@/lib/account'
 import { bootstrapSession } from '@/lib/session'
 import { useTelegramWebApp } from '@/hooks/useTelegramWebApp'
@@ -7,7 +7,8 @@ import { useEffect, useState } from 'react'
 
 export function useUserAccount() {
   const { isAvailable } = useTelegramWebApp()
-  const { sessionReady } = useAuth()
+  // Must not use throwing useAuth() — App historically calls useAppSession() above AuthGate.
+  const sessionReady = useSessionReady()
   const [account, setAccount] = useState<UserAccount>(() => getCurrentAccount())
 
   useEffect(() => {

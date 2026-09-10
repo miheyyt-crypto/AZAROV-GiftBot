@@ -18,6 +18,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
+    console.error('[ErrorBoundary]', error.message, error.stack, info.componentStack)
     logAppError(getUserFacingError(error), `ErrorBoundary:${info.componentStack ?? ''}`)
   }
 

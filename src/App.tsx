@@ -23,11 +23,16 @@ import {
   TasksPage,
 } from '@/pages'
 
-export default function App() {
+/** Runs only under AuthGate so auth-dependent hooks have a provider. */
+function AuthenticatedSessionEffects() {
   useAppSession()
+  return null
+}
 
+export default function App() {
   return (
     <AuthGate>
+      <AuthenticatedSessionEffects />
       <PresenceHeartbeat />
       <ServerNotificationToasts />
       <WelvuraPopup />
