@@ -1,7 +1,5 @@
 import { getTelegramInitData } from '@/lib/telegram'
 
-const PRESENCE_PING_INTERVAL_MS = 30_000
-
 function apiUrl(path: string): string {
   const base = import.meta.env.VITE_API_URL ?? ''
   return `${base}${path}`
