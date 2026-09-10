@@ -66,8 +66,6 @@ function simulateFirstClickLossRate({
         mineCount,
         MINES_GRID_SIZE,
         MINES_HOUSE_EDGE_BPS,
-        difficultyMultiplier,
-        maxLossProbability,
       )
       const payout = minesPotentialWin(
         bet,
@@ -75,8 +73,6 @@ function simulateFirstClickLossRate({
         mineCount,
         MINES_GRID_SIZE,
         MINES_HOUSE_EDGE_BPS,
-        difficultyMultiplier,
-        maxLossProbability,
       )
       multiplierSum += multBps / 10_000
       payoutSum += payout
@@ -127,7 +123,9 @@ test('simulation: difficulty×3 raises first-click loss ≈3× for 5 mines', () 
   assert.ok(current.lossRate > 0.18 && current.lossRate < 0.22)
   assert.ok(next.lossRate > 0.56 && next.lossRate < 0.64)
   assert.ok(ratio > 2.7 && ratio < 3.3)
-  assert.ok(next.avgMultiplierOnSurvive > current.avgMultiplierOnSurvive)
+  // Payouts / multipliers remain classic (unchanged by difficulty).
+  assert.equal(Number(current.avgMultiplierOnSurvive.toFixed(4)), 1.2125)
+  assert.equal(Number(next.avgMultiplierOnSurvive.toFixed(4)), 1.2125)
 })
 
 test('simulation: displayed mine count math stays at selected count', () => {

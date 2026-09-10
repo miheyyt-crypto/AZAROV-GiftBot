@@ -48,10 +48,8 @@ test('minesMultiplierBps grows with safe opens and more mines', () => {
   assert.ok(high > low)
   assert.ok(minesMultiplierBps(3, 5) > minesMultiplierBps(1, 5))
   assert.equal(minesMultiplierBps(0, 5), 10_000)
-  // Difficulty×3 raises first-safe multiplier vs classic combinatorial odds.
-  const classic = minesMultiplierBps(1, 5, 25, 9700, 1, 1)
-  const hard = minesMultiplierBps(1, 5, 25, 9700, 3, 0.95)
-  assert.ok(hard > classic)
+  // Multipliers stay classic combinatorial; difficulty only affects hit rate.
+  assert.equal(minesMultiplierBps(1, 5), 12_125)
 })
 
 test('difficulty scales first-click loss ≈3× without exceeding cap', () => {
