@@ -19,8 +19,9 @@ export const TELEGRAM_CHANNEL = '@azarov222'
 export const TELEGRAM_CHANNEL_URL = 'https://t.me/azarov222'
 /** Deep-link payload for the launch-bot task (?start=launch_bot). */
 export const LAUNCH_BOT_START_PAYLOAD = 'launch_bot'
-/** Existing public channel used as support contact (no separate support bot configured). */
-export const TELEGRAM_SUPPORT_URL = TELEGRAM_CHANNEL_URL
+/** Support DM for blocked / multi-account appeals. */
+export const TELEGRAM_SUPPORT_USERNAME = 'yyy1ers'
+export const TELEGRAM_SUPPORT_URL = `https://t.me/${TELEGRAM_SUPPORT_USERNAME}`
 export const KICK_REQUIRED_CHANNEL = 'azarov7777'
 export const KICK_REQUIRED_CHANNEL_URL = 'https://kick.com/azarov7777'
 
