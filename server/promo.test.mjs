@@ -158,7 +158,7 @@ test('missing promo returns not found', async () => {
 
 test('store version includes promo maps', () => {
   const store = createEmptyStore()
-  assert.equal(store.version, 19)
+  assert.equal(store.version, 20)
   assert.ok(store.promoCodes)
   assert.ok(store.promoUsages)
 })

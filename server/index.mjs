@@ -29,7 +29,7 @@ import {
 } from './kick-follow.mjs'
 import { checkKickNickname } from './kick-nickname.mjs'
 import { getKickStreakForUser } from './kick-streak.mjs'
-import { resetAllKickBindingsOnStore } from './kick-reset.mjs'
+import { resetAllKickBindingsOnStore, unlinkKickForUserOnStore } from './kick-reset.mjs'
 import { startPartnerTask, verifyPartnerTask } from './partner-tasks.mjs'
 import {
   approvePartnerSubmission,
@@ -1441,6 +1441,44 @@ app.post(
     res.json({
       success: true,
       message: 'Все привязки Kick сброшены. Можно подключать аккаунты заново.',
+      summary,
+    })
+  }),
+)
+
+/**
+ * Unlink Kick for one user (admin only).
+ * Body: { "username": "lamkustg" } or { "telegramId": 123 }
+ */
+app.post(
+  '/api/admin/kick/unlink',
+  withAdmin(async (req, res) => {
+    const username =
+      typeof req.body?.username === 'string' ? req.body.username.trim().replace(/^@+/, '') : ''
+    const telegramIdRaw = req.body?.telegramId
+    const telegramId = Number(telegramIdRaw)
+    if (!username && !(Number.isInteger(telegramId) && telegramId > 0)) {
+      res.status(400).json({
+        success: false,
+        message: 'Передай username или telegramId.',
+      })
+      return
+    }
+
+    const summary = withStore((store) =>
+      unlinkKickForUserOnStore(store, {
+        username: username || null,
+        telegramId: Number.isInteger(telegramId) && telegramId > 0 ? telegramId : null,
+      }),
+    )
+    console.info('[admin] kick unlink', summary)
+    res.status(summary.ok ? 200 : summary.code === 'NOT_FOUND' ? 404 : 400).json({
+      success: summary.ok,
+      message: summary.ok
+        ? summary.unlinked
+          ? `Kick отвязан у @${summary.username || summary.telegramId}.`
+          : 'У пользователя не было привязки Kick.'
+        : summary.message || 'Не удалось отвязать Kick.',
       summary,
     })
   }),

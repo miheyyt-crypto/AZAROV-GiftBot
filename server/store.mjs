@@ -102,7 +102,7 @@ export function isPersistentStoreDir(dir = getDataDir()) {
 
 export function createEmptyStore() {
   return {
-    version: 19,
+    version: 20,
     users: {},
     referralIndex: {},
     referrals: {},
@@ -397,6 +397,61 @@ function migrateStore(store) {
     store.antiAbuseAudit = {}
     console.info('[anti-abuse] migration v19 removed bans', { unbannedCount })
     store.version = 19
+  }
+
+  // v20: one-shot unlink Kick for @lamkustg (ops request).
+  if (Number(store.version) < 20) {
+    const needle = 'lamkustg'
+    let target = null
+    for (const user of Object.values(store.users || {})) {
+      if (!user || typeof user !== 'object') continue
+      const tg = String(user.username || '')
+        .trim()
+        .replace(/^@+/, '')
+        .toLowerCase()
+      const kick = String(user.kickUsername || '')
+        .trim()
+        .replace(/^@+/, '')
+        .toLowerCase()
+      if (tg === needle || kick === needle) {
+        target = user
+        break
+      }
+    }
+    if (target) {
+      store.kickAccounts = store.kickAccounts || {}
+      store.kickByTelegram = store.kickByTelegram || {}
+      store.kickFollows = store.kickFollows || {}
+      store.kickStreamStreaks = store.kickStreamStreaks || {}
+      const tgKey = String(target.telegramId)
+      const kickId =
+        (store.kickByTelegram[tgKey] && String(store.kickByTelegram[tgKey])) ||
+        (target.kickUserId ? String(target.kickUserId) : '') ||
+        ''
+      target.kickVerified = false
+      target.kickUserId = null
+      target.kickUsername = null
+      target.kickDisplayName = null
+      target.kickAvatarUrl = null
+      target.kickLinkedAt = null
+      if (Array.isArray(target.completedTasks)) {
+        target.completedTasks = target.completedTasks.filter(
+          (id) => !['kick-connect', 'kick-follow', 'kick-nickname'].includes(String(id)),
+        )
+      }
+      if (store.kickByTelegram[tgKey]) delete store.kickByTelegram[tgKey]
+      if (kickId && store.kickAccounts[kickId]) delete store.kickAccounts[kickId]
+      if (kickId && store.kickFollows[kickId]) delete store.kickFollows[kickId]
+      if (store.kickStreamStreaks[tgKey]) delete store.kickStreamStreaks[tgKey]
+      console.info('[kick] migration v20 unlinked user', {
+        telegramId: target.telegramId,
+        username: target.username || null,
+        previousKickUserId: kickId || null,
+      })
+    } else {
+      console.info('[kick] migration v20: user @lamkustg not found — nothing to unlink')
+    }
+    store.version = 20
   }
 
   return store

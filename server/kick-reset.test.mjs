@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { resetAllKickBindingsOnStore } from './kick-reset.mjs'
+import { resetAllKickBindingsOnStore, unlinkKickForUserOnStore } from './kick-reset.mjs'
 import { linkKickAccountOnStore } from './kick-oauth.mjs'
 import { recordKickFollowOnStore } from './kick-follow.mjs'
 import { createEmptyStore } from './store.mjs'
@@ -48,4 +48,33 @@ test('resetAllKickBindingsOnStore clears links, tokens and Kick task markers', (
   assert.equal(store.users['1'].kickVerified, false)
   assert.equal(store.users['1'].completedTasks.includes('kick-connect'), false)
   assert.equal(Object.keys(store.events).some((key) => key.includes('kick-connect')), false)
+})
+
+test('unlinkKickForUserOnStore unlinks one user by username', () => {
+  const store = createEmptyStore()
+  createUser(store, { id: 10, first_name: 'L', username: 'lamkustg' })
+  createUser(store, { id: 11, first_name: 'O', username: 'other' })
+  linkKickAccountOnStore(store, 10, {
+    kickUserId: '200',
+    username: 'kick_lam',
+    displayName: 'Lam',
+    avatarUrl: '',
+  })
+  linkKickAccountOnStore(store, 11, {
+    kickUserId: '201',
+    username: 'kick_other',
+    displayName: 'Other',
+    avatarUrl: '',
+  })
+
+  const summary = unlinkKickForUserOnStore(store, { username: '@lamkustg' })
+  assert.equal(summary.ok, true)
+  assert.equal(summary.unlinked, true)
+  assert.equal(summary.telegramId, 10)
+  assert.equal(store.users['10'].kickUserId, null)
+  assert.equal(store.kickByTelegram['10'], undefined)
+  assert.equal(store.kickAccounts['200'], undefined)
+  // Other user stays linked
+  assert.equal(store.users['11'].kickUserId, '201')
+  assert.equal(store.kickByTelegram['11'], '201')
 })

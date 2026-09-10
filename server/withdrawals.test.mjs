@@ -249,7 +249,7 @@ test('cannot withdraw without Welvura task-1 referral', async () => {
 
 test('store version includes withdrawals', () => {
   const store = createEmptyStore()
-  assert.equal(store.version, 19)
+  assert.equal(store.version, 20)
   assert.ok(store.withdrawals)
 })
 
