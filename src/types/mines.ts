@@ -13,6 +13,8 @@ export type MinesGame = {
   potentialWin: number
   payout: number | null
   canCashout: boolean
+  difficultyMultiplier?: number
+  lossProbability?: number
   mineIndices: number[] | null
   createdAt?: string
   finishedAt?: string | null

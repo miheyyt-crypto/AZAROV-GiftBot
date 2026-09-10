@@ -8,6 +8,14 @@ export const MINES_MIN_BET = 100
 export const MINES_ALLOWED_COUNTS = Object.freeze([3, 5, 7, 10, 15, 20, 24])
 /** Fair multiplier × this / 10000 (9700 ≈ 3% house edge). */
 export const MINES_HOUSE_EDGE_BPS = 9700
+/**
+ * Scales per-click loss probability vs classic combinatorial Mines.
+ * Visual mine count stays the same; hazard may relocate a mine onto the clicked cell.
+ */
+export const MINES_DIFFICULTY_MULTIPLIER = 3
+/** Cap so high mine counts do not become guaranteed instant losses beyond natural odds. */
+export const MINES_MAX_LOSS_PROBABILITY = 0.95
+const LOSS_PROB_SCALE = 1_000_000
 
 function ensureMaps(store) {
   store.minesGames = store.minesGames || {}
@@ -34,14 +42,102 @@ function shufflePick(count, poolSize) {
 }
 
 /**
+ * Classic combinatorial loss chance after `safeOpened` safe reveals:
+ * P_natural = mineCount / (gridSize - safeOpened)
+ */
+export function minesNaturalLossProbability(
+  safeOpened,
+  mineCount,
+  gridSize = MINES_GRID_SIZE,
+) {
+  const k = Math.max(0, Math.floor(Number(safeOpened) || 0))
+  const mines = Math.floor(Number(mineCount) || 0)
+  const n = Math.floor(Number(gridSize) || MINES_GRID_SIZE)
+  const remaining = n - k
+  if (remaining <= 0) {
+    return 1
+  }
+  if (mines <= 0) {
+    return 0
+  }
+  if (mines >= remaining) {
+    return 1
+  }
+  return mines / remaining
+}
+
+/**
+ * Effective loss probability after difficulty scaling.
+ * Never easier than natural; never above MINES_MAX_LOSS_PROBABILITY unless natural already is.
+ */
+export function minesLossProbability(
+  safeOpened,
+  mineCount,
+  gridSize = MINES_GRID_SIZE,
+  difficultyMultiplier = MINES_DIFFICULTY_MULTIPLIER,
+  maxLossProbability = MINES_MAX_LOSS_PROBABILITY,
+) {
+  const natural = minesNaturalLossProbability(safeOpened, mineCount, gridSize)
+  const mult = Number(difficultyMultiplier)
+  const maxLoss = Number(maxLossProbability)
+  if (!Number.isFinite(mult) || mult <= 0) {
+    return natural
+  }
+  const scaled = natural * mult
+  const capped = Number.isFinite(maxLoss) ? Math.min(scaled, maxLoss) : scaled
+  return Math.min(1, Math.max(natural, capped))
+}
+
+export function minesSurviveProbability(
+  safeOpened,
+  mineCount,
+  gridSize = MINES_GRID_SIZE,
+  difficultyMultiplier = MINES_DIFFICULTY_MULTIPLIER,
+  maxLossProbability = MINES_MAX_LOSS_PROBABILITY,
+) {
+  return Math.max(
+    0,
+    1 -
+      minesLossProbability(
+        safeOpened,
+        mineCount,
+        gridSize,
+        difficultyMultiplier,
+        maxLossProbability,
+      ),
+  )
+}
+
+/** Fixed-point loss probability in [0, LOSS_PROB_SCALE]. */
+export function minesLossProbabilityScaled(
+  safeOpened,
+  mineCount,
+  gridSize = MINES_GRID_SIZE,
+  difficultyMultiplier = MINES_DIFFICULTY_MULTIPLIER,
+  maxLossProbability = MINES_MAX_LOSS_PROBABILITY,
+) {
+  const p = minesLossProbability(
+    safeOpened,
+    mineCount,
+    gridSize,
+    difficultyMultiplier,
+    maxLossProbability,
+  )
+  return Math.max(0, Math.min(LOSS_PROB_SCALE, Math.round(p * LOSS_PROB_SCALE)))
+}
+
+/**
  * Multiplier in basis points after `safeOpened` safe reveals.
  * 10000 = 1.00×. At 0 opens → 10000 (bet face value; cashout blocked until ≥1).
+ * Uses difficulty-adjusted survival probabilities (not raw combinatorial board odds).
  */
 export function minesMultiplierBps(
   safeOpened,
   mineCount,
   gridSize = MINES_GRID_SIZE,
   houseEdgeBps = MINES_HOUSE_EDGE_BPS,
+  difficultyMultiplier = MINES_DIFFICULTY_MULTIPLIER,
+  maxLossProbability = MINES_MAX_LOSS_PROBABILITY,
 ) {
   const k = Math.max(0, Math.floor(Number(safeOpened) || 0))
   const mines = Math.floor(Number(mineCount) || 0)
@@ -55,24 +151,127 @@ export function minesMultiplierBps(
     return 0
   }
 
-  let num = 1n
-  let den = 1n
+  let bps = 10_000n
+  const scale = BigInt(LOSS_PROB_SCALE)
   for (let i = 0; i < k; i += 1) {
-    num *= BigInt(n - i)
-    den *= BigInt(safeTotal - i)
+    const lossScaled = minesLossProbabilityScaled(
+      i,
+      mines,
+      n,
+      difficultyMultiplier,
+      maxLossProbability,
+    )
+    const surviveScaled = LOSS_PROB_SCALE - lossScaled
+    if (surviveScaled <= 0) {
+      return 0
+    }
+    bps = (bps * scale) / BigInt(surviveScaled)
   }
 
   const edge = BigInt(Math.max(1, Math.floor(houseEdgeBps)))
-  return Number((num * edge) / den)
+  return Number((bps * edge) / 10_000n)
 }
 
-export function minesPotentialWin(bet, safeOpened, mineCount) {
+export function minesPotentialWin(
+  bet,
+  safeOpened,
+  mineCount,
+  gridSize = MINES_GRID_SIZE,
+  houseEdgeBps = MINES_HOUSE_EDGE_BPS,
+  difficultyMultiplier = MINES_DIFFICULTY_MULTIPLIER,
+  maxLossProbability = MINES_MAX_LOSS_PROBABILITY,
+) {
   const stake = Math.max(0, Math.floor(Number(bet) || 0))
-  const bps = minesMultiplierBps(safeOpened, mineCount)
+  const bps = minesMultiplierBps(
+    safeOpened,
+    mineCount,
+    gridSize,
+    houseEdgeBps,
+    difficultyMultiplier,
+    maxLossProbability,
+  )
   if (stake <= 0 || bps <= 0) {
     return 0
   }
   return Math.floor((stake * bps) / 10_000)
+}
+
+/**
+ * Extra hazard on a layout-safe cell so click loss ≈ difficulty-scaled probability.
+ * Returns probability in [0, 1].
+ */
+export function minesExtraHazardProbability(
+  safeOpened,
+  mineCount,
+  gridSize = MINES_GRID_SIZE,
+  difficultyMultiplier = MINES_DIFFICULTY_MULTIPLIER,
+  maxLossProbability = MINES_MAX_LOSS_PROBABILITY,
+) {
+  const natural = minesNaturalLossProbability(safeOpened, mineCount, gridSize)
+  const target = minesLossProbability(
+    safeOpened,
+    mineCount,
+    gridSize,
+    difficultyMultiplier,
+    maxLossProbability,
+  )
+  if (target <= natural + 1e-12) {
+    return 0
+  }
+  if (natural >= 1 - 1e-12) {
+    return 0
+  }
+  return Math.min(1, Math.max(0, (target - natural) / (1 - natural)))
+}
+
+function gameDifficulty(game) {
+  const raw = Number(game?.difficultyMultiplier)
+  return Number.isFinite(raw) && raw > 0 ? raw : MINES_DIFFICULTY_MULTIPLIER
+}
+
+/**
+ * Keep visual mine count stable: move one existing unrevealed mine onto `cell`.
+ */
+function relocateMineOntoCell(game, cell) {
+  const mines = Array.isArray(game.mineIndices) ? [...game.mineIndices] : []
+  const donors = mines.filter((index) => index !== cell)
+  if (!donors.length) {
+    return false
+  }
+  const donor = donors[crypto.randomInt(0, donors.length)]
+  const next = mines.filter((index) => index !== donor)
+  next.push(cell)
+  game.mineIndices = [...new Set(next)].sort((a, b) => a - b)
+  return game.mineIndices.includes(cell)
+}
+
+function resolveMineHit(game, cell) {
+  if (game.mineIndices.includes(cell)) {
+    return true
+  }
+
+  const safeOpened = Array.isArray(game.revealed) ? game.revealed.length : 0
+  const gridSize = game.gridSize || MINES_GRID_SIZE
+  const difficulty = gameDifficulty(game)
+  const hazard = minesExtraHazardProbability(
+    safeOpened,
+    game.mineCount,
+    gridSize,
+    difficulty,
+  )
+  if (hazard <= 0) {
+    return false
+  }
+
+  const threshold = Math.max(0, Math.min(LOSS_PROB_SCALE, Math.round(hazard * LOSS_PROB_SCALE)))
+  if (threshold <= 0) {
+    return false
+  }
+  if (crypto.randomInt(0, LOSS_PROB_SCALE) >= threshold) {
+    return false
+  }
+
+  return relocateMineOntoCell(game, cell)
 }
 
 function findActiveGame(store, userId) {
@@ -87,8 +286,23 @@ function publicGame(game, { includeMines = false } = {}) {
   }
 
   const safeOpened = Array.isArray(game.revealed) ? game.revealed.length : 0
-  const multiplierBps = minesMultiplierBps(safeOpened, game.mineCount)
-  const potentialWin = minesPotentialWin(game.bet, safeOpened, game.mineCount)
+  const difficulty = gameDifficulty(game)
+  const gridSize = game.gridSize || MINES_GRID_SIZE
+  const multiplierBps = minesMultiplierBps(
+    safeOpened,
+    game.mineCount,
+    gridSize,
+    MINES_HOUSE_EDGE_BPS,
+    difficulty,
+  )
+  const potentialWin = minesPotentialWin(
+    game.bet,
+    safeOpened,
+    game.mineCount,
+    gridSize,
+    MINES_HOUSE_EDGE_BPS,
+    difficulty,
+  )
   const finished = game.status === 'won' || game.status === 'lost'
   const showMines = includeMines || finished
 
@@ -97,7 +311,7 @@ function publicGame(game, { includeMines = false } = {}) {
     status: game.status,
     bet: game.bet,
     mineCount: game.mineCount,
-    gridSize: game.gridSize || MINES_GRID_SIZE,
+    gridSize,
     revealed: Array.isArray(game.revealed) ? [...game.revealed] : [],
     safeOpened,
     multiplierBps,
@@ -105,6 +319,10 @@ function publicGame(game, { includeMines = false } = {}) {
     potentialWin: game.status === 'won' ? Number(game.payout) || potentialWin : potentialWin,
     payout: game.payout == null ? null : Number(game.payout),
     canCashout: game.status === 'playing' && safeOpened >= 1,
+    difficultyMultiplier: difficulty,
+    lossProbability: Number(
+      minesLossProbability(safeOpened, game.mineCount, gridSize, difficulty).toFixed(6),
+    ),
     mineIndices: showMines && Array.isArray(game.mineIndices) ? [...game.mineIndices] : null,
     createdAt: game.createdAt,
     finishedAt: game.finishedAt || null,
@@ -196,6 +414,7 @@ export function startMinesGameOnStore(store, userId, { bet, mineCount, requestId
     revealed: [],
     status: 'playing',
     payout: null,
+    difficultyMultiplier: MINES_DIFFICULTY_MULTIPLIER,
     createdAt: now,
     finishedAt: null,
     requestId: rid,
@@ -260,7 +479,7 @@ export function revealMinesCellOnStore(store, userId, { gameId, cellIndex, reque
     }
   }
 
-  const hitMine = game.mineIndices.includes(cell)
+  const hitMine = resolveMineHit(game, cell)
   store.events[revealKey] = {
     eventId: revealKey,
     done: true,
@@ -345,7 +564,16 @@ export function cashoutMinesOnStore(store, userId, { gameId, requestId }) {
     }
   }
 
-  const payout = minesPotentialWin(game.bet, safeOpened, game.mineCount)
+  const difficulty = gameDifficulty(game)
+  const gridSize = game.gridSize || MINES_GRID_SIZE
+  const payout = minesPotentialWin(
+    game.bet,
+    safeOpened,
+    game.mineCount,
+    gridSize,
+    MINES_HOUSE_EDGE_BPS,
+    difficulty,
+  )
   if (payout < 1) {
     return {
       success: false,
@@ -356,9 +584,16 @@ export function cashoutMinesOnStore(store, userId, { gameId, requestId }) {
   }
 
   const winEvent = `mines:game:${id}:win`
+  const multBps = minesMultiplierBps(
+    safeOpened,
+    game.mineCount,
+    gridSize,
+    MINES_HOUSE_EDGE_BPS,
+    difficulty,
+  )
   const grant = addCoins(store, user, payout, TX_TYPE.MINES_WIN, winEvent, {
     referenceId: id,
-    description: `Выигрыш в Mines (×${(minesMultiplierBps(safeOpened, game.mineCount) / 10_000).toFixed(2)})`,
+    description: `Выигрыш в Mines (×${(multBps / 10_000).toFixed(2)})`,
   })
 
   if (!grant.granted && grant.reason !== 'already_granted') {

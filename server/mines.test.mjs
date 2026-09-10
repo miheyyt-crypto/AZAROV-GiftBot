@@ -6,7 +6,9 @@ import test from 'node:test'
 
 import {
   cashoutMinesOnStore,
+  minesLossProbability,
   minesMultiplierBps,
+  minesNaturalLossProbability,
   minesPotentialWin,
   MINES_MIN_BET,
   revealMinesCellOnStore,
@@ -46,6 +48,18 @@ test('minesMultiplierBps grows with safe opens and more mines', () => {
   assert.ok(high > low)
   assert.ok(minesMultiplierBps(3, 5) > minesMultiplierBps(1, 5))
   assert.equal(minesMultiplierBps(0, 5), 10_000)
+  // Difficulty×3 raises first-safe multiplier vs classic combinatorial odds.
+  const classic = minesMultiplierBps(1, 5, 25, 9700, 1, 1)
+  const hard = minesMultiplierBps(1, 5, 25, 9700, 3, 0.95)
+  assert.ok(hard > classic)
+})
+
+test('difficulty scales first-click loss ≈3× without exceeding cap', () => {
+  const natural = minesNaturalLossProbability(0, 5)
+  const hard = minesLossProbability(0, 5)
+  assert.ok(Math.abs(natural - 0.2) < 1e-9)
+  assert.ok(Math.abs(hard - 0.6) < 1e-9)
+  assert.ok(minesLossProbability(0, 24) >= minesNaturalLossProbability(0, 24))
 })
 
 test('start rejects bet below minimum and insufficient funds', async () => {
