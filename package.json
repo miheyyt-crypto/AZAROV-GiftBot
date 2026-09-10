@@ -18,7 +18,8 @@
     "reset:kick": "node server/reset-kick.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "optimize:images": "node scripts/optimize-images.mjs"
   },
   "dependencies": {
     "dotenv": "^17.2.1",
@@ -38,6 +39,7 @@
     "@vitejs/plugin-react": "^6.0.4",
     "concurrently": "^9.2.1",
     "oxlint": "^1.75.0",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "vite": "^8.2.0"

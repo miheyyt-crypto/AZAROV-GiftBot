@@ -1,7 +1,7 @@
-import caseMedium from '@/assets/cases/medium.jpg'
-import casePoor from '@/assets/cases/poor.jpg'
-import caseReferral from '@/assets/cases/referral.png'
-import caseRich from '@/assets/cases/rich.jpg'
+import caseMedium from '@/assets/cases/medium.webp'
+import casePoor from '@/assets/cases/poor.webp'
+import caseReferral from '@/assets/cases/referral.webp'
+import caseRich from '@/assets/cases/rich.webp'
 import type { Giveaway } from '@/types/giveaway'
 
 /**

@@ -45,6 +45,8 @@ export function CaseCard({
         <img
           src={giftCase.image}
           alt=""
+          loading="lazy"
+          decoding="async"
           className={[
             'relative z-[1] size-full drop-shadow-[0_8px_18px_rgb(0_0_0/35%)]',
             isCinematicArt

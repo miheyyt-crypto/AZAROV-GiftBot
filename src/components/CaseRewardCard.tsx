@@ -37,6 +37,8 @@ export function CaseRewardCard({ reward }: CaseRewardCardProps) {
               ? 'h-[49%] w-[49%] drop-shadow-[0_6px_14px_rgb(0_0_0/35%)]'
               : 'h-[70%] w-[70%]',
           ].join(' ')}
+          loading="lazy"
+          decoding="async"
         />
       </div>
       <div className="space-y-1 p-3">

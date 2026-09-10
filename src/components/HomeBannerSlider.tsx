@@ -245,6 +245,9 @@ export function HomeBannerSlider({ banners }: HomeBannerSliderProps) {
                 alt=""
                 className="pointer-events-none size-full object-cover"
                 draggable={false}
+                loading={index === trackIndex ? 'eager' : 'lazy'}
+                decoding="async"
+                fetchPriority={index === trackIndex ? 'high' : 'auto'}
               />
             </button>
           ))}

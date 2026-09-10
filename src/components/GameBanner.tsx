@@ -27,6 +27,8 @@ export function GameBanner({ ariaLabel, onClick, image, className = '' }: GameBa
           aria-hidden="true"
           className="size-full object-cover"
           draggable={false}
+          decoding="async"
+          fetchPriority="high"
         />
       ) : null}
     </button>

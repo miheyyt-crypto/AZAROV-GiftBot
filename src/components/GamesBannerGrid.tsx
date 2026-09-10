@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 
-import minesBanner from '@/assets/banners/mines-banner.jpg'
-import towerBanner from '@/assets/banners/tower-banner.png'
+import minesBanner from '@/assets/banners/mines-banner.webp'
+import towerBanner from '@/assets/banners/tower-banner.webp'
 import { GameBanner } from '@/components/GameBanner'
 import { ROUTES } from '@/lib/constants'
 

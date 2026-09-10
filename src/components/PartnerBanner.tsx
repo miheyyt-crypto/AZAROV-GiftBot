@@ -79,6 +79,8 @@ export function PartnerBanner({
           alt=""
           className={['pointer-events-none', styles.imageClass].join(' ')}
           aria-hidden
+          loading="lazy"
+          decoding="async"
         />
       )}
 
@@ -88,6 +90,8 @@ export function PartnerBanner({
           alt=""
           className="pointer-events-none absolute inset-0 size-full object-cover opacity-30"
           aria-hidden
+          loading="lazy"
+          decoding="async"
         />
       )}
 

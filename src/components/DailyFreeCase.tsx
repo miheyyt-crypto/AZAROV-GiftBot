@@ -64,6 +64,8 @@ function RewardCard({
             alt=""
             className="max-h-[68%] max-w-[68%] object-contain"
             draggable={false}
+            loading="lazy"
+            decoding="async"
           />
         ) : (
           <span className="text-[34px] leading-none" aria-hidden>

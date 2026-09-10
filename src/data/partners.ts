@@ -1,5 +1,5 @@
-import welvuraCookie from '@/assets/partners/welvura-cookie.png'
-import stakeLogo from '@/assets/partners/stake-logo.png'
+import welvuraCookie from '@/assets/partners/welvura-cookie.webp'
+import stakeLogo from '@/assets/partners/stake-logo.webp'
 import type { PartnerConfig, PartnerTaskConfig } from '@/types/partner'
 
 /** Bind-account reward (task 1). */

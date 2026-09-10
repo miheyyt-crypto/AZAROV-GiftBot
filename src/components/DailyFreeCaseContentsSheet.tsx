@@ -50,6 +50,8 @@ function ContentsCard({ reward }: { reward: DailyFreeCaseReward }) {
             alt=""
             className="max-h-[70%] max-w-[70%] object-contain"
             draggable={false}
+            loading="lazy"
+            decoding="async"
           />
         ) : (
           <span className="text-[28px] leading-none" aria-hidden>

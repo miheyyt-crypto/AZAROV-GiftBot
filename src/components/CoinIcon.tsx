@@ -1,4 +1,4 @@
-import coinsImage from '@/assets/cases/reward-coins.png'
+import coinsImage from '@/assets/cases/reward-coins.webp'
 
 interface CoinIconProps {
   className?: string
@@ -6,7 +6,7 @@ interface CoinIconProps {
   alt?: string
 }
 
-/** Official bot currency mark — transparent PNG coin art. */
+/** Official bot currency mark — WebP coin art. */
 export function CoinIcon({ className = 'size-[1.15rem]', alt = '' }: CoinIconProps) {
   return (
     <img
@@ -14,6 +14,7 @@ export function CoinIcon({ className = 'size-[1.15rem]', alt = '' }: CoinIconPro
       alt={alt}
       className={['inline-block shrink-0 object-contain align-middle', className].filter(Boolean).join(' ')}
       draggable={false}
+      decoding="async"
       aria-hidden={alt ? undefined : true}
     />
   )

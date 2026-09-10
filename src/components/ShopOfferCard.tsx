@@ -43,6 +43,8 @@ export function ShopOfferCard({
           ]
             .filter(Boolean)
             .join(' ')}
+          loading="lazy"
+          decoding="async"
         />
         {badge}
       </div>

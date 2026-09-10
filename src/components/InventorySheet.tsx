@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
-import freezeImage from '@/assets/shop/freeze.png'
+import freezeImage from '@/assets/shop/freeze.webp'
 import { ProfileSheet } from '@/components/ProfileSheet'
 import { WelvuraReferralRequiredModal } from '@/components/WelvuraReferralRequiredModal'
 import { WithdrawCashModal } from '@/components/WithdrawCashModal'

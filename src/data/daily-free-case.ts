@@ -1,4 +1,4 @@
-import coinImage from '@/assets/cases/reward-coins.png'
+import coinImage from '@/assets/cases/reward-coins.webp'
 import diamondRingImage from '@/assets/cases/reward-diamond-ring.webp'
 import durovGlassImage from '@/assets/cases/reward-durov-glass.webp'
 import gramImage from '@/assets/cases/reward-gram.webp'

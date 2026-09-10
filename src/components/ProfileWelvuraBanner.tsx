@@ -1,6 +1,6 @@
 import { ChevronRight } from 'lucide-react'
 
-import welvuraCookie from '@/assets/partners/welvura-cookie.png'
+import welvuraCookie from '@/assets/partners/welvura-cookie.webp'
 
 interface ProfileWelvuraBannerProps {
   onClick: () => void

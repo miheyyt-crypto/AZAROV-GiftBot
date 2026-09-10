@@ -2444,6 +2444,18 @@ if (canServeFrontend) {
     express.static(distDir, {
       index: false,
       fallthrough: true,
+      setHeaders(res, filePath) {
+        const normalized = filePath.replace(/\\/g, '/')
+        // Vite content-hashed files under /assets/ — safe for long immutable cache.
+        if (normalized.includes('/assets/')) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+          return
+        }
+        // Root public copies (favicon, welvura-popup.webp) — shorter cache; query bust on popup.
+        if (/\.(webp|png|jpe?g|svg|gif|ico|woff2?)$/i.test(normalized)) {
+          res.setHeader('Cache-Control', 'public, max-age=86400')
+        }
+      },
     }),
   )
 } else if (IS_PRODUCTION) {
@@ -2460,6 +2472,7 @@ app.use((req, res, next) => {
   }
 
   if (canServeFrontend && (req.method === 'GET' || req.method === 'HEAD')) {
+    res.setHeader('Cache-Control', 'no-cache')
     res.sendFile(path.join(distDir, 'index.html'), (error) => {
       if (error) {
         next(error)

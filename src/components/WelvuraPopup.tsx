@@ -12,8 +12,8 @@ import {
 } from '@/lib/partners'
 import type { PartnerSubmission } from '@/types/partner'
 
-/** Replace `public/welvura-popup.png` and redeploy — build id busts WebView cache. */
-const WELVURA_POPUP_IMAGE_SRC = `/welvura-popup.png?v=${
+/** Replace `public/welvura-popup.webp` and redeploy — build id busts WebView cache. */
+const WELVURA_POPUP_IMAGE_SRC = `/welvura-popup.webp?v=${
   import.meta.env.VITE_ASSET_BUILD_ID || 'dev'
 }`
 
@@ -246,6 +246,8 @@ export function WelvuraPopup() {
                       alt="Welvura"
                       className="size-full object-cover"
                       draggable={false}
+                      decoding="async"
+                      fetchPriority="high"
                     />
                     <span
                       className="pointer-events-none absolute inset-0 rounded-[26px] ring-1 ring-inset ring-white/10"
