@@ -127,9 +127,12 @@ export function minesLossProbabilityScaled(
 }
 
 /**
- * Multiplier in basis points after `safeOpened` safe reveals.
+ * Classic board multiplier in basis points after `safeOpened` safe reveals.
  * 10000 = 1.00×. At 0 opens → 10000 (bet face value; cashout blocked until ≥1).
- * Uses classic combinatorial board odds (independent of MINES_DIFFICULTY_MULTIPLIER).
+ *
+ * IMPORTANT: payouts MUST stay on combinatorial board odds:
+ *   ∏ (gridSize - i) / (safeTotal - i)  ×  houseEdge
+ * Do NOT scale this by MINES_DIFFICULTY_MULTIPLIER — difficulty only affects hit chance.
  */
 export function minesMultiplierBps(
   safeOpened,
@@ -149,6 +152,7 @@ export function minesMultiplierBps(
     return 0
   }
 
+  // Pure combinatorial product — ignore difficulty / lossProbability entirely.
   let num = 1n
   let den = 1n
   for (let i = 0; i < k; i += 1) {
@@ -156,9 +160,12 @@ export function minesMultiplierBps(
     den *= BigInt(safeTotal - i)
   }
 
-  const edge = BigInt(Math.max(1, Math.floor(houseEdgeBps)))
+  const edge = BigInt(Math.max(1, Math.floor(Number(houseEdgeBps) || MINES_HOUSE_EDGE_BPS)))
   return Number((num * edge) / den)
 }
+
+/** @deprecated alias — same classic board formula */
+export const minesClassicMultiplierBps = minesMultiplierBps
 
 export function minesPotentialWin(bet, safeOpened, mineCount, gridSize = MINES_GRID_SIZE, houseEdgeBps = MINES_HOUSE_EDGE_BPS) {
   const stake = Math.max(0, Math.floor(Number(bet) || 0))
@@ -287,6 +294,8 @@ function publicGame(game, { includeMines = false } = {}) {
     safeOpened,
     multiplierBps,
     multiplier: Number((multiplierBps / 10_000).toFixed(4)),
+    /** Payout math version: classic board odds (not difficulty-scaled). */
+    payoutMath: 'classic_board_v2',
     potentialWin: game.status === 'won' ? Number(game.payout) || potentialWin : potentialWin,
     payout: game.payout == null ? null : Number(game.payout),
     canCashout: game.status === 'playing' && safeOpened >= 1,

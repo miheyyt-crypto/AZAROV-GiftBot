@@ -49,7 +49,9 @@ test('minesMultiplierBps grows with safe opens and more mines', () => {
   assert.ok(minesMultiplierBps(3, 5) > minesMultiplierBps(1, 5))
   assert.equal(minesMultiplierBps(0, 5), 10_000)
   // Multipliers stay classic combinatorial; difficulty only affects hit rate.
+  // 5 mines / 25 cells / 1 safe → 25/20 * 0.97 = 1.2125 (NOT difficulty-scaled 2.425).
   assert.equal(minesMultiplierBps(1, 5), 12_125)
+  assert.equal(minesPotentialWin(100, 1, 5), 121)
 })
 
 test('difficulty scales first-click loss ≈3× without exceeding cap', () => {
