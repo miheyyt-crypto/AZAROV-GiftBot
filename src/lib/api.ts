@@ -61,6 +61,23 @@ export interface ApiUserResponse {
     totalAmount: number
     level: number
   } | null
+  openingId?: string
+  available?: boolean
+  availableAt?: string | null
+  cooldownMs?: number
+  alreadyProcessed?: boolean
+  dailyReward?: {
+    id: string
+    name: string
+    amount: number
+    emoji?: string
+  }
+  rewards?: Array<{
+    id: string
+    name: string
+    amount: number
+    emoji?: string
+  }>
 }
 
 export class MultiAccountBlockedError extends Error {
@@ -259,6 +276,19 @@ export function openCaseRequest(caseId: string, requestId: string): Promise<ApiU
   return request('/api/cases/open', {
     method: 'POST',
     body: JSON.stringify({ caseId, requestId }),
+  })
+}
+
+export function getDailyFreeCaseStatusRequest(): Promise<ApiUserResponse> {
+  return request('/api/daily-free-case/status', {
+    method: 'GET',
+  })
+}
+
+export function openDailyFreeCaseRequest(requestId: string): Promise<ApiUserResponse> {
+  return request('/api/daily-free-case/open', {
+    method: 'POST',
+    body: JSON.stringify({ requestId }),
   })
 }
 

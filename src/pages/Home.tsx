@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 
 import { CommunityAccessBanner } from '@/components/CommunityAccessBanner'
+import { DailyFreeCase } from '@/components/DailyFreeCase'
 import { GamesBannerGrid } from '@/components/GamesBannerGrid'
 import { GiveawaysSection } from '@/components/GiveawaysSection'
 import { HomeBannerSlider } from '@/components/HomeBannerSlider'
@@ -17,7 +18,13 @@ export function Home() {
     <div className="ui-page">
       <HomeUserHeader />
 
-      <HomeBannerSlider banners={banners} />
+      <div className="mt-4">
+        <DailyFreeCase />
+      </div>
+
+      <div className="mt-5">
+        <HomeBannerSlider banners={banners} />
+      </div>
 
       <div className="mt-6">
         <StreamStreakCard />

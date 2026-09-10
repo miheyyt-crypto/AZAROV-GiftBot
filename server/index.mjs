@@ -79,6 +79,10 @@ import {
 } from './shop.mjs'
 import { openCase, claimCaseCoins } from './cases.mjs'
 import {
+  getDailyFreeCaseStatus,
+  openDailyFreeCase,
+} from './daily-free-case.mjs'
+import {
   cashoutMines,
   getActiveMinesGame,
   revealMinesCell,
@@ -2128,6 +2132,30 @@ app.post(
     res.json({
       ...result,
       user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.get(
+  '/api/daily-free-case/status',
+  withEconomicUser(async (_req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const result = getDailyFreeCaseStatus(telegramUser.id)
+    res.json(result)
+  }),
+)
+
+app.post(
+  '/api/daily-free-case/open',
+  withEconomicUser(async (req, res, telegramUser) => {
+    assertNoClientFinancialOverrides(req.body)
+    const requestId = parseRequestId(req.body?.requestId)
+    bootstrapUser(telegramUser, '')
+    const result = openDailyFreeCase(telegramUser.id, requestId)
+    const status = result.success === false && result.code === 'COOLDOWN' ? 429 : 200
+    res.status(status).json({
+      ...result,
+      user: result.user || toPublicUser(getUser(telegramUser.id)),
     })
   }),
 )

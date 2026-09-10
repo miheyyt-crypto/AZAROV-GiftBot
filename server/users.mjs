@@ -160,6 +160,8 @@ export function createUser(store, telegramUser, options = {}) {
     invitedRewardGranted: false,
     openedReferralCases: 0,
     caseOpenings: [],
+    lastDailyFreeCaseAt: null,
+    dailyFreeCaseOpenings: [],
     pendingStartParam: null,
     languageCode: telegramUser.language_code || '',
     isPremium: Boolean(telegramUser.is_premium),
@@ -365,6 +367,18 @@ export function toPublicUser(user, store = null) {
   )
   const levelSnap = buildUserLevelSnapshot(user, watchSeconds)
 
+  const lastDailyFreeCaseAt = user.lastDailyFreeCaseAt || null
+  let dailyFreeCaseAvailable = true
+  let dailyFreeCaseAvailableAt = null
+  if (lastDailyFreeCaseAt) {
+    const lastMs = Date.parse(lastDailyFreeCaseAt)
+    if (Number.isFinite(lastMs)) {
+      const nextMs = lastMs + 24 * 60 * 60 * 1000
+      dailyFreeCaseAvailable = Date.now() >= nextMs
+      dailyFreeCaseAvailableAt = new Date(nextMs).toISOString()
+    }
+  }
+
   return {
     telegramId: user.telegramId,
     username: user.username,
@@ -394,6 +408,9 @@ export function toPublicUser(user, store = null) {
     availableReferralCases,
     caseProgress,
     caseTarget: REFERRAL_CASE_EVERY,
+    lastDailyFreeCaseAt,
+    dailyFreeCaseAvailable,
+    dailyFreeCaseAvailableAt,
     referralLink: buildReferralLink(user.referralCode),
     chatMessages: levelSnap.chatMessages,
     watchSeconds: levelSnap.watchSeconds,

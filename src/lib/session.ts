@@ -47,6 +47,10 @@ export function mapRemoteAccount(remote: UserAccount): UserAccount {
     availableReferralCases: remote.availableReferralCases,
     caseProgress: remote.caseProgress,
     caseTarget: remote.caseTarget,
+    lastDailyFreeCaseAt: remote.lastDailyFreeCaseAt ?? null,
+    dailyFreeCaseAvailable:
+      remote.dailyFreeCaseAvailable == null ? true : Boolean(remote.dailyFreeCaseAvailable),
+    dailyFreeCaseAvailableAt: remote.dailyFreeCaseAvailableAt ?? null,
     chatMessages: remote.chatMessages ?? 0,
     watchSeconds: remote.watchSeconds ?? 0,
     streamHours: remote.streamHours ?? 0,

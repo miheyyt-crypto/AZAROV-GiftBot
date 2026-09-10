@@ -27,6 +27,9 @@ export interface UserAccount {
   availableReferralCases?: number
   caseProgress?: number
   caseTarget?: number
+  lastDailyFreeCaseAt?: string | null
+  dailyFreeCaseAvailable?: boolean
+  dailyFreeCaseAvailableAt?: string | null
   chatMessages?: number
   watchSeconds?: number
   streamHours?: number
