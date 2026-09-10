@@ -125,26 +125,66 @@ export async function submitPartnerTaskAction(input: {
   }
 }
 
+function indexLatestSubmissionsByTask(
+  submissions: PartnerSubmission[],
+): Record<string, PartnerSubmission> {
+  const map: Record<string, PartnerSubmission> = {}
+  for (const submission of submissions) {
+    const current = map[submission.taskId]
+    if (
+      !current ||
+      new Date(submission.createdAt).getTime() > new Date(current.createdAt).getTime()
+    ) {
+      map[submission.taskId] = submission
+    }
+  }
+  return map
+}
+
 export async function loadMyPartnerSubmissions(): Promise<
   Record<string, PartnerSubmission>
 > {
   try {
     const result = await getMyPartnerSubmissions()
     applyRemoteUser(result.user)
-    const map: Record<string, PartnerSubmission> = {}
-    for (const submission of result.submissions ?? []) {
-      const current = map[submission.taskId]
-      if (
-        !current ||
-        new Date(submission.createdAt).getTime() > new Date(current.createdAt).getTime()
-      ) {
-        map[submission.taskId] = submission
-      }
-    }
-    return map
+    return indexLatestSubmissionsByTask(result.submissions ?? [])
   } catch {
     return {}
   }
+}
+
+/**
+ * Same source as PartnerTaskModal, but distinguishes API failure from empty list.
+ * Used by entry promo so we never show the popup on unknown status.
+ */
+export async function loadMyPartnerSubmissionsResult(): Promise<
+  | { ok: true; byTaskId: Record<string, PartnerSubmission> }
+  | { ok: false }
+> {
+  try {
+    const result = await getMyPartnerSubmissions()
+    applyRemoteUser(result.user)
+    if (!result.success) {
+      return { ok: false }
+    }
+    return {
+      ok: true,
+      byTaskId: indexLatestSubmissionsByTask(result.submissions ?? []),
+    }
+  } catch {
+    return { ok: false }
+  }
+}
+
+/**
+ * Entry popup visibility over existing partner task status.
+ * completed → COMPLETED (claimed / admin approved)
+ * verified → PENDING (submission awaiting admin confirmation)
+ */
+export function shouldShowWelvuraEntryPopup(status: PartnerTaskStatus): boolean {
+  const completed = status === 'COMPLETED'
+  const verified = status === 'PENDING'
+  return !completed && !verified
 }
 
 export function getPartnerProgress(
