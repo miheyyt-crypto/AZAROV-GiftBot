@@ -1797,13 +1797,17 @@ app.post(
 )
 
 app.get('/api/home/leaderboard', (_req, res) => {
+  const __start = Date.now()
   const result = getLeaderboard(3)
   res.json(result)
+  console.log(`[PERF] GET /api/home/leaderboard took ${Date.now() - __start}ms`)
 })
 
 app.get('/api/home/recent-drops', (_req, res) => {
+  const __start = Date.now()
   const result = getRecentCaseDrops(12)
   res.json(result)
+  console.log(`[PERF] GET /api/home/recent-drops took ${Date.now() - __start}ms`)
 })
 
 app.get(
@@ -1898,12 +1902,14 @@ app.get(
 app.get(
   '/api/notifications/unread-count',
   withUser(async (_req, res, telegramUser) => {
+    const __start = Date.now()
     bootstrapUser(telegramUser, '')
     const result = getUnreadNotificationsCount(telegramUser.id)
     res.json({
       ...result,
       user: toPublicUser(getUser(telegramUser.id)),
     })
+    console.log(`[PERF] GET /api/notifications/unread-count took ${Date.now() - __start}ms`)
   }),
 )
 
