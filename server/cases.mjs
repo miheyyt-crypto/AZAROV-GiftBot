@@ -7,6 +7,11 @@ import { countActiveReferrals, ensureArray } from './users.mjs'
 import { addCoins, hasEvent, spendCoins, TX_TYPE, utcNow } from './wallet.mjs'
 import { withStore } from './store.mjs'
 
+/** Display `chance` stays unchanged; each RUB prize actually drops at this percent. */
+export const CASE_RUB_DROP_PERCENT = 0.1
+/** Roll resolution: 100_000 units = 100% → 0.1% = 100 units. */
+export const CASE_ROLL_SCALE = 100_000
+
 const CASE_CONFIG = {
   poor: {
     id: 'poor',
@@ -46,21 +51,103 @@ export function isDropTableValid(rewards) {
   return getChanceTotal(rewards) === 100
 }
 
+function isRubReward(reward) {
+  return String(reward?.currency || '').toUpperCase() === 'RUB'
+}
+
+/**
+ * Build integer roll weights. Display `chance` is ignored for RUB (fixed 0.1% each);
+ * remaining mass is split across non-RUB rewards proportional to their display chances.
+ */
+export function buildCaseRollWeights(rewards, options = {}) {
+  const list = Array.isArray(rewards) ? rewards : []
+  const rubDropPercent = Number(options.rubDropPercent ?? CASE_RUB_DROP_PERCENT)
+  const scale = Math.floor(Number(options.scale ?? CASE_ROLL_SCALE))
+  const rubUnit = Math.max(1, Math.round((rubDropPercent / 100) * scale))
+
+  const weights = list.map(() => 0)
+  const rubIndexes = []
+  const otherIndexes = []
+
+  list.forEach((reward, index) => {
+    if (isRubReward(reward)) {
+      rubIndexes.push(index)
+    } else {
+      otherIndexes.push(index)
+    }
+  })
+
+  let rubTotal = 0
+  for (const index of rubIndexes) {
+    weights[index] = rubUnit
+    rubTotal += rubUnit
+  }
+
+  if (rubTotal >= scale) {
+    // Degenerate table: keep RUB weights and leave others at 0.
+    return weights
+  }
+
+  const remaining = scale - rubTotal
+  if (!otherIndexes.length) {
+    return weights
+  }
+
+  const otherChanceSum = otherIndexes.reduce(
+    (sum, index) => sum + Math.max(0, Number(list[index].chance) || 0),
+    0,
+  )
+
+  if (otherChanceSum <= 0) {
+    const each = Math.floor(remaining / otherIndexes.length)
+    let assigned = 0
+    otherIndexes.forEach((index, offset) => {
+      if (offset === otherIndexes.length - 1) {
+        weights[index] = remaining - assigned
+      } else {
+        weights[index] = each
+        assigned += each
+      }
+    })
+    return weights
+  }
+
+  let assigned = 0
+  otherIndexes.forEach((index, offset) => {
+    if (offset === otherIndexes.length - 1) {
+      weights[index] = remaining - assigned
+      return
+    }
+    const share = Math.floor(
+      (remaining * Math.max(0, Number(list[index].chance) || 0)) / otherChanceSum,
+    )
+    weights[index] = share
+    assigned += share
+  })
+
+  return weights
+}
+
 function findCase(caseId) {
   return CASE_CONFIG[caseId] || null
 }
 
-function rollReward(rewards) {
+export function rollReward(rewards) {
   if (!isDropTableValid(rewards)) {
     return null
   }
 
-  let cursor = crypto.randomInt(0, 100)
+  const weights = buildCaseRollWeights(rewards)
+  const total = weights.reduce((sum, value) => sum + value, 0)
+  if (total <= 0) {
+    return rewards[rewards.length - 1] || null
+  }
 
-  for (const reward of rewards) {
-    cursor -= reward.chance
+  let cursor = crypto.randomInt(0, total)
+  for (let index = 0; index < rewards.length; index += 1) {
+    cursor -= weights[index]
     if (cursor < 0) {
-      return reward
+      return rewards[index]
     }
   }
 

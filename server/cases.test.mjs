@@ -6,7 +6,7 @@ import path from 'node:path'
 
 import dropTables from '../src/data/case-drops.json' with { type: 'json' }
 
-import { claimCaseCoins, getChanceTotal, isDropTableValid, openCase } from './cases.mjs'
+import { claimCaseCoins, getChanceTotal, isDropTableValid, openCase, buildCaseRollWeights, CASE_ROLL_SCALE, CASE_RUB_DROP_PERCENT, rollReward } from './cases.mjs'
 import { withStore } from './store.mjs'
 import { createUser } from './users.mjs'
 
@@ -165,5 +165,42 @@ test('COINS from case stay in inventory until claimCaseCoins', () => {
       process.env.AZAROV_STORE_DIR = prev
     }
     rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('display chance text stays 100% while each RUB prize rolls at 0.1%', () => {
+  for (const [caseId, rewards] of Object.entries(dropTables)) {
+    assert.equal(getChanceTotal(rewards), 100, `${caseId} display chances`)
+    const weights = buildCaseRollWeights(rewards)
+    const rubUnit = Math.round((CASE_RUB_DROP_PERCENT / 100) * CASE_ROLL_SCALE)
+    const total = weights.reduce((sum, value) => sum + value, 0)
+    assert.equal(total, CASE_ROLL_SCALE, `${caseId} roll weights`)
+
+    rewards.forEach((reward, index) => {
+      if (String(reward.currency).toUpperCase() === 'RUB') {
+        assert.equal(weights[index], rubUnit, `${caseId}:${reward.id}`)
+        assert.notEqual(reward.chance, CASE_RUB_DROP_PERCENT)
+      }
+    })
+  }
+})
+
+test('rollReward simulation keeps each RUB near 0.1%', () => {
+  const rewards = dropTables.poor
+  const samples = 100_000
+  const counts = Object.fromEntries(rewards.map((reward) => [reward.id, 0]))
+  for (let i = 0; i < samples; i += 1) {
+    const reward = rollReward(rewards)
+    counts[reward.id] += 1
+  }
+  for (const reward of rewards) {
+    if (String(reward.currency).toUpperCase() !== 'RUB') {
+      continue
+    }
+    const rate = (counts[reward.id] / samples) * 100
+    assert.ok(
+      rate > 0.05 && rate < 0.2,
+      `${reward.id} rate=${rate.toFixed(3)}% expected ~0.1%`,
+    )
   }
 })
