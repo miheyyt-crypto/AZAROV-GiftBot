@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { CoinIcon } from '@/components/CoinIcon'
 import { useNotifications } from '@/components/NotificationProvider'
 import { formatBalance } from '@/lib/balance'
-import { KICK_REQUIRED_CHANNEL_URL, TELEGRAM_CHANNEL_URL } from '@/lib/constants'
+import { KICK_REQUIRED_CHANNEL_URL, getLaunchBotTaskUrl, TELEGRAM_CHANNEL_URL } from '@/lib/constants'
 import { handleTaskAction } from '@/lib/tasks'
 import { getTelegramWebApp } from '@/lib/telegram'
 import type { Task, TaskCategory } from '@/types'
@@ -49,6 +49,18 @@ function openKickRequiredChannel(): void {
   window.open(KICK_REQUIRED_CHANNEL_URL, '_blank', 'noopener,noreferrer')
 }
 
+function openLaunchBotTask(): void {
+  const url = getLaunchBotTaskUrl()
+  const webApp = getTelegramWebApp()
+
+  if (webApp?.openTelegramLink) {
+    webApp.openTelegramLink(url)
+    return
+  }
+
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
+
 export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
   const { showNotification } = useNotifications()
   const [visible, setVisible] = useState(false)
@@ -58,8 +70,9 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
   const isCompleted = task.status === 'completed'
   const isLocked = task.status === 'locked'
   const isSubscribeTask = task.type === 'telegram_subscribe'
+  const isLaunchBotTask = task.type === 'telegram_bot_start'
   const isKickFollowTask = task.type === 'kick_follow'
-  const isTwoStepVerify = isSubscribeTask || isKickFollowTask
+  const isTwoStepVerify = isSubscribeTask || isKickFollowTask || isLaunchBotTask
   const showProgress = Boolean(task.progress)
 
   useEffect(() => {
@@ -90,6 +103,13 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
           title: 'Подпишись на канал',
           message: 'После подписки вернись и нажми «Проверить».',
         })
+      } else if (isLaunchBotTask) {
+        openLaunchBotTask()
+        showNotification({
+          type: 'info',
+          title: 'Запусти бота',
+          message: 'Нажми Start у @AZAROV_GiftBot, затем вернись и нажми «Проверить».',
+        })
       } else {
         openKickRequiredChannel()
         showNotification({
@@ -118,6 +138,7 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
       const notDone =
         result.code === 'NOT_SUBSCRIBED' ||
         result.code === 'NOT_FOLLOWING' ||
+        result.code === 'NOT_STARTED' ||
         result.code === 'FOLLOW_WEBHOOK_PENDING'
       showNotification({
         type: notDone ? 'warning' : 'error',
@@ -128,9 +149,11 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
             ? 'Отпишись от kick.com/azarov7777 и подпишись снова, подожди несколько секунд и нажми «Проверить».'
             : result.code === 'NOT_FOLLOWING'
               ? 'Сначала зафолловь канал kick.com/azarov7777.'
-              : notDone
-                ? 'Сначала подпишись на канал @azarov222.'
-                : 'Не удалось проверить задание. Попробуй ещё раз позже.'),
+              : result.code === 'NOT_STARTED'
+                ? 'Сначала запусти бота @AZAROV_GiftBot и нажми Start.'
+                : notDone
+                  ? 'Сначала подпишись на канал @azarov222.'
+                  : 'Не удалось проверить задание. Попробуй ещё раз позже.'),
       })
     } finally {
       setIsLoading(false)
@@ -138,7 +161,7 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
   }
 
   const ctaLabel = isCompleted
-    ? 'Выполнено'
+    ? 'Выполнено ✓'
     : isLocked
       ? isKickFollowTask
         ? 'Сначала привяжи Kick'
@@ -146,7 +169,9 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
       : isLoading
         ? 'Проверяем...'
         : isTwoStepVerify && !awaitingCheck
-          ? 'Выполнить'
+          ? isLaunchBotTask
+            ? 'Запустить бота'
+            : 'Выполнить'
           : 'Проверить'
 
   const progress = task.progress

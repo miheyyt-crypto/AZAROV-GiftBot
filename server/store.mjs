@@ -122,6 +122,7 @@ export function createEmptyStore() {
     ipHashIndex: {},
     antiAbuseAudit: {},
     pendingBotStarts: {},
+    botLaunchStarts: {},
   }
 }
 
@@ -160,6 +161,7 @@ function migrateStore(store) {
   store.ipHashIndex = store.ipHashIndex || {}
   store.antiAbuseAudit = store.antiAbuseAudit || {}
   store.pendingBotStarts = store.pendingBotStarts || {}
+  store.botLaunchStarts = store.botLaunchStarts || {}
 
   // One-shot upgrade: pending streak-freeze orders → inventory (strategy B).
   if (Number(store.version) < 5) {

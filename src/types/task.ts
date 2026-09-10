@@ -7,6 +7,7 @@ export type TaskType =
   | 'kick_connect'
   | 'kick_follow'
   | 'telegram_subscribe'
+  | 'telegram_bot_start'
   | 'referral'
 
 export interface ReferralProgress {

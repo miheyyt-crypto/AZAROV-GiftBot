@@ -10,7 +10,7 @@ import { createCorsMiddleware } from './cors.mjs'
 import { asyncHandler, HttpError, sendSafeError } from './errors.mjs'
 import { extractReferralCode, toPublicUser } from './users.mjs'
 import { bootstrapUser, activateReferral, readReferralMe } from './referrals.mjs'
-import { checkTelegramSubscribe, claimInviteFriendsTask } from './tasks.mjs'
+import { checkTelegramSubscribe, claimInviteFriendsTask, checkLaunchBot } from './tasks.mjs'
 import {
   buildKickResultRedirect,
   completeKickOAuthCallback,
@@ -972,6 +972,19 @@ app.post(
     const requestId = parseRequestId(req.body?.requestId)
     bootstrapUser(telegramUser, '')
     const result = await checkTelegramSubscribe(telegramUser.id, requestId)
+    res.json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/tasks/launch-bot/check',
+  withEconomicUser(async (req, res, telegramUser) => {
+    const requestId = parseRequestId(req.body?.requestId)
+    bootstrapUser(telegramUser, '')
+    const result = checkLaunchBot(telegramUser.id, requestId)
     res.json({
       ...result,
       user: toPublicUser(getUser(telegramUser.id)),

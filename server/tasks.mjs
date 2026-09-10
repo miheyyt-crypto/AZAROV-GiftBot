@@ -1,5 +1,8 @@
 import { addCoins, hasEvent, TX_TYPE } from './wallet.mjs'
 import {
+  LAUNCH_BOT_REWARD,
+  LAUNCH_BOT_START_PAYLOAD,
+  LAUNCH_BOT_TASK_ID,
   REFERRAL_INVITE_TASK_ID,
   REFERRAL_INVITE_TASK_REQUIRED,
   REFERRAL_INVITE_TASK_REWARD,
@@ -477,5 +480,201 @@ export function claimInviteFriendsTask(userId, requestId) {
       success: false,
       message: 'Не удалось начислить награду. Попробуй ещё раз.',
     }
+  })
+}
+
+export function isLaunchBotStartPayload(raw) {
+  const payload = String(raw || '')
+    .trim()
+    .toLowerCase()
+  return payload === LAUNCH_BOT_START_PAYLOAD || payload === `task_${LAUNCH_BOT_START_PAYLOAD}`
+}
+
+/**
+ * Record verified bot /start for the launch-bot task.
+ * Uses ctx.from.id from Telegraf — never trust Mini App claims alone.
+ */
+export function markBotLaunchStart(telegramUserId) {
+  const tid = Number(telegramUserId)
+  if (!Number.isInteger(tid) || tid <= 0) {
+    return { ok: false }
+  }
+
+  return withStore((store) => {
+    store.botLaunchStarts = store.botLaunchStarts || {}
+    const at = new Date().toISOString()
+    store.botLaunchStarts[String(tid)] = { at, telegramId: tid }
+    const user = store.users[String(tid)]
+    if (user) {
+      user.botLaunchVerifiedAt = at
+    }
+    logTask('bot_launch_verified', { userId: tid })
+    return { ok: true, at }
+  })
+}
+
+function userHasBotLaunchProof(store, user) {
+  if (user?.botLaunchVerifiedAt) {
+    return true
+  }
+  const pending = store.botLaunchStarts?.[String(user?.telegramId)]
+  return Boolean(pending?.at)
+}
+
+function grantLaunchBotReward(store, user) {
+  const eventId = `task:${LAUNCH_BOT_TASK_ID}:${user.telegramId}`
+
+  if (hasEvent(store, eventId) || user.completedTasks.includes(LAUNCH_BOT_TASK_ID)) {
+    user.completedTasks = [...new Set([...user.completedTasks, LAUNCH_BOT_TASK_ID])]
+    logTask('duplicate_reward_prevented', {
+      userId: user.telegramId,
+      taskId: LAUNCH_BOT_TASK_ID,
+    })
+    return {
+      granted: false,
+      alreadyCompleted: true,
+      reward: 0,
+    }
+  }
+
+  const grant = addCoins(store, user, LAUNCH_BOT_REWARD, TX_TYPE.TASK_REWARD, eventId, {
+    referenceId: LAUNCH_BOT_TASK_ID,
+    description: 'Награда за задание: запуск бота',
+  })
+
+  user.completedTasks = [...new Set([...user.completedTasks, LAUNCH_BOT_TASK_ID])]
+
+  if (!grant.granted) {
+    logTask('duplicate_reward_prevented', {
+      userId: user.telegramId,
+      taskId: LAUNCH_BOT_TASK_ID,
+      reason: grant.reason,
+    })
+    return {
+      granted: false,
+      alreadyCompleted: true,
+      reward: 0,
+    }
+  }
+
+  logTask('reward_granted', {
+    userId: user.telegramId,
+    taskId: LAUNCH_BOT_TASK_ID,
+    amount: LAUNCH_BOT_REWARD,
+  })
+
+  return {
+    granted: true,
+    alreadyCompleted: false,
+    reward: LAUNCH_BOT_REWARD,
+  }
+}
+
+/**
+ * Mini App check: award only if bot /start with launch_bot payload was recorded.
+ */
+export function checkLaunchBot(userId, requestId) {
+  const idempotencyKey = String(requestId || '').trim()
+  if (!idempotencyKey) {
+    return {
+      success: false,
+      code: 'MISSING_REQUEST_ID',
+      completed: false,
+      message: 'Нужен requestId для этой операции.',
+    }
+  }
+
+  logTask('verification_requested', {
+    userId: Number(userId),
+    taskId: LAUNCH_BOT_TASK_ID,
+  })
+
+  return withStore((store) => {
+    const user = store.users[String(userId)]
+    if (!user) {
+      return {
+        success: false,
+        code: 'MISSING_USER',
+        completed: false,
+        message: 'Пользователь не найден.',
+      }
+    }
+
+    const requestKey = `task:launch:${userId}:${idempotencyKey}`
+    if (store.events[requestKey] && Number(store.events[requestKey].userId) === Number(userId)) {
+      return {
+        success: Boolean(store.events[requestKey].success),
+        completed: Boolean(store.events[requestKey].completed),
+        alreadyCompleted: Boolean(store.events[requestKey].alreadyCompleted),
+        rewarded: Boolean(store.events[requestKey].rewarded),
+        reward: Number(store.events[requestKey].reward || 0),
+        message: store.events[requestKey].message || 'Награда уже получена.',
+        code: store.events[requestKey].code || undefined,
+      }
+    }
+
+    const eventId = `task:${LAUNCH_BOT_TASK_ID}:${user.telegramId}`
+    if (hasEvent(store, eventId) || user.completedTasks.includes(LAUNCH_BOT_TASK_ID)) {
+      user.completedTasks = [...new Set([...user.completedTasks, LAUNCH_BOT_TASK_ID])]
+      const response = {
+        success: true,
+        completed: true,
+        alreadyCompleted: true,
+        rewarded: false,
+        reward: 0,
+        message: 'Задание уже выполнено.',
+      }
+      store.events[requestKey] = {
+        eventId: requestKey,
+        userId,
+        ...response,
+        createdAt: new Date().toISOString(),
+      }
+      return response
+    }
+
+    if (!userHasBotLaunchProof(store, user)) {
+      return {
+        success: false,
+        code: 'NOT_STARTED',
+        completed: false,
+        rewarded: false,
+        reward: 0,
+        message: 'Сначала запусти бота @AZAROV_GiftBot через кнопку задания и нажми Start.',
+      }
+    }
+
+    // Copy pending proof onto user if only store map had it.
+    const pending = store.botLaunchStarts?.[String(user.telegramId)]
+    if (!user.botLaunchVerifiedAt && pending?.at) {
+      user.botLaunchVerifiedAt = pending.at
+    }
+
+    const grant = grantLaunchBotReward(store, user)
+    const response = grant.granted
+      ? {
+          success: true,
+          completed: true,
+          alreadyCompleted: false,
+          rewarded: true,
+          reward: grant.reward,
+          message: `Бот запущен. Начислено ${LAUNCH_BOT_REWARD} монет.`,
+        }
+      : {
+          success: true,
+          completed: true,
+          alreadyCompleted: true,
+          rewarded: false,
+          reward: 0,
+          message: 'Задание уже выполнено.',
+        }
+
+    store.events[requestKey] = {
+      eventId: requestKey,
+      userId,
+      ...response,
+      createdAt: new Date().toISOString(),
+    }
+    return response
   })
 }

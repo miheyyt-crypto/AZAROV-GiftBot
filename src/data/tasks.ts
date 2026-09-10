@@ -49,6 +49,16 @@ export const tasks: Task[] = [
     icon: iconTelegramSubscribe,
   },
   {
+    id: 'launch-bot',
+    title: 'Запустить нашего бота',
+    description: 'Запусти @AZAROV_GiftBot и получи награду',
+    category: 'telegram',
+    reward: 600,
+    type: 'telegram_bot_start',
+    status: 'available',
+    icon: iconTelegramSubscribe,
+  },
+  {
     id: 'referral-invite',
     title: 'Пригласи 3 друга',
     description:

@@ -17,6 +17,8 @@ export const ROUTES = {
 export const TELEGRAM_BOT_USERNAME = 'AZAROV_GiftBot'
 export const TELEGRAM_CHANNEL = '@azarov222'
 export const TELEGRAM_CHANNEL_URL = 'https://t.me/azarov222'
+/** Deep-link payload for the launch-bot task (?start=launch_bot). */
+export const LAUNCH_BOT_START_PAYLOAD = 'launch_bot'
 /** Existing public channel used as support contact (no separate support bot configured). */
 export const TELEGRAM_SUPPORT_URL = TELEGRAM_CHANNEL_URL
 export const KICK_REQUIRED_CHANNEL = 'azarov7777'
@@ -28,6 +30,10 @@ export function getTelegramLoginBotUsername(): string {
     .trim()
     .replace(/^@/, '')
   return fromEnv || TELEGRAM_BOT_USERNAME
+}
+
+export function getLaunchBotTaskUrl(): string {
+  return `https://t.me/${getTelegramLoginBotUsername()}?start=${LAUNCH_BOT_START_PAYLOAD}`
 }
 
 export const REFERRAL_CODE_PREFIX = 'ref_'

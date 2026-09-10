@@ -44,6 +44,7 @@ import {
   handleCommunityAdminCommand,
   handleCommunityRejectReasonMessage,
 } from './community-admin.mjs'
+import { isLaunchBotStartPayload, markBotLaunchStart } from './tasks.mjs'
 import { isAdminTelegramUser } from './telegram-notify.mjs'
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -136,10 +137,14 @@ export function createBot() {
 
     try {
       const registered = registerBotStart(telegramUser, startPayload)
+      if (isLaunchBotStartPayload(startPayload)) {
+        markBotLaunchStart(telegramUser.id)
+      }
       console.info('[Telegram Bot] /start', {
         telegramId: registered.telegramId,
         username: ctx.from?.username || null,
         hasStartPayload: Boolean(startPayload),
+        launchBotTask: isLaunchBotStartPayload(startPayload),
       })
     } catch (error) {
       console.error('[Telegram Bot] Failed to register /start user', {

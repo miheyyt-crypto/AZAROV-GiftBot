@@ -1,5 +1,5 @@
 import { applyAccountSnapshot, getCurrentAccount } from '@/lib/account'
-import { claimInviteFriendsTask, checkKickFollow, checkKickNickname, checkTelegramSubscribe } from '@/lib/api'
+import { claimInviteFriendsTask, checkKickFollow, checkKickNickname, checkLaunchBot, checkTelegramSubscribe } from '@/lib/api'
 import { hydrateBalanceFromAccount } from '@/lib/balance'
 import {
   REFERRAL_INVITE_TASK_ID,
@@ -145,6 +145,38 @@ export async function handleTaskAction(
         success: false,
         code: 'NETWORK_ERROR',
         message: 'Не удалось проверить подписку. Попробуй ещё раз позже.',
+      }
+    }
+  }
+
+  if (taskId === 'launch-bot') {
+    try {
+      const result = await checkLaunchBot(createPurchaseRequestId())
+      applyRemoteUser(result.user)
+
+      if (result.alreadyCompleted || (result.success && result.completed)) {
+        return {
+          success: true,
+          alreadyCompleted: Boolean(result.alreadyCompleted),
+          code: result.code,
+          message:
+            result.message ||
+            (result.alreadyCompleted
+              ? 'Задание уже выполнено.'
+              : 'Бот запущен. Награда начислена.'),
+        }
+      }
+
+      return {
+        success: false,
+        code: result.code,
+        message: result.message || 'Сначала запусти бота @AZAROV_GiftBot и нажми Start.',
+      }
+    } catch {
+      return {
+        success: false,
+        code: 'NETWORK_ERROR',
+        message: 'Не удалось подтвердить выполнение. Попробуй ещё раз позже.',
       }
     }
   }

@@ -162,6 +162,13 @@ export function checkTelegramSubscribe(requestId: string): Promise<ApiUserRespon
   })
 }
 
+export function checkLaunchBot(requestId: string): Promise<ApiUserResponse> {
+  return request('/api/tasks/launch-bot/check', {
+    method: 'POST',
+    body: JSON.stringify({ requestId }),
+  })
+}
+
 export function checkKickFollow(requestId: string): Promise<ApiUserResponse> {
   return request('/api/tasks/kick-follow/check', {
     method: 'POST',
