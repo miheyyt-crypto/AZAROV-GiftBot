@@ -1,9 +1,9 @@
 import { RollMobileView } from '@/components/roll/RollMobileView'
-import { useRollGame } from '@/hooks/useRollGame'
+import { useAndroidRollRuntime } from '@/hooks/useAndroidRollRuntime'
 
-/** iOS / non-Android mobile Roll — existing useRollGame runtime. */
-export function RollPage() {
-  const game = useRollGame()
+/** Android Telegram Mini App Roll — dedicated runtime, shared UI. */
+export function AndroidRollPage() {
+  const game = useAndroidRollRuntime()
 
   if (!game.bootstrapped) {
     return (
