@@ -6,6 +6,8 @@ import test from 'node:test'
 
 import {
   buildKickLiveStartedMessageHtml,
+  buildKickLiveStartedReplyMarkup,
+  buildKickLiveStartedSendExtra,
   evaluateKickLiveNotifyTransition,
   kickLiveNotifyEventKey,
   planKickLiveStartedNotifyOnStore,
@@ -16,6 +18,7 @@ import {
 } from './kick-live-notify.mjs'
 import { hasKickWebhookEvent, processLivestreamStatusUpdated } from './kick-streak.mjs'
 import { createEmptyStore, withStore } from './store.mjs'
+import { createUser } from './users.mjs'
 
 function withTempStore(run) {
   const dir = mkdtempSync(path.join(tmpdir(), 'azarov-kick-live-notify-'))
@@ -165,11 +168,35 @@ test('evaluate: already notified skips', () => {
   assert.equal(result.reason, 'already_notified')
 })
 
-test('message HTML has bold title and Kick link', () => {
+test('message HTML has title, bare Kick URL for preview', () => {
   const html = buildKickLiveStartedMessageHtml('https://kick.com/azarov7777')
   assert.match(html, /<b>Стрим начался!<\/b>/)
-  assert.match(html, /<a href="https:\/\/kick\.com\/azarov7777">Смотреть на Kick<\/a>/)
-  assert.doesNotMatch(html, /https:\/\/kick\.com\/azarov7777<\/a>https/)
+  assert.match(html, /👉 Смотреть на Kick/)
+  assert.match(html, /https:\/\/kick\.com\/azarov7777/)
+  assert.doesNotMatch(html, /<a href=/)
+})
+
+test('reply markup: Kick URL + Mini App tasks web_app', () => {
+  const prev = process.env.WEBAPP_URL
+  process.env.WEBAPP_URL = 'https://azarov-giftbot-production.up.railway.app'
+  const markup = buildKickLiveStartedReplyMarkup({
+    channelUrl: 'https://kick.com/azarov7777',
+  })
+  assert.equal(markup.inline_keyboard[0][0].text, 'Зайти на стрим ↗')
+  assert.equal(markup.inline_keyboard[0][0].url, 'https://kick.com/azarov7777')
+  assert.equal(markup.inline_keyboard[1][0].text, 'Выполнять задания ▣')
+  assert.equal(
+    markup.inline_keyboard[1][0].web_app.url,
+    'https://azarov-giftbot-production.up.railway.app/tasks',
+  )
+  const extra = buildKickLiveStartedSendExtra({
+    channelUrl: 'https://kick.com/azarov7777',
+  })
+  assert.equal(extra.disable_web_page_preview, false)
+  assert.equal(extra.link_preview_options.is_disabled, false)
+  assert.equal(extra.link_preview_options.url, 'https://kick.com/azarov7777')
+  if (prev === undefined) delete process.env.WEBAPP_URL
+  else process.env.WEBAPP_URL = prev
 })
 
 test('stream key prefers livestream id', () => {
@@ -468,24 +495,22 @@ test('wrong channel ignored', async () => {
 })
 
 test('sendKickLiveStartedTelegram reports failure without throwing', async () => {
-  const prev = process.env.KICK_NOTIFICATION_CHAT_ID
   const prevToken = process.env.BOT_TOKEN
-  process.env.KICK_NOTIFICATION_CHAT_ID = '-1001'
   process.env.BOT_TOKEN = 'x'
   try {
     const result = await sendKickLiveStartedTelegram({
       streamKey: 'x',
+      chatIds: ['-1001'],
       fetchImpl: async () => ({
         ok: false,
         status: 500,
         json: async () => ({ ok: false, description: 'fail' }),
       }),
+      ratePerSec: 1000,
     })
     assert.equal(result.ok, false)
     assert.equal(result.sent, 0)
   } finally {
-    if (prev === undefined) delete process.env.KICK_NOTIFICATION_CHAT_ID
-    else process.env.KICK_NOTIFICATION_CHAT_ID = prev
     if (prevToken === undefined) delete process.env.BOT_TOKEN
     else process.env.BOT_TOKEN = prevToken
   }
@@ -515,4 +540,96 @@ test('unclaim removes dedupe key', () => {
     else process.env.KICK_NOTIFICATION_CHAT_ID = prevChat
     resetKickLiveNotifyBootstrapForTests()
   }
+})
+
+test('broadcast fans out to store users + continues after 403 blocked', async () => {
+  await withTempStore(async () => {
+    delete process.env.KICK_NOTIFICATION_CHAT_ID
+    process.env.WEBAPP_URL = 'https://example.com'
+    withStore((store) => {
+      createUser(store, { id: 101, first_name: 'A', username: 'a' })
+      createUser(store, { id: 102, first_name: 'B', username: 'b' })
+      createUser(store, { id: 103, first_name: 'C', username: 'c' })
+      return true
+    })
+
+    const calls = []
+    const fetchImpl = async (url, init) => {
+      const href = String(url)
+      if (href.includes('api.telegram.org')) {
+        const body = JSON.parse(String(init?.body || '{}'))
+        calls.push(body)
+        if (String(body.chat_id) === '102') {
+          return {
+            ok: false,
+            status: 403,
+            json: async () => ({
+              ok: false,
+              error_code: 403,
+              description: 'Forbidden: bot was blocked by the user',
+            }),
+          }
+        }
+        return { ok: true, status: 200, json: async () => ({ ok: true, result: { message_id: 1 } }) }
+      }
+      return liveFetchImpl()(url)
+    }
+
+    const result = await sendKickLiveStartedTelegram({
+      streamKey: 'fanout',
+      fetchImpl,
+      ratePerSec: 1000,
+    })
+    assert.equal(result.ok, true)
+    assert.equal(result.sent, 2)
+    assert.equal(result.blocked, 1)
+    assert.equal(calls.length, 3)
+    assert.ok(calls.every((c) => c.disable_web_page_preview === false))
+    assert.ok(calls.every((c) => c.reply_markup?.inline_keyboard?.[0]?.[0]?.url === 'https://kick.com/azarov7777'))
+    assert.ok(
+      calls.every(
+        (c) => c.reply_markup?.inline_keyboard?.[1]?.[0]?.web_app?.url === 'https://example.com/tasks',
+      ),
+    )
+    withStore((store) => {
+      assert.equal(store.users['102'].botBlocked, true)
+      return true
+    })
+  })
+})
+
+test('429 retry_after is respected then send succeeds', async () => {
+  await withTempStore(async () => {
+    process.env.KICK_NOTIFICATION_CHAT_ID = '-100999'
+    let attempts = 0
+    const fetchImpl = async (url) => {
+      const href = String(url)
+      if (href.includes('api.telegram.org')) {
+        attempts += 1
+        if (attempts === 1) {
+          return {
+            ok: false,
+            status: 429,
+            json: async () => ({
+              ok: false,
+              error_code: 429,
+              description: 'Too Many Requests',
+              parameters: { retry_after: 0 },
+            }),
+          }
+        }
+        return { ok: true, status: 200, json: async () => ({ ok: true, result: {} }) }
+      }
+      return liveFetchImpl()(url)
+    }
+    const result = await sendKickLiveStartedTelegram({
+      streamKey: 'rate',
+      chatIds: ['-100999'],
+      fetchImpl,
+      ratePerSec: 1000,
+    })
+    assert.equal(result.ok, true)
+    assert.equal(result.sent, 1)
+    assert.ok(attempts >= 2)
+  })
 })
