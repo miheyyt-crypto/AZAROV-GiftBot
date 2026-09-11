@@ -17,6 +17,7 @@ import {
   computeTargetAngle,
   findSegmentAtLocalDeg,
   getRollStateOnStore,
+  getRollState,
   normalizeDeg,
   peekRollRoundOnStore,
   pickWeightedWinner,
@@ -345,6 +346,31 @@ test('insufficient funds and invalid bet', async () => {
       const broke = placeRollBetOnStore(store, 401, { bet: ROLL_MIN_BET, requestId: 'x2' })
       assert.equal(broke.code, 'INSUFFICIENT_FUNDS')
     })
+  })
+})
+
+test('getRollState advances expired betting (desktop ticker path) and stays consistent', async () => {
+  await withTempStore(async () => {
+    withStore((store) => {
+      seedUser(store, 901, 20_000, 'ga')
+      seedUser(store, 902, 20_000, 'gb')
+      placeRollBetOnStore(store, 901, { bet: 500, requestId: 'gs1' })
+      placeRollBetOnStore(store, 902, { bet: 500, requestId: 'gs2' })
+      const round = peekRollRoundOnStore(store)
+      assert.equal(round.status, 'betting')
+      round.bettingEndsAt = new Date(Date.now() - 50).toISOString()
+    })
+
+    const advanced = getRollState(901)
+    assert.equal(advanced.success, true)
+    assert.equal(advanced.round.status, 'spinning')
+    assert.ok(advanced.round.winnerUserId === 901 || advanced.round.winnerUserId === 902)
+    assert.equal(Object.prototype.hasOwnProperty.call(advanced, '__storeDirty'), false)
+
+    const warm = getRollState(901)
+    assert.equal(warm.round.status, 'spinning')
+    assert.equal(warm.round.id, advanced.round.id)
+    assert.equal(warm.round.version, advanced.round.version)
   })
 })
 

@@ -6,6 +6,12 @@ import { useBalance } from '@/hooks/useBalance'
 import { useUserAccount } from '@/hooks/useUserAccount'
 import { fetchRollState, placeRollBet, subscribeRollStream } from '@/lib/roll'
 import {
+  createRollPollScheduler,
+  rollDebug,
+  shouldPauseRollPollingWhenHidden,
+  subscribeRollResume,
+} from '@/lib/roll-runtime'
+import {
   ROLL_MAX_PLAYERS,
   ROLL_MIN_BET,
   ROLL_POLL_MS_ACTIVE,
@@ -331,19 +337,70 @@ export function useRollGame() {
     [account.telegramId, serverNowApprox, tryRevealResult],
   )
 
-  useEffect(() => {
-    let cancelled = false
-    void fetchRollState().then((payload) => {
-      if (cancelled) {
+  const pollFailuresRef = useRef(0)
+  const syncErrorShownRef = useRef(false)
+  const statusRef = useRef<string | null>(null)
+  statusRef.current = round?.status ?? null
+
+  const recoverActiveRoll = useCallback(
+    async (reason: string) => {
+      rollDebug(reason)
+      const payload = await fetchRollState()
+      if (!payload.success && !payload.round) {
+        pollFailuresRef.current += 1
+        rollDebug('error', {
+          code: payload.code,
+          failures: pollFailuresRef.current,
+        })
+        // Backend unreachable while a round is in progress — surface once, allow retry via resume.
+        if (
+          pollFailuresRef.current >= 4 &&
+          !syncErrorShownRef.current &&
+          (statusRef.current === 'waiting' ||
+            statusRef.current === 'betting' ||
+            statusRef.current === 'spinning' ||
+            statusRef.current === 'locked')
+        ) {
+          syncErrorShownRef.current = true
+          showNotification({
+            type: 'warning',
+            title: 'Нет связи с Roll',
+            message: payload.message || 'Не удалось обновить игру. Проверьте сеть и вернитесь в приложение.',
+          })
+        }
         return
       }
+      pollFailuresRef.current = 0
+      syncErrorShownRef.current = false
+      if (payload.round?.status === 'spinning' || payload.round?.status === 'completed') {
+        rollDebug('backend result', {
+          status: payload.round.status,
+          roundId: payload.round.id,
+        })
+      } else {
+        rollDebug('poll response status', {
+          status: payload.round?.status,
+          players: payload.round?.players?.length || 0,
+        })
+      }
       applyState(payload)
-      setBootstrapped(true)
+    },
+    [applyState, showNotification],
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    rollDebug('start')
+    void recoverActiveRoll('bootstrap').then(() => {
+      if (!cancelled) {
+        setBootstrapped(true)
+      }
     })
     return () => {
       cancelled = true
+      rollDebug('cleanup')
     }
-  }, [applyState])
+  }, [recoverActiveRoll])
 
   useEffect(() => {
     if (!bootstrapped) {
@@ -367,30 +424,38 @@ export function useRollGame() {
     if (!bootstrapped) {
       return
     }
-    const status = round?.status
-    const ms =
-      status === 'spinning' || status === 'locked'
-        ? ROLL_POLL_MS_SPIN
-        : status === 'betting' || status === 'completed' || status === 'waiting'
-          ? ROLL_POLL_MS_ACTIVE
-          : ROLL_POLL_MS_IDLE
-    const timer = window.setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-        return
+
+    const pauseWhenHidden = shouldPauseRollPollingWhenHidden()
+    const scheduler = createRollPollScheduler({
+      poll: () => recoverActiveRoll('poll'),
+      shouldSkipTick: () => {
+        if (!pauseWhenHidden) {
+          return false
+        }
+        return typeof document !== 'undefined' && document.visibilityState === 'hidden'
+      },
+    })
+
+    scheduler.start(() => {
+      const status = statusRef.current
+      if (status === 'spinning' || status === 'locked') {
+        return ROLL_POLL_MS_SPIN
       }
-      void fetchRollState().then(applyState)
-    }, ms)
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        void fetchRollState().then(applyState)
+      if (status === 'betting' || status === 'completed' || status === 'waiting') {
+        return ROLL_POLL_MS_ACTIVE
       }
-    }
-    document.addEventListener('visibilitychange', onVisibility)
+      return ROLL_POLL_MS_IDLE
+    })
+
+    const stopResume = subscribeRollResume(() => {
+      scheduler.recover('recover')
+    })
+
     return () => {
-      window.clearInterval(timer)
-      document.removeEventListener('visibilitychange', onVisibility)
+      stopResume()
+      scheduler.stop()
     }
-  }, [applyState, bootstrapped, round?.status])
+  }, [bootstrapped, recoverActiveRoll])
 
   useEffect(() => {
     if (round?.status !== 'betting' || !round.bettingEndsAt) {
@@ -402,11 +467,11 @@ export function useRollGame() {
       setCountdownMs(remaining)
       if (remaining <= 0 && !forcedFetchAtZero.current) {
         forcedFetchAtZero.current = true
-        void fetchRollState().then(applyState)
+        void recoverActiveRoll('betting-end')
       }
     }, 100)
     return () => window.clearInterval(timer)
-  }, [applyState, round?.status, round?.bettingEndsAt, serverNowApprox])
+  }, [recoverActiveRoll, round?.status, round?.bettingEndsAt, serverNowApprox])
 
   useEffect(() => {
     if (!spinClock) {
@@ -417,6 +482,8 @@ export function useRollGame() {
     const revealDelay = Math.max(0, clock.startedAtMs + ROLL_WINNER_REVEAL_AFTER_MS - Date.now())
     const endDelay = Math.max(0, clock.endsAtMs - Date.now())
 
+    rollDebug('animation start', { roundId: clock.roundId })
+
     const revealTimer = window.setTimeout(() => {
       tryRevealResult(roundRef.current)
     }, revealDelay)
@@ -425,11 +492,12 @@ export function useRollGame() {
       tryRevealResult(roundRef.current)
       if (!forcedFetchAtSpinEnd.current) {
         forcedFetchAtSpinEnd.current = true
-        void fetchRollState().then(applyState)
+        void recoverActiveRoll('spin-end')
       }
       setSpinClock((prev) => {
         if (prev && prev.roundId === clock.roundId && Date.now() >= prev.endsAtMs) {
           spinClockRef.current = null
+          rollDebug('animation end', { roundId: clock.roundId })
           return null
         }
         return prev
@@ -440,7 +508,7 @@ export function useRollGame() {
       window.clearTimeout(revealTimer)
       window.clearTimeout(endTimer)
     }
-  }, [applyState, spinClock, tryRevealResult])
+  }, [recoverActiveRoll, spinClock, tryRevealResult])
 
   useEffect(() => {
     if (!bettingOpen) {
@@ -489,6 +557,7 @@ export function useRollGame() {
       return
     }
     setBusy(true)
+    rollDebug('start', { action: 'bet', bet })
     console.info('[ROLL BET] loading true')
     try {
       const result = await placeRollBet({ bet })
@@ -509,7 +578,14 @@ export function useRollGame() {
           message: result.message || 'Попробуйте ещё раз.',
         })
       } else {
+        rollDebug('created rollId', {
+          roundId: result.round?.id,
+          status: result.round?.status,
+          players: result.round?.players?.length || 0,
+        })
         syncBetValue(Math.min(Math.max(amountFloor, minBet), Math.max(amountFloor, amount)))
+        // Android WebView may drop the bet response body or skip SSE — resync from backend.
+        void recoverActiveRoll('post-bet')
       }
     } catch (error) {
       console.warn('[ROLL BET] unexpected error', error)

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 
-import { withStore, withStoreRead } from './store.mjs'
+import { withStore } from './store.mjs'
 import { addCoins, spendCoins, TX_TYPE, utcNow } from './wallet.mjs'
 import { broadcastRollEvent, getRollSseClientCount } from './roll-bus.mjs'
 
@@ -667,8 +667,24 @@ export function placeRollBetOnStore(store, userId, { bet, requestId = '' } = {})
   }
 }
 
+/**
+ * GET /api/roll/state must advance timers (same as desktop ticker) and persist
+ * when the round fingerprint changes. withStoreRead left advances in memory only,
+ * which desynced clients when the ticker was delayed and Android polls resumed late.
+ */
 export function getRollState(userId) {
-  return withStoreRead((store) => getRollStateOnStore(store, userId))
+  return withStore((store) => {
+    ensureMaps(store)
+    const beforeId = store.rollMeta?.currentRoundId || null
+    const beforeRound = beforeId ? store.rollRounds?.[beforeId] : null
+    const beforeFp = beforeRound ? roundFingerprint(beforeRound) : ''
+    const payload = getRollStateOnStore(store, userId)
+    const afterId = store.rollMeta?.currentRoundId || null
+    const afterRound = afterId ? store.rollRounds?.[afterId] : null
+    const afterFp = afterRound ? roundFingerprint(afterRound) : ''
+    const dirty = beforeFp !== afterFp || beforeId !== afterId
+    return { ...payload, __storeDirty: dirty }
+  })
 }
 
 /** Advance + push current round snapshot to SSE subscribers. */

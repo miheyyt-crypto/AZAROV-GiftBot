@@ -492,6 +492,42 @@ export function RollWheel({ round, countdownMs, spinClock, stageClassName }: Rol
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spinClock, status, round?.targetAngle, idleWanted])
 
+  // Android Telegram WebView throttles rAF while backgrounded; resume from wall clock.
+  useEffect(() => {
+    if (!spinClock || (status !== 'spinning' && status !== 'locked')) {
+      return
+    }
+    const resume = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return
+      }
+      if (rafRef.current != null) {
+        return
+      }
+      const clock = spinClock
+      const tick = () => {
+        const now = Date.now()
+        const angle = rotationAt(clock, now)
+        applyRotation(angle)
+        if (now < clock.endsAtMs) {
+          rafRef.current = requestAnimationFrame(tick)
+        } else {
+          applyRotation(clock.targetAngle)
+          rafRef.current = null
+        }
+      }
+      applyRotation(rotationAt(clock, Date.now()))
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    document.addEventListener('visibilitychange', resume)
+    window.addEventListener('focus', resume)
+    return () => {
+      document.removeEventListener('visibilitychange', resume)
+      window.removeEventListener('focus', resume)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spinClock, status])
+
   useEffect(() => {
     const onResize = () => paint(rotationRef.current)
     window.addEventListener('resize', onResize)
