@@ -162,6 +162,16 @@ export async function resolveKickChannelBySlug(slug, options = {}) {
     return cachedChannelBySlug.get(normalized)
   }
 
+  return coalesceKickRequest(`channel:${normalized}`, () =>
+    resolveKickChannelBySlugUncached(normalized, options),
+  )
+}
+
+async function resolveKickChannelBySlugUncached(normalized, options = {}) {
+  if (cachedChannelBySlug.has(normalized) && !options.skipCache) {
+    return cachedChannelBySlug.get(normalized)
+  }
+
   const fetchImpl = options.fetchImpl || fetch
 
   try {

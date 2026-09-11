@@ -114,6 +114,9 @@ export function startKickConnectionPolling(options?: {
   const startedAt = Date.now()
 
   kickPollTimer = setInterval(() => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      return
+    }
     void refreshKickAccountState().then((connection) => {
       if (connection.connected) {
         stopKickConnectionPolling()

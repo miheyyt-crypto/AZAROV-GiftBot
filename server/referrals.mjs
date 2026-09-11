@@ -472,9 +472,42 @@ export function getReferralMe(store, user) {
 }
 
 export function bootstrapUser(telegramUser, startParam, options = {}) {
-  // Default true: warm GET/session must not rewrite the whole JSON ledger when unchanged.
-  // Avoid full-store JSON.stringify (blocks the event loop under lock).
+  // Default true: warm paths must not rewrite the ledger when unchanged.
   const trackDirty = options.skipUnchangedPersist !== false
+  const signed = String(startParam || '').trim()
+  const clientStartParam = String(options.clientStartParam || '').trim()
+  const needsWritePath =
+    Boolean(signed) ||
+    Boolean(clientStartParam) ||
+    options.enforceAntiAbuse === true ||
+    Boolean(options.deviceId) ||
+    trackDirty === false
+
+  // Warm GET/POST without referral/anti-abuse work: never take exclusive write lock.
+  if (!needsWritePath) {
+    const telegramId = Number(telegramUser?.id)
+    const existing = withStoreRead((store) => {
+      const user = store.users[String(telegramId)] || null
+      if (!user) {
+        return null
+      }
+      return {
+        referral: { applied: false, reason: 'none' },
+        activation: { rewarded: false, reason: 'none' },
+        me: getReferralMe(store, user),
+        levelRewards: { granted: [], totalAmount: 0 },
+        antiAbuse: { allowed: true, code: null, message: null },
+        blocked: false,
+        created: false,
+        user,
+        storePersisted: false,
+      }
+    })
+    if (existing) {
+      return existing
+    }
+    // Missing user → fall through to create under write lock.
+  }
 
   return withStore((store) => {
     let dirty = false
@@ -560,7 +593,6 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
       dirty = true
     }
 
-    const clientStartParam = String(options.clientStartParam || '').trim()
     const resolved = resolveReferralStartParam({
       signed: startParam,
       client: clientStartParam,
@@ -693,7 +725,10 @@ export function registerBotStart(telegramUser, startPayload) {
 
 export function activateReferral(userId) {
   return withStore((store) => {
-    migrateAllReferrals(store)
+    const user = store.users[String(userId)]
+    if (user) {
+      hydrateUserReferrals(store, user)
+    }
     return activateReferralOnStore(store, userId)
   })
 }

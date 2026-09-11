@@ -514,28 +514,52 @@ export async function processLivestreamStatusUpdated(payload, options = {}) {
   let notify = {
     attempted: false,
     sent: false,
+    queued: false,
     reason: plan?.reason || null,
   }
 
   if (plan?.shouldSend) {
     notify.attempted = true
-    const sendResult = await sendKickLiveStartedTelegram({
-      streamKey: plan.streamKey,
-      channelUrl: getKickNotificationChannelUrl(),
-      fetchImpl: options.fetchImpl || options.telegramFetchImpl,
-    })
-    if (sendResult.ok) {
-      notify.sent = true
-    } else {
+    const runNotify = async () => {
+      const sendResult = await sendKickLiveStartedTelegram({
+        streamKey: plan.streamKey,
+        channelUrl: getKickNotificationChannelUrl(),
+        fetchImpl: options.fetchImpl || options.telegramFetchImpl,
+      })
+      if (sendResult.ok) {
+        return { sent: true, reason: null }
+      }
       // Do not keep a success claim when Telegram failed — allow a safe retry.
       withStore((store) => {
         unclaimKickLiveNotify(store, plan.streamKey)
         return true
       })
-      notify.reason = sendResult.error || 'telegram_send_failed'
+      const reason = sendResult.error || 'telegram_send_failed'
       logKickStreak('livestream_notify_failed', {
         streamKey: plan.streamKey,
-        error: notify.reason,
+        error: reason,
+      })
+      return { sent: false, reason }
+    }
+
+    // Production: ACK Kick webhook immediately; fan-out Telegram in background.
+    // Tests inject fetchImpl and should await completion unless awaitNotify:false.
+    const shouldAwait =
+      options.awaitNotify === true ||
+      (options.awaitNotify !== false &&
+        (typeof options.fetchImpl === 'function' ||
+          typeof options.telegramFetchImpl === 'function'))
+    if (shouldAwait) {
+      const result = await runNotify()
+      notify.sent = Boolean(result.sent)
+      notify.reason = result.reason || notify.reason
+    } else {
+      notify.queued = true
+      void runNotify().catch((error) => {
+        logKickStreak('livestream_notify_async_failed', {
+          streamKey: plan.streamKey,
+          error: error instanceof Error ? error.message : 'unknown_error',
+        })
       })
     }
   }
@@ -875,18 +899,31 @@ export async function getKickLiveBannerState(options = {}) {
   }
 
   try {
+    // GET/home poll must stay read-only: never take write lock here.
+    // Persist refreshed live state in background (deferred batch).
     const liveApi = await fetchKickChannelLiveStatus(broadcasterUserId, options)
-    withStore((store) => {
-      updateKickLivestreamStateOnStore(store, {
-        broadcasterUserId,
-        channelSlug,
-        isLive: Boolean(liveApi.isLive),
-        startedAt: liveApi.startedAt || null,
-        endedAt: liveApi.isLive ? null : new Date().toISOString(),
-        livestreamId: null,
-        source: 'home_poll',
-      })
-      return true
+    queueMicrotask(() => {
+      try {
+        withStore(
+          (store) => {
+            updateKickLivestreamStateOnStore(store, {
+              broadcasterUserId,
+              channelSlug,
+              isLive: Boolean(liveApi.isLive),
+              startedAt: liveApi.startedAt || null,
+              endedAt: liveApi.isLive ? null : new Date().toISOString(),
+              livestreamId: null,
+              source: 'home_poll',
+            })
+            return true
+          },
+          { deferPersist: true },
+        )
+      } catch (error) {
+        console.warn('[kick-streak] background live-state persist failed', {
+          message: error instanceof Error ? error.message : 'unknown_error',
+        })
+      }
     })
     return {
       isLive: Boolean(liveApi.isLive),

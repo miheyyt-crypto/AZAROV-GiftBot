@@ -375,9 +375,21 @@ export function useRollGame() {
           ? ROLL_POLL_MS_ACTIVE
           : ROLL_POLL_MS_IDLE
     const timer = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return
+      }
       void fetchRollState().then(applyState)
     }, ms)
-    return () => window.clearInterval(timer)
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchRollState().then(applyState)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [applyState, bootstrapped, round?.status])
 
   useEffect(() => {

@@ -66,6 +66,9 @@ export function usePendingReviewPoll<T = unknown>(options: {
 
     void tick()
     timer = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return
+      }
       void tick()
     }, pollMs)
 

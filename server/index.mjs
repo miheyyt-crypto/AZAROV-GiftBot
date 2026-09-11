@@ -150,6 +150,7 @@ import {
   loadStore,
   persistStoreMigrations,
   withStore,
+  withStoreRead,
 } from './store.mjs'
 import {
   assertSingleReplicaDeployment,
@@ -1412,7 +1413,7 @@ app.get(
       return
     }
 
-    const snapshot = withStore((store) => {
+    const snapshot = withStoreRead((store) => {
       const user = store.users[String(telegramId)]
       if (!user) {
         return null

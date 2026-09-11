@@ -85,11 +85,32 @@ function normalizePositiveAmount(amount) {
 function ensureLedger(store) {
   store.events = store.events || {}
   store.coinTransactions = store.coinTransactions || {}
+  store.txIndexByUser = store.txIndexByUser || {}
 }
 
 function getUserBalance(user) {
   const balance = Number(user.balance || 0)
   return Number.isFinite(balance) ? balance : 0
+}
+
+const MAX_TX_INDEX_PER_USER = 400
+
+function rememberUserTx(store, userId, eventId) {
+  if (!eventId) {
+    return
+  }
+  store.txIndexByUser = store.txIndexByUser || {}
+  const key = String(userId)
+  const prev = Array.isArray(store.txIndexByUser[key]) ? store.txIndexByUser[key] : []
+  if (prev[prev.length - 1] === eventId) {
+    return
+  }
+  if (prev.includes(eventId)) {
+    return
+  }
+  const next = prev.length >= MAX_TX_INDEX_PER_USER ? prev.slice(-(MAX_TX_INDEX_PER_USER - 1)) : prev.slice()
+  next.push(eventId)
+  store.txIndexByUser[key] = next
 }
 
 /**
@@ -98,17 +119,37 @@ function getUserBalance(user) {
 export function listUserTransactions(store, userId) {
   ensureLedger(store)
   const seen = new Set()
-  return Object.values(store.coinTransactions)
-    .filter((item) => Number(item.userId) === Number(userId))
-    .filter((item) => {
-      const id = item.id
-      if (!id || seen.has(id)) {
-        return false
+  const key = String(userId)
+  const indexed = store.txIndexByUser?.[key]
+  let rows
+  if (Array.isArray(indexed) && indexed.length > 0) {
+    rows = []
+    for (const id of indexed) {
+      const item = store.coinTransactions[id]
+      if (!item || Number(item.userId) !== Number(userId)) {
+        continue
       }
-      seen.add(id)
-      return true
-    })
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+      if (!item.id || seen.has(item.id)) {
+        continue
+      }
+      seen.add(item.id)
+      rows.push(item)
+    }
+  } else {
+    rows = Object.values(store.coinTransactions)
+      .filter((item) => Number(item.userId) === Number(userId))
+      .filter((item) => {
+        const id = item.id
+        if (!id || seen.has(id)) {
+          return false
+        }
+        seen.add(id)
+        return true
+      })
+    // Rebuild index for subsequent profile/history GETs.
+    store.txIndexByUser[key] = rows.map((item) => item.id).slice(-MAX_TX_INDEX_PER_USER)
+  }
+  return rows.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
 }
 
 export function sumUserLedger(store, userId) {
@@ -192,6 +233,7 @@ export function applyBalanceChange(store, user, amount, type, eventId, meta = {}
 
   store.events[eventId] = { eventId, ...transaction }
   store.coinTransactions[eventId] = transaction
+  rememberUserTx(store, user.telegramId, eventId)
 
   if (uniqueKey) {
     store.events[uniqueKey] = store.events[eventId]
@@ -271,6 +313,7 @@ export function recordLedgerNote(store, user, type, eventId, meta = {}) {
 
   store.events[eventId] = { eventId, ...transaction }
   store.coinTransactions[eventId] = transaction
+  rememberUserTx(store, user.telegramId, eventId)
 
   if (uniqueKey) {
     store.events[uniqueKey] = store.events[eventId]

@@ -30,26 +30,21 @@ test('concurrent withStoreRead stays fast under deferred writes', async () => {
       return true
     })
 
-    const writers = []
     for (let w = 0; w < 40; w += 1) {
-      writers.push(
-        withStore(
-          (store) => {
-            const id = String((w % 200) + 1)
-            store.users[id].balance = Number(store.users[id].balance) + 1
-            return true
-          },
-          { deferPersist: true },
-        ),
+      withStore(
+        (store) => {
+          const id = String((w % 200) + 1)
+          store.users[id].balance = Number(store.users[id].balance) + 1
+          return true
+        },
+        { deferPersist: true },
       )
     }
 
     const t0 = performance.now()
     const reads = []
     for (let r = 0; r < 100; r += 1) {
-      reads.push(
-        withStoreRead((store) => Object.keys(store.users || {}).length),
-      )
+      reads.push(withStoreRead((store) => Object.keys(store.users || {}).length))
     }
     const readMs = performance.now() - t0
 
@@ -96,11 +91,73 @@ test('leaderboard TTL cache returns identical payload within window', async () =
 
     const a = getLeaderboard(3, { metric: 'balance' })
     const b = getLeaderboard(3, { metric: 'balance' })
-    assert.equal(a.players[0]?.telegramId || a.players[0]?.id, b.players[0]?.telegramId || b.players[0]?.id)
+    assert.equal(
+      a.players[0]?.telegramId || a.players[0]?.id,
+      b.players[0]?.telegramId || b.players[0]?.id,
+    )
     assert.equal(a.players.length, b.players.length)
   } finally {
     delete process.env.AZAROV_STORE_DIR
     delete process.env.AZAROV_LEADERBOARD_TTL_MS
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+/**
+ * Simulate 100 concurrent Mini App warm GETs (bootstrap read-path) while Kick chat
+ * mutates store with deferred persistence — must stay responsive.
+ */
+test('100 concurrent warm bootstrapUsers stay read-only under Kick chat writes', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'azarov-boot-load-'))
+  process.env.AZAROV_STORE_DIR = dir
+  process.env.AZAROV_STORE_DEFER_MS = '800'
+
+  try {
+    const stamp = Date.now() + 60
+    const { withStore, flushStoreNow } = await import(`./store.mjs?t=${stamp}`)
+    const { bootstrapUser } = await import(`./referrals.mjs?t=${stamp}`)
+    const { createUser } = await import(`./users.mjs?t=${stamp}`)
+
+    withStore((store) => {
+      for (let i = 1; i <= 100; i += 1) {
+        createUser(store, { id: i, first_name: `U${i}`, username: `user${i}` })
+      }
+      return true
+    })
+
+    for (let w = 0; w < 80; w += 1) {
+      withStore(
+        (store) => {
+          const id = String((w % 100) + 1)
+          store.users[id].chatMessages = (Number(store.users[id].chatMessages) || 0) + 1
+          store.kickWebhookEvents = store.kickWebhookEvents || {}
+          store.kickWebhookEvents[`chat:load:${w}`] = {
+            processedAt: new Date().toISOString(),
+            outcome: 'load_test',
+          }
+          return true
+        },
+        { deferPersist: true },
+      )
+    }
+
+    const t0 = performance.now()
+    const results = []
+    for (let i = 1; i <= 100; i += 1) {
+      results.push(bootstrapUser({ id: i, first_name: `U${i}`, username: `user${i}` }, ''))
+    }
+    const ms = performance.now() - t0
+
+    assert.equal(
+      results.every((row) => row?.user && row.storePersisted === false),
+      true,
+    )
+    assert.ok(ms < 500, `expected 100 warm bootstraps <500ms, got ${Math.round(ms)}ms`)
+
+    flushStoreNow()
+  } finally {
+    delete process.env.AZAROV_STORE_DIR
+    delete process.env.AZAROV_STORE_DEFER_MS
     rmSync(dir, { recursive: true, force: true })
   }
 })

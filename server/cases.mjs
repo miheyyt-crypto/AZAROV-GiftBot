@@ -2,8 +2,8 @@ import crypto from 'node:crypto'
 
 import dropTables from '../src/data/case-drops.json' with { type: 'json' }
 
-import { getReferralCaseStats, migrateAllReferrals } from './referrals.mjs'
-import { countActiveReferrals, ensureArray } from './users.mjs'
+import { getReferralCaseStats } from './referrals.mjs'
+import { countActiveReferrals, ensureArray, hydrateUserReferrals } from './users.mjs'
 import { addCoins, hasEvent, spendCoins, TX_TYPE, utcNow } from './wallet.mjs'
 import { withStore } from './store.mjs'
 
@@ -231,7 +231,9 @@ function saveOpeningRecord(store, user, opening) {
     ...(opening.coinClaimStatus ? { coinClaimStatus: opening.coinClaimStatus } : {}),
   }
   const openings = ensureArray(user.caseOpenings)
-  user.caseOpenings = [...openings, opening]
+  // Keep recent openings only — unbounded per-user arrays inflate store stringify.
+  const MAX_USER_CASE_OPENINGS = 40
+  user.caseOpenings = [...openings, opening].slice(-MAX_USER_CASE_OPENINGS)
 }
 
 function grantReward(store, user, reward, openingId) {
@@ -637,13 +639,15 @@ function openPurchasedCase(store, user, caseConfig, requestId) {
 
 export function openCase(userId, caseId, requestId) {
   return withStore((store) => {
-    migrateAllReferrals(store)
     const user = store.users[String(userId)]
     const caseConfig = findCase(caseId)
 
     if (!user) {
       return { success: false, message: 'Пользователь не найден.' }
     }
+
+    // Heal this user only — never walk all users on the hot open path.
+    hydrateUserReferrals(store, user)
 
     // Heal corrupt array fields before economy mutations (objects used to pass `|| []`).
     user.caseOpenings = ensureArray(user.caseOpenings)
