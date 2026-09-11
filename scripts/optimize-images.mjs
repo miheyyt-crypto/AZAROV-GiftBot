@@ -32,6 +32,7 @@ const jobs = [
   { src: 'src/assets/shop/cash.png', out: 'src/assets/shop/cash.webp', maxEdge: 640, quality: 82 },
   { src: 'src/assets/shop/freeze.png', out: 'src/assets/shop/freeze.webp', maxEdge: 640, quality: 82 },
   { src: 'src/assets/shop/welvura-200.png', out: 'src/assets/shop/welvura-200.webp', maxEdge: 640, quality: 82 },
+  { src: 'src/assets/shop/welvura-500.png', out: 'src/assets/shop/welvura-500.webp', maxEdge: 640, quality: 82 },
   { src: 'src/assets/shop/premium-12m.png', out: 'src/assets/shop/premium-12m.webp', maxEdge: 512, quality: 82 },
   { src: 'src/assets/shop/premium-6m.png', out: 'src/assets/shop/premium-6m.webp', maxEdge: 512, quality: 82 },
   { src: 'src/assets/shop/donate.png', out: 'src/assets/shop/donate.webp', maxEdge: 512, quality: 82 },

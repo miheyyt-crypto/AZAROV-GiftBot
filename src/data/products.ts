@@ -6,6 +6,7 @@ import premium6mImage from '@/assets/shop/premium-6m.webp'
 import premium12mImage from '@/assets/shop/premium-12m.webp'
 import vipImage from '@/assets/shop/vip.webp'
 import welvura200Image from '@/assets/shop/welvura-200.webp'
+import welvura500Image from '@/assets/shop/welvura-500.webp'
 import type { ProductCategory, ShopProduct } from '@/types/shop'
 
 export const shopCategories: Array<{ id: ProductCategory | 'all'; label: string }> = [
@@ -54,7 +55,7 @@ export const products: ShopProduct[] = [
     price: 11111,
     currency: 'coins',
     category: 'money',
-    image: welvura200Image,
+    image: welvura500Image,
     imageClassName: 'object-contain scale-[0.92]',
     description: '500 рублей на твой баланс Welvura, с вагером х1.',
     detailText:
