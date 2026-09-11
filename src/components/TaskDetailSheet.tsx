@@ -56,17 +56,44 @@ function openLaunchBotTask(): void {
 
   if (webApp?.openTelegramLink) {
     webApp.openTelegramLink(url)
+    // Bot API 7+: openTelegramLink keeps the Mini App open, so the same-bot
+    // chat opens behind it. Close so the bot chat (Start) is on top.
+    webApp.close()
     return
   }
 
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
+const LAUNCH_BOT_AWAITING_KEY = 'task:launch-bot:awaiting'
+
+function readLaunchBotAwaiting(): boolean {
+  try {
+    return sessionStorage.getItem(LAUNCH_BOT_AWAITING_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeLaunchBotAwaiting(value: boolean): void {
+  try {
+    if (value) {
+      sessionStorage.setItem(LAUNCH_BOT_AWAITING_KEY, '1')
+    } else {
+      sessionStorage.removeItem(LAUNCH_BOT_AWAITING_KEY)
+    }
+  } catch {
+    // ignore storage failures in restricted WebViews
+  }
+}
+
 export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
   const { showNotification } = useNotifications()
   const [visible, setVisible] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [awaitingCheck, setAwaitingCheck] = useState(false)
+  const [awaitingCheck, setAwaitingCheck] = useState(() =>
+    task.type === 'telegram_bot_start' ? readLaunchBotAwaiting() : false,
+  )
 
   const isCompleted = task.status === 'completed'
   const isLocked = task.status === 'locked'
@@ -105,12 +132,10 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
           message: 'После подписки вернись и нажми «Проверить».',
         })
       } else if (isLaunchBotTask) {
+        writeLaunchBotAwaiting(true)
+        setAwaitingCheck(true)
         openLaunchBotTask()
-        showNotification({
-          type: 'info',
-          title: 'Запусти бота',
-          message: 'Нажми Start у @AZAROV_GiftBot, затем вернись и нажми «Проверить».',
-        })
+        return
       } else {
         openKickRequiredChannel()
         showNotification({
@@ -127,6 +152,9 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
     try {
       const result = await handleTaskAction(task.id)
       if (result.success) {
+        if (isLaunchBotTask) {
+          writeLaunchBotAwaiting(false)
+        }
         showNotification({
           type: result.alreadyCompleted ? 'success' : 'reward',
           title: result.alreadyCompleted ? 'Уже выполнено' : 'Задание выполнено',
