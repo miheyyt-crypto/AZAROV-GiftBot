@@ -61,7 +61,7 @@ function NotificationDetail({
       : null
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-end justify-center">
+    <div className="fixed inset-0 z-[490] flex items-end justify-center">
       <button
         type="button"
         className="press-none ui-overlay absolute inset-0"
@@ -212,7 +212,7 @@ export function NotificationsSheet({
 
   return (
     <>
-      <ProfileSheet title="Уведомления" onClose={onClose}>
+      <ProfileSheet title="Уведомления" onClose={onClose} zClassName="z-[480]">
         {!isLoading && !loadError && items.length > 0 ? (
           <div className="mb-4 flex items-center justify-between gap-3">
             <p className="text-xs text-muted">

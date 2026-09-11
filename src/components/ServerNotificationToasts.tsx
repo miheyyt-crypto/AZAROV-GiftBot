@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { LevelUpCelebration } from '@/components/LevelUpCelebration'
 import { NotificationsSheet } from '@/components/NotificationsSheet'
@@ -263,43 +264,59 @@ export function ServerNotificationToasts() {
     scheduleDismiss(remainingMsRef.current)
   }
 
+  const toastLayer =
+    current && copy && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="pointer-events-none fixed inset-x-0 top-0 z-[500] mx-auto flex w-full max-w-lg justify-center px-4"
+            style={{ paddingTop: 'calc(0.75rem + var(--safe-area-top))' }}
+          >
+            <div
+              className="pointer-events-auto w-full"
+              onPointerEnter={handlePointerEnter}
+              onPointerLeave={handlePointerLeave}
+            >
+              <ServerNotificationToast
+                copy={copy}
+                reducedMotion={reducedMotion}
+                onOpen={handleOpen}
+                onDismiss={dismissCurrent}
+              />
+            </div>
+          </div>,
+          document.body,
+        )
+      : null
+
+  const levelUpLayer =
+    levelUp && typeof document !== 'undefined'
+      ? createPortal(
+          <LevelUpCelebration
+            rewards={levelUp.rewards}
+            totalAmount={levelUp.totalAmount}
+            onClose={() => setLevelUp(null)}
+          />,
+          document.body,
+        )
+      : null
+
+  const sheetLayer =
+    sheetOpen && typeof document !== 'undefined'
+      ? createPortal(
+          <NotificationsSheet
+            onClose={handleSheetClose}
+            focusNotificationId={sheetFocusId}
+            onUnreadChange={(count) => emitNotificationsUpdated({ unreadCount: count })}
+          />,
+          document.body,
+        )
+      : null
+
   return (
     <>
-      {current && copy ? (
-        <div
-          className="pointer-events-none fixed inset-x-0 top-0 z-[210] mx-auto flex w-full max-w-lg justify-center px-4"
-          style={{ paddingTop: 'calc(0.75rem + var(--safe-area-top))' }}
-        >
-          <div
-            className="pointer-events-auto w-full"
-            onPointerEnter={handlePointerEnter}
-            onPointerLeave={handlePointerLeave}
-          >
-            <ServerNotificationToast
-              copy={copy}
-              reducedMotion={reducedMotion}
-              onOpen={handleOpen}
-              onDismiss={dismissCurrent}
-            />
-          </div>
-        </div>
-      ) : null}
-
-      {levelUp ? (
-        <LevelUpCelebration
-          rewards={levelUp.rewards}
-          totalAmount={levelUp.totalAmount}
-          onClose={() => setLevelUp(null)}
-        />
-      ) : null}
-
-      {sheetOpen ? (
-        <NotificationsSheet
-          onClose={handleSheetClose}
-          focusNotificationId={sheetFocusId}
-          onUnreadChange={(count) => emitNotificationsUpdated({ unreadCount: count })}
-        />
-      ) : null}
+      {toastLayer}
+      {levelUpLayer}
+      {sheetLayer}
     </>
   )
 }

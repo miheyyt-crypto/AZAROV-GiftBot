@@ -50,7 +50,7 @@ export function LevelUpCelebration({ rewards, totalAmount, onClose }: LevelUpCel
   }, [totalAmount])
 
   return (
-    <div className="fixed inset-0 z-[220] flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-[480] flex items-center justify-center px-4">
       <button
         type="button"
         className={[

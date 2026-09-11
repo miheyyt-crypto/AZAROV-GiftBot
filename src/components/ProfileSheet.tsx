@@ -6,9 +6,16 @@ interface ProfileSheetProps {
   title: string
   onClose: () => void
   children: ReactNode
+  /** Override stacking — e.g. notification list above other sheets. */
+  zClassName?: string
 }
 
-export function ProfileSheet({ title, onClose, children }: ProfileSheetProps) {
+export function ProfileSheet({
+  title,
+  onClose,
+  children,
+  zClassName = 'z-[100]',
+}: ProfileSheetProps) {
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
@@ -28,7 +35,7 @@ export function ProfileSheet({ title, onClose, children }: ProfileSheetProps) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-end justify-center">
+    <div className={['fixed inset-0 flex items-end justify-center', zClassName].join(' ')}>
       <button
         type="button"
         className={[
