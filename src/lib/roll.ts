@@ -17,6 +17,8 @@ function apiUrl(path: string): string {
   return `${base}${path}`
 }
 
+const ROLL_FETCH_TIMEOUT_MS = 12_000
+
 async function rollRequest(path: string, init: RequestInit = {}): Promise<RollApiResponse> {
   const initData = getTelegramInitData()
   const headers = new Headers(init.headers)
@@ -25,36 +27,71 @@ async function rollRequest(path: string, init: RequestInit = {}): Promise<RollAp
     headers.set('Authorization', `tma ${initData}`)
   }
 
-  const response = await fetch(apiUrl(path), {
-    ...init,
-    headers,
-    credentials: 'include',
-  })
-  const payload = (await response.json().catch(() => null)) as RollApiResponse | null
-  if (!payload) {
-    return {
-      success: false,
-      code: 'BAD_RESPONSE',
-      message: 'Пустой ответ сервера.',
-      round: null,
-      lastResult: null,
-      previousGame: null,
-      topGame: null,
-      serverNow: new Date().toISOString(),
-      serverNowMs: Date.now(),
-      viewerInRound: false,
-      config: {
-        maxPlayers: 1000,
-        minBet: 100,
-        bettingDurationMs: 20_000,
-        spinDurationMs: 10_000,
-        resultHoldMs: 8_000,
-        payoutBps: 10_000,
-        quickBets: [100, 250, 500, 1000, 2500],
-      },
+  const timeoutController = new AbortController()
+  const timeoutId = window.setTimeout(() => timeoutController.abort(), ROLL_FETCH_TIMEOUT_MS)
+  const upstream = init.signal
+  const onUpstreamAbort = () => timeoutController.abort()
+  if (upstream) {
+    if (upstream.aborted) {
+      timeoutController.abort()
+    } else {
+      upstream.addEventListener('abort', onUpstreamAbort, { once: true })
     }
   }
-  return payload
+
+  try {
+    const response = await fetch(apiUrl(path), {
+      ...init,
+      headers,
+      credentials: 'include',
+      signal: timeoutController.signal,
+    })
+    const payload = (await response.json().catch(() => null)) as RollApiResponse | null
+    if (!payload) {
+      return emptyRollFailure('BAD_RESPONSE', 'Пустой ответ сервера.')
+    }
+    return payload
+  } catch (error) {
+    const aborted =
+      (error instanceof DOMException && error.name === 'AbortError') ||
+      (error instanceof Error && error.name === 'AbortError')
+    if (aborted && upstream?.aborted) {
+      return emptyRollFailure('ABORTED', 'Запрос отменён.')
+    }
+    if (aborted) {
+      return emptyRollFailure('TIMEOUT', 'Сервер не ответил вовремя. Попробуйте ещё раз.')
+    }
+    return emptyRollFailure('NETWORK', 'Нет связи с сервером. Проверьте интернет.')
+  } finally {
+    window.clearTimeout(timeoutId)
+    if (upstream) {
+      upstream.removeEventListener('abort', onUpstreamAbort)
+    }
+  }
+}
+
+function emptyRollFailure(code: string, message: string): RollApiResponse {
+  return {
+    success: false,
+    code,
+    message,
+    round: null,
+    lastResult: null,
+    previousGame: null,
+    topGame: null,
+    serverNow: new Date().toISOString(),
+    serverNowMs: Date.now(),
+    viewerInRound: false,
+    config: {
+      maxPlayers: 1000,
+      minBet: 100,
+      bettingDurationMs: 20_000,
+      spinDurationMs: 10_000,
+      resultHoldMs: 8_000,
+      payoutBps: 10_000,
+      quickBets: [100, 250, 500, 1000, 2500],
+    },
+  }
 }
 
 function applyRemoteUser(user: UserAccount | undefined): void {
@@ -96,6 +133,7 @@ export async function placeRollBet(input: {
   requestId?: string
 }): Promise<RollApiResponse> {
   const requestId = input.requestId || createPurchaseRequestId()
+  console.info('[ROLL BET] request started', { bet: input.bet, requestId })
   return once(`bet:${requestId}`, async () => {
     const clientSentAt = Date.now()
     const result = await rollRequest('/api/roll/bet', {
@@ -106,6 +144,12 @@ export async function placeRollBet(input: {
       }),
     })
     const clientReceivedAt = Date.now()
+    console.info('[ROLL BET] request finished', {
+      requestId,
+      success: result.success,
+      code: result.code,
+      ms: clientReceivedAt - clientSentAt,
+    })
     applyRemoteUser(result.user)
     return {
       ...result,

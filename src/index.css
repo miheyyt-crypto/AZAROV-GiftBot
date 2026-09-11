@@ -544,10 +544,45 @@ body {
   --roll-glass-bg: rgb(22 16 34 / 72%);
   --roll-glass-border: rgb(255 255 255 / 10%);
   --roll-glass-shadow: 0 8px 28px rgb(0 0 0 / 35%);
+  /* Header + stats + pot + status + bet chrome + nav + safe areas */
+  --roll-chrome: calc(
+    var(--safe-area-top) + var(--safe-area-bottom) + var(--nav-height) + 18.5rem
+  );
   position: relative;
   isolation: isolate;
-  /* Deep purple base — not pure black */
   background: #140a22;
+}
+
+/* Wheel diameter: fit width AND remaining viewport height (Telegram Mini App). */
+.roll-wheel-shell {
+  width: min(100%, 82vw, 360px, calc(100dvh - var(--roll-chrome)));
+  max-width: 100%;
+  margin-inline: auto;
+}
+
+@media (max-height: 760px) {
+  .roll-page {
+    --roll-chrome: calc(
+      var(--safe-area-top) + var(--safe-area-bottom) + var(--nav-height) + 20.5rem
+    );
+  }
+
+  .roll-page.ui-page {
+    padding-top: calc(0.65rem + var(--safe-area-top));
+    padding-bottom: 1rem;
+  }
+
+  .roll-wheel-shell {
+    margin-bottom: 0.25rem;
+  }
+}
+
+@media (max-height: 680px) {
+  .roll-page {
+    --roll-chrome: calc(
+      var(--safe-area-top) + var(--safe-area-bottom) + var(--nav-height) + 21.5rem
+    );
+  }
 }
 
 .roll-glass {

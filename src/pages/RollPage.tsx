@@ -466,6 +466,9 @@ export function RollPage() {
   }
 
   async function handleBet() {
+    if (busy) {
+      return
+    }
     if (!canSubmit) {
       if (amount < amountFloor) {
         showNotification({
@@ -479,9 +482,21 @@ export function RollPage() {
       return
     }
     setBusy(true)
+    console.info('[ROLL BET] loading true')
     try {
       const result = await placeRollBet({ bet })
-      applyState(result)
+      // Unlock button from HTTP completion — never wait for SSE/poll.
+      setBusy(false)
+      console.info('[ROLL BET] loading false (http done)', {
+        success: result.success,
+        code: result.code,
+      })
+      try {
+        applyState(result)
+        console.info('[ROLL BET] state applied')
+      } catch (error) {
+        console.warn('[ROLL BET] applyState failed', error)
+      }
       if (!result.success) {
         showNotification({
           type: 'warning',
@@ -491,8 +506,17 @@ export function RollPage() {
       } else {
         syncBetValue(Math.min(Math.max(amountFloor, minBet), Math.max(amountFloor, amount)))
       }
+    } catch (error) {
+      console.warn('[ROLL BET] unexpected error', error)
+      setBusy(false)
+      showNotification({
+        type: 'warning',
+        title: addMode ? 'Пополнение не принято' : 'Ставка не принята',
+        message: 'Не удалось отправить ставку. Попробуйте ещё раз.',
+      })
     } finally {
       setBusy(false)
+      console.info('[ROLL BET] loading false (finally)')
     }
   }
 

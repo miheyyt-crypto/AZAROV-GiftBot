@@ -35,8 +35,36 @@ export function initTelegramWebApp(): TelegramWebApp | null {
   // callers should capture start_param first via captureStartParam().
   webApp.ready()
   webApp.expand()
+  syncTelegramSafeArea(webApp)
 
   return webApp
+}
+
+/** Prefer Telegram content/safe insets when env(safe-area-*) is 0 in WebView. */
+function syncTelegramSafeArea(webApp: TelegramWebApp): void {
+  try {
+    const root = document.documentElement
+    const anyApp = webApp as TelegramWebApp & {
+      contentSafeAreaInset?: { top?: number; bottom?: number }
+      safeAreaInset?: { top?: number; bottom?: number }
+    }
+    const top = Math.max(
+      Number(anyApp.contentSafeAreaInset?.top) || 0,
+      Number(anyApp.safeAreaInset?.top) || 0,
+    )
+    const bottom = Math.max(
+      Number(anyApp.contentSafeAreaInset?.bottom) || 0,
+      Number(anyApp.safeAreaInset?.bottom) || 0,
+    )
+    if (top > 0) {
+      root.style.setProperty('--safe-area-top', `${top}px`)
+    }
+    if (bottom > 0) {
+      root.style.setProperty('--safe-area-bottom', `${bottom}px`)
+    }
+  } catch {
+    // ignore — CSS env() fallback remains
+  }
 }
 
 export function getTelegramPlatform(): string {
