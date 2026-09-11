@@ -1,4 +1,4 @@
-import { ChevronDown, Copy, Flame, Send } from 'lucide-react'
+import { ChevronDown, Flame, Send } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 
@@ -14,7 +14,7 @@ import {
   formatCoinsAmount,
   formatContestCountdown,
 } from '@/lib/referral-contest'
-import { buildReferralLink, copyText, shareReferralLink } from '@/lib/referral'
+import { buildReferralLink, shareReferralLink } from '@/lib/referral'
 import type {
   ReferralContestMotivation,
   ReferralContestPayload,
@@ -239,19 +239,6 @@ export function ReferralBattlePage() {
   const contest = payload?.contest
   const motivation = payload?.motivation
   const ended = contest?.status === 'ended'
-
-  async function handleCopy() {
-    if (!referralLink) {
-      showNotification({
-        type: 'warning',
-        title: 'Ссылка недоступна',
-        message: 'Открой приложение в Telegram',
-      })
-      return
-    }
-    await copyText(referralLink)
-    showNotification({ type: 'success', title: 'Готово', message: 'Ссылка скопирована' })
-  }
 
   async function handleInvite() {
     if (!referralLink) {
@@ -615,25 +602,23 @@ export function ReferralBattlePage() {
 
       {/* Invite sticky CTA */}
       {!ended ? (
-        <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 px-4 sm:px-0">
-          <div className="mx-auto flex max-w-lg gap-2">
+        <div
+          className="pointer-events-none fixed inset-x-0 z-30 px-4"
+          style={{
+            bottom:
+              'calc(var(--nav-height, 5.75rem) + var(--safe-area-bottom, 0px) + 1.25rem)',
+          }}
+        >
+          <div className="pointer-events-auto mx-auto flex max-w-lg justify-center">
             <button
               type="button"
               onClick={() => void handleInvite()}
               disabled={sharing}
-              className="interactive flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#f4c95d] to-[#e8a84a] py-3.5 text-sm font-black text-[#1a1200] shadow-[0_8px_24px_rgb(244_201_93/35%)]"
+              className="interactive flex w-full max-w-sm items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#f4c95d] to-[#e8a84a] py-3.5 text-sm font-black text-[#1a1200] shadow-[0_8px_24px_rgb(244_201_93/35%)]"
             >
               <Flame size={18} />
               ПРИГЛАСИТЬ РЕФЕРАЛОВ
               <Send size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleCopy()}
-              className="interactive flex size-[52px] shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-bg-elevated text-white"
-              aria-label="Скопировать ссылку"
-            >
-              <Copy size={18} />
             </button>
           </div>
         </div>
