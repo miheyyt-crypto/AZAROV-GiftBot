@@ -55,10 +55,9 @@ function openLaunchBotTask(): void {
   const webApp = getTelegramWebApp()
 
   if (webApp?.openTelegramLink) {
+    // Opens bot chat and minimizes the Mini App into Telegram’s app bar
+    // (does not destroy the session — unlike WebApp.close()).
     webApp.openTelegramLink(url)
-    // Bot API 7+: openTelegramLink keeps the Mini App open, so the same-bot
-    // chat opens behind it. Close so the bot chat (Start) is on top.
-    webApp.close()
     return
   }
 
