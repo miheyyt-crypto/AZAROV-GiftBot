@@ -504,6 +504,23 @@ body {
   animation: tower-shake 360ms var(--press-ease);
 }
 
+@keyframes roll-confetti-fall {
+  0% {
+    transform: translate3d(0, -12px, 0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(12px, 220px, 0) rotate(220deg);
+    opacity: 0;
+  }
+}
+
+.roll-confetti-piece {
+  animation-name: roll-confetti-fall;
+  animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation-fill-mode: forwards;
+}
+
 @keyframes level-up-burst {
   0% {
     opacity: 0;

@@ -35,11 +35,13 @@ const TRANSACTION_LABELS = {
   mines_win: 'Выигрыш в Mines',
   tower_bet: 'Ставка в Tower',
   tower_win: 'Выигрыш в Tower',
+  roll_bet: 'Ставка в Roll',
+  roll_win: 'Выигрыш в Roll',
   admin_adjustment: 'Корректировка баланса',
   refund: 'Возврат',
 }
 
-const PURCHASE_TYPES = new Set(['case_purchase', 'shop_purchase', 'mines_bet', 'tower_bet'])
+const PURCHASE_TYPES = new Set(['case_purchase', 'shop_purchase', 'mines_bet', 'tower_bet', 'roll_bet'])
 const REWARD_TYPES = new Set([
   'task_reward',
   'referral_reward',
@@ -50,6 +52,7 @@ const REWARD_TYPES = new Set([
   'level_reward',
   'mines_win',
   'tower_win',
+  'roll_win',
 ])
 
 function getCaseName(caseId) {

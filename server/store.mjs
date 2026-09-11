@@ -102,7 +102,7 @@ export function isPersistentStoreDir(dir = getDataDir()) {
 
 export function createEmptyStore() {
   return {
-    version: 20,
+    version: 21,
     users: {},
     referralIndex: {},
     referrals: {},
@@ -113,6 +113,14 @@ export function createEmptyStore() {
     caseOpenings: {},
     minesGames: {},
     towerGames: {},
+    rollRounds: {},
+    rollMeta: {
+      nextDisplayId: 100001,
+      previousGame: null,
+      topGame: null,
+      currentRoundId: null,
+      lastResultRoundId: null,
+    },
     promoCodes: {},
     promoUsages: {},
     withdrawals: {},
@@ -168,6 +176,14 @@ function migrateStore(store) {
   store.communityAccessRequests = store.communityAccessRequests || {}
   store.minesGames = store.minesGames || {}
   store.towerGames = store.towerGames || {}
+  store.rollRounds = store.rollRounds || {}
+  store.rollMeta = store.rollMeta || {
+    nextDisplayId: 100001,
+    previousGame: null,
+    topGame: null,
+    currentRoundId: null,
+    lastResultRoundId: null,
+  }
   store.promoCodes = store.promoCodes || {}
   store.promoUsages = store.promoUsages || {}
   store.withdrawals = store.withdrawals || {}
@@ -452,6 +468,19 @@ function migrateStore(store) {
       console.info('[kick] migration v20: user @lamkustg not found — nothing to unlink')
     }
     store.version = 20
+  }
+
+  // Additive v21: Roll PvP rounds + meta.
+  if (Number(store.version) < 21) {
+    store.rollRounds = store.rollRounds || {}
+    store.rollMeta = store.rollMeta || {
+      nextDisplayId: 100001,
+      previousGame: null,
+      topGame: null,
+      currentRoundId: null,
+      lastResultRoundId: null,
+    }
+    store.version = 21
   }
 
   return store

@@ -15,6 +15,7 @@ import {
   HomePage,
   MinesPage,
   TowerPage,
+  RollPage,
   NotFoundPage,
   OperationsHistoryPage,
   OrdersPage,
@@ -50,6 +51,7 @@ export default function App() {
           <Route path={ROUTES.communityAccess} element={<CommunityAccessPage />} />
           <Route path={ROUTES.mines} element={<MinesPage />} />
           <Route path={ROUTES.tower} element={<TowerPage />} />
+          <Route path={ROUTES.roll} element={<RollPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

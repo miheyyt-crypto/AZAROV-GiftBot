@@ -12,6 +12,8 @@ export type OperationType =
   | 'mines_win'
   | 'tower_bet'
   | 'tower_win'
+  | 'roll_bet'
+  | 'roll_win'
   | 'promo_reward'
   | 'admin_adjustment'
   | 'refund'
@@ -41,6 +43,7 @@ export const OPERATION_PURCHASE_TYPES: ReadonlySet<string> = new Set([
   'shop_purchase',
   'mines_bet',
   'tower_bet',
+  'roll_bet',
 ])
 
 export const OPERATION_REWARD_TYPES: ReadonlySet<string> = new Set([
@@ -53,6 +56,7 @@ export const OPERATION_REWARD_TYPES: ReadonlySet<string> = new Set([
   'level_reward',
   'mines_win',
   'tower_win',
+  'roll_win',
   'promo_reward',
 ])
 
@@ -91,6 +95,10 @@ export function iconForOperationType(type: string, income: boolean): string {
       return '🏗️'
     case 'tower_win':
       return '🏰'
+    case 'roll_bet':
+      return '🍥'
+    case 'roll_win':
+      return '🍥'
     case 'promo_reward':
       return '🎁'
     case 'refund':

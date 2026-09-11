@@ -95,6 +95,7 @@ import {
   pickTowerCell,
   startTowerGame,
 } from './tower.mjs'
+import { getRollState, placeRollBet } from './roll.mjs'
 import { redeemPromoCode } from './promo.mjs'
 import {
   getUnreadNotificationsCount,
@@ -2345,6 +2346,34 @@ app.post(
     bootstrapUser(telegramUser, '')
     const result = cashoutTower(telegramUser.id, {
       gameId: req.body?.gameId,
+      requestId,
+    })
+    res.status(result.success ? 200 : 400).json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.get(
+  '/api/roll/state',
+  withEconomicUser(async (_req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    const result = getRollState(telegramUser.id)
+    res.json({
+      ...result,
+      user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.post(
+  '/api/roll/bet',
+  withEconomicUser(async (req, res, telegramUser) => {
+    const requestId = parseRequestId(req.body?.requestId)
+    bootstrapUser(telegramUser, '')
+    const result = placeRollBet(telegramUser.id, {
+      bet: req.body?.bet,
       requestId,
     })
     res.status(result.success ? 200 : 400).json({
