@@ -176,17 +176,6 @@ export async function loadMyPartnerSubmissionsResult(): Promise<
   }
 }
 
-/**
- * Entry popup visibility over existing partner task status.
- * completed → COMPLETED (claimed / admin approved)
- * verified → PENDING (submission awaiting admin confirmation)
- */
-export function shouldShowWelvuraEntryPopup(status: PartnerTaskStatus): boolean {
-  const completed = status === 'COMPLETED'
-  const verified = status === 'PENDING'
-  return !completed && !verified
-}
-
 export function getPartnerProgress(
   partnerId: string,
   completedIds: string[],
