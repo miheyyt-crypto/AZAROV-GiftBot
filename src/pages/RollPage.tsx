@@ -16,9 +16,9 @@ import { ROUTES } from '@/lib/constants'
 import { formatBalance } from '@/lib/balance'
 import { fetchRollState, placeRollBet, subscribeRollStream } from '@/lib/roll'
 import {
-  dumpRollScrollState,
-  dumpScrollParents,
-  installRollScrollDebugHooks,
+  captureScrollTrace,
+  installDesktopScrollTrace,
+  runRollScrollTimeline,
 } from '@/lib/roll-scroll-debug'
 import { resetAppScrollPosition } from '@/lib/telegram'
 import {
@@ -109,25 +109,27 @@ export function RollPage() {
   const forcedFetchAtSpinEnd = useRef(false)
   const spinClockRef = useRef<RollSpinClock | null>(null)
   const roundRef = useRef<RollRound | null>(null)
+  const tracedFirstRound = useRef(false)
 
-  // #root keeps scroll across routes; skeleton→content also grows layout.
-  // Reset BEFORE paint (layout) and again when real Roll UI mounts — not setTimeout.
   useLayoutEffect(() => {
-    installRollScrollDebugHooks()
+    installDesktopScrollTrace()
+    captureScrollTrace('T2-roll-mount-layout')
     resetAppScrollPosition()
-    dumpRollScrollState('roll-layout-mount')
-    dumpScrollParents('roll-layout-mount')
+    captureScrollTrace('T3-roll-after-layout-reset')
+  }, [])
+
+  useEffect(() => {
+    captureScrollTrace('T4-roll-useEffect')
   }, [])
 
   useLayoutEffect(() => {
     if (!bootstrapped) {
       return
     }
+    captureScrollTrace('T11-bootstrapped-before-reset')
     resetAppScrollPosition()
-    dumpRollScrollState('roll-bootstrapped')
-    // Critical test: force 0 again and re-measure Header vs Wheel.
-    resetAppScrollPosition()
-    dumpRollScrollState('roll-after-forced-zero')
+    captureScrollTrace('T11-bootstrapped-after-reset')
+    runRollScrollTimeline(true)
   }, [bootstrapped])
 
   const minBet = config?.minBet ?? ROLL_MIN_BET
@@ -301,6 +303,10 @@ export function RollPage() {
       setViewerInRound(inRound)
       if (payload.config) {
         setConfig(payload.config)
+      }
+      if (!tracedFirstRound.current && r) {
+        tracedFirstRound.current = true
+        queueMicrotask(() => captureScrollTrace('T12-round-loaded'))
       }
 
       if (r?.status === 'betting' && r.bettingEndsAt) {

@@ -2,16 +2,22 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { useLayoutEffect } from 'react'
 
 import { BottomNav } from '@/components/BottomNav'
+import {
+  captureScrollTrace,
+  installDesktopScrollTrace,
+  traceRouteChanged,
+} from '@/lib/roll-scroll-debug'
 import { resetAppScrollPosition } from '@/lib/telegram'
 
 export function AppLayout() {
   const location = useLocation()
 
-  // #root is a persistent scroll container on desktop. Without resetting on
-  // every route change, Home scrollTop carries into Roll and Header sits above
-  // the fold (looks "already scrolled" to the wheel). useLayoutEffect = before paint.
   useLayoutEffect(() => {
+    installDesktopScrollTrace()
+    traceRouteChanged(location.pathname)
+    captureScrollTrace('T3-layout-before-reset')
     resetAppScrollPosition()
+    captureScrollTrace('T3-layout-after-reset')
   }, [location.pathname])
 
   return (
