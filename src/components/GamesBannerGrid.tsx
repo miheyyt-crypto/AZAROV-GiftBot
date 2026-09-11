@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 
 import minesBanner from '@/assets/banners/mines-banner.webp'
+import rollBanner from '@/assets/banners/roll-banner.jpg'
 import towerBanner from '@/assets/banners/tower-banner.webp'
 import { GameBanner } from '@/components/GameBanner'
 import { ROUTES } from '@/lib/constants'
@@ -20,19 +21,21 @@ export function GamesBannerGrid({ className = '' }: GamesBannerGridProps) {
         aria-label="Открыть Roll"
         onClick={() => navigate(ROUTES.roll)}
         className={[
-          'game-banner relative col-span-2 flex aspect-[2.08/1] w-full min-w-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-[20px]',
-          'border border-[rgb(255_106_43/35%)] bg-[linear-gradient(120deg,#1a1220_0%,#2a1830_45%,#1a1024_100%)]',
+          'game-banner relative col-span-2 aspect-[2.08/1] w-full min-w-0 overflow-hidden rounded-[20px]',
+          'border border-white/10 bg-[#121018]',
           'shadow-[0_8px_20px_rgb(0_0_0/35%)]',
           'transition-transform duration-150 ease-out active:scale-[0.97]',
         ].join(' ')}
       >
-        <span className="text-4xl leading-none" aria-hidden>
-          🍥
-        </span>
-        <span className="text-center">
-          <span className="block text-xl font-bold tracking-wide text-white">Roll</span>
-          <span className="mt-0.5 block text-xs font-medium text-white/55">PvP колесо удачи</span>
-        </span>
+        <img
+          src={rollBanner}
+          alt=""
+          aria-hidden="true"
+          className="size-full object-cover"
+          draggable={false}
+          decoding="async"
+          fetchPriority="high"
+        />
       </button>
       <GameBanner
         ariaLabel="Открыть Mines"
