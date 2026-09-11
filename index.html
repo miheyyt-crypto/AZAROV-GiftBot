@@ -58,20 +58,28 @@
         justify-content: center;
         isolation: isolate;
       }
-      /* Light edge haze only — keep most of the face sharp */
+      /* Soft black fade top/bottom + gentle side vignette */
       #azarov-boot-splash .splash-media-wrap::after {
         content: '';
         position: absolute;
-        inset: -10%;
+        inset: 0;
         z-index: 1;
         pointer-events: none;
-        background: radial-gradient(
-          ellipse 78% 74% at 50% 46%,
-          transparent 58%,
-          rgb(0 0 0 / 22%) 78%,
-          rgb(0 0 0 / 72%) 92%,
-          #000 100%
-        );
+        background:
+          linear-gradient(
+            to bottom,
+            #000 0%,
+            rgb(0 0 0 / 72%) 8%,
+            transparent 28%,
+            transparent 72%,
+            rgb(0 0 0 / 72%) 92%,
+            #000 100%
+          ),
+          radial-gradient(
+            ellipse 88% 80% at 50% 48%,
+            transparent 62%,
+            rgb(0 0 0 / 35%) 100%
+          );
       }
       #azarov-boot-splash .splash-media {
         width: min(58vw, 14rem);
@@ -82,25 +90,6 @@
         display: block;
         user-select: none;
         -webkit-user-drag: none;
-        /* Soft rim only near the outer edge */
-        -webkit-mask-image: radial-gradient(
-          ellipse 88% 86% at 50% 46%,
-          #000 0%,
-          #000 72%,
-          rgb(0 0 0 / 0.7) 88%,
-          transparent 100%
-        );
-        mask-image: radial-gradient(
-          ellipse 88% 86% at 50% 46%,
-          #000 0%,
-          #000 72%,
-          rgb(0 0 0 / 0.7) 88%,
-          transparent 100%
-        );
-        -webkit-mask-repeat: no-repeat;
-        mask-repeat: no-repeat;
-        -webkit-mask-size: 100% 100%;
-        mask-size: 100% 100%;
       }
       #azarov-boot-splash .splash-brand {
         position: relative;

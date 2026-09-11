@@ -151,7 +151,7 @@ export function resolveReferralContestWindow(store = null, { nowMs = Date.now(),
 
 export function getReferralContestConfig(store = null) {
   const enabled = envFlag('REFERRAL_CONTEST_ENABLED', true)
-  const adminOnly = envFlag('REFERRAL_CONTEST_ADMIN_ONLY', true)
+  const adminOnly = envFlag('REFERRAL_CONTEST_ADMIN_ONLY', false)
   const window = resolveReferralContestWindow(store, { persist: false })
   const row = store?.referralContests?.[REFERRAL_CONTEST_ID] || null
   return {
@@ -731,7 +731,7 @@ export function bootstrapReferralContestSchedule() {
       status: row?.status || 'active',
       startsAt: window.startsAt,
       endsAt: window.endsAt,
-      adminOnly: envFlag('REFERRAL_CONTEST_ADMIN_ONLY', true),
+      adminOnly: envFlag('REFERRAL_CONTEST_ADMIN_ONLY', false),
       enabled: envFlag('REFERRAL_CONTEST_ENABLED', true),
     })
     return { startsAt: window.startsAt, endsAt: window.endsAt, status: row?.status || 'active' }
