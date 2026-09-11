@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { CoinIcon } from '@/components/CoinIcon'
@@ -15,11 +15,6 @@ import { useUserAccount } from '@/hooks/useUserAccount'
 import { ROUTES } from '@/lib/constants'
 import { formatBalance } from '@/lib/balance'
 import { fetchRollState, placeRollBet, subscribeRollStream } from '@/lib/roll'
-import {
-  captureScrollTrace,
-  installDesktopScrollTrace,
-  runRollScrollTimeline,
-} from '@/lib/roll-scroll-debug'
 import {
   ROLL_MAX_PLAYERS,
   ROLL_MIN_BET,
@@ -108,26 +103,6 @@ export function RollPage() {
   const forcedFetchAtSpinEnd = useRef(false)
   const spinClockRef = useRef<RollSpinClock | null>(null)
   const roundRef = useRef<RollRound | null>(null)
-  const tracedFirstRound = useRef(false)
-
-  useLayoutEffect(() => {
-    installDesktopScrollTrace()
-    captureScrollTrace('T2-roll-mount-layout')
-    // Route-level reset lives in AppLayout. Do NOT re-zero here after mount —
-    // late resets (and former debug probes) made Desktop appear unscrollable.
-  }, [])
-
-  useEffect(() => {
-    captureScrollTrace('T4-roll-useEffect')
-  }, [])
-
-  useLayoutEffect(() => {
-    if (!bootstrapped) {
-      return
-    }
-    captureScrollTrace('T11-bootstrapped')
-    runRollScrollTimeline(true)
-  }, [bootstrapped])
 
   const minBet = config?.minBet ?? ROLL_MIN_BET
   const quickBets = config?.quickBets?.length ? config.quickBets : [...ROLL_QUICK_BETS]
@@ -300,10 +275,6 @@ export function RollPage() {
       setViewerInRound(inRound)
       if (payload.config) {
         setConfig(payload.config)
-      }
-      if (!tracedFirstRound.current && r) {
-        tracedFirstRound.current = true
-        queueMicrotask(() => captureScrollTrace('T12-round-loaded'))
       }
 
       if (r?.status === 'betting' && r.bettingEndsAt) {

@@ -130,8 +130,13 @@ body {
  */
 html.app-desktop-embed,
 html.app-desktop-embed body {
-  height: var(--tg-viewport-stable-height, 100dvh);
-  max-height: var(--tg-viewport-stable-height, 100dvh);
+  /* Use the iframe/viewport itself — do NOT bind to JS --tg-viewport-stable-height.
+     Live HUD: rewriting that var on resize/viewportChanged reset #root.scrollTop
+     (498→500 then back to 0) while canScrollRoot was already YES. */
+  height: 100%;
+  height: 100dvh;
+  max-height: 100%;
+  max-height: 100dvh;
   min-height: 0;
   overflow: hidden !important;
   overscroll-behavior: none;
@@ -139,10 +144,11 @@ html.app-desktop-embed body {
 }
 
 html.app-desktop-embed #root {
-  height: var(--tg-viewport-stable-height, 100dvh);
-  max-height: var(--tg-viewport-stable-height, 100dvh);
+  height: 100%;
+  height: 100dvh;
+  max-height: 100%;
+  max-height: 100dvh;
   min-height: 0;
-  /* !important: beat base #root overflow-y:visible and any TG injection */
   overflow-x: hidden !important;
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch;

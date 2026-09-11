@@ -7,17 +7,16 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { NotificationProvider } from '@/components/NotificationProvider'
 import { armBootSplashWatchdog } from '@/lib/boot-splash'
 import { captureStartParam } from '@/lib/startParam'
-import { bootstrapViewportEnvironment, getTelegramWebApp } from '@/lib/telegram'
-import { installDesktopScrollTrace } from '@/lib/roll-scroll-debug'
+import { bootstrapViewportEnvironment, getTelegramWebApp, installDesktopRootWheelBridge } from '@/lib/telegram'
 import '@/index.css'
 
 // Persist Telegram start_param before React mounts / WebApp.ready().
 captureStartParam()
 armBootSplashWatchdog()
-// Desktop scroll-root before first paint (TG Desktop iframe clips document scroll).
 bootstrapViewportEnvironment(getTelegramWebApp())
-installDesktopScrollTrace()
+installDesktopRootWheelBridge()
 if (typeof window !== 'undefined') {
+  // Re-toggle desktop class only — height is CSS 100dvh (no pixel thrash / scroll reset).
   const resync = () => bootstrapViewportEnvironment(getTelegramWebApp())
   window.addEventListener('resize', resync)
   window.visualViewport?.addEventListener('resize', resync)

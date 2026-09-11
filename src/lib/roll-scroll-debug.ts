@@ -60,10 +60,8 @@ export function isDesktopScrollTraceEnabled(): boolean {
   if (typeof document === 'undefined') {
     return false
   }
-  if (debugVerbose()) {
-    return true
-  }
-  return document.documentElement.classList.contains('app-desktop-embed')
+  // HUD covered Header on Desktop — opt-in only.
+  return debugVerbose()
 }
 
 function ensureStore(): TraceStore {

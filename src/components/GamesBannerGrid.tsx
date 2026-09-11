@@ -5,7 +5,6 @@ import rollBanner from '@/assets/banners/roll-banner.jpg'
 import towerBanner from '@/assets/banners/tower-banner.webp'
 import { GameBanner } from '@/components/GameBanner'
 import { ROUTES } from '@/lib/constants'
-import { traceBeforeNavigate } from '@/lib/roll-scroll-debug'
 
 type GamesBannerGridProps = {
   className?: string
@@ -20,10 +19,7 @@ export function GamesBannerGrid({ className = '' }: GamesBannerGridProps) {
       <button
         type="button"
         aria-label="Открыть Roll"
-        onClick={() => {
-          traceBeforeNavigate(ROUTES.roll)
-          navigate(ROUTES.roll)
-        }}
+        onClick={() => navigate(ROUTES.roll)}
         className={[
           'game-banner relative col-span-2 aspect-[2.08/1] w-full min-w-0 overflow-hidden rounded-[20px]',
           'border border-white/10 bg-[#121018]',

@@ -2,22 +2,13 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { useLayoutEffect } from 'react'
 
 import { BottomNav } from '@/components/BottomNav'
-import {
-  captureScrollTrace,
-  installDesktopScrollTrace,
-  traceRouteChanged,
-} from '@/lib/roll-scroll-debug'
 import { resetAppScrollPosition } from '@/lib/telegram'
 
 export function AppLayout() {
   const location = useLocation()
 
   useLayoutEffect(() => {
-    installDesktopScrollTrace()
-    traceRouteChanged(location.pathname)
-    captureScrollTrace('T3-layout-before-reset')
     resetAppScrollPosition()
-    captureScrollTrace('T3-layout-after-reset')
   }, [location.pathname])
 
   return (

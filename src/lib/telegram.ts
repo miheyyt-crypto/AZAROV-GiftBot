@@ -1,5 +1,7 @@
 import type { TelegramWebApp, TelegramWebAppUser } from '@/types'
 
+import { withScrollResetMarker } from '@/lib/roll-scroll-debug'
+
 const HARD_DESKTOP_TG_PLATFORMS = new Set([
   'tdesktop',
   'macos',
@@ -12,7 +14,7 @@ const MOBILE_TG_PLATFORMS = new Set([
   'android',
   'android_x',
   'iphone',
-  'ipad', // keep iPad on document-scroll path (Safari rubber-band)
+  'ipad',
 ])
 
 export function isTelegramWebApp(): boolean {
@@ -47,8 +49,6 @@ export function initTelegramWebApp(): TelegramWebApp | null {
     return null
   }
 
-  // Do not call ready() here with side effects that depend on unread launch params —
-  // callers should capture start_param first via captureStartParam().
   webApp.ready()
   webApp.expand()
   bootstrapViewportEnvironment(webApp)
@@ -57,6 +57,7 @@ export function initTelegramWebApp(): TelegramWebApp | null {
     onEvent?: (event: string, cb: () => void) => void
   }
   if (typeof anyApp.onEvent === 'function') {
+    // Only re-apply class / safe-area — do NOT rewrite pixel heights (resets #root scrollTop).
     const resync = () => bootstrapViewportEnvironment(webApp)
     anyApp.onEvent('viewportChanged', resync)
     anyApp.onEvent('safeAreaChanged', resync)
@@ -67,9 +68,8 @@ export function initTelegramWebApp(): TelegramWebApp | null {
 }
 
 /**
- * Desktop (Telegram Desktop / desktop browser): #root is the ONLY vertical scroll
- * container — the outer iframe / window clips document scroll.
- * Mobile (iOS/Android): keep natural document scroll (do NOT add app-desktop-embed).
+ * Desktop: #root is the only vertical scroller (see .app-desktop-embed CSS).
+ * Mobile: natural document scroll — never add the class.
  */
 export function bootstrapViewportEnvironment(webApp: TelegramWebApp | null = getTelegramWebApp()): void {
   if (typeof document === 'undefined' || typeof window === 'undefined') {
@@ -84,32 +84,23 @@ export function bootstrapViewportEnvironment(webApp: TelegramWebApp | null = get
 
   const isMobileTg = MOBILE_TG_PLATFORMS.has(platform)
   const isHardDesktopTg = HARD_DESKTOP_TG_PLATFORMS.has(platform)
-
-  /*
-   * CRITICAL (eda9ee3 miss):
-   * telegram-web-app.js often reports platform "unknown" when WebApp exists.
-   * Old logic required platform==="browser" | !webApp for fine-pointer path →
-   * desktop scroll NEVER activated → Header/Stats stuck above fold.
-   *
-   * Rule: never on ios/android; always on tdesktop/macos/linux; otherwise any
-   * fine pointer (mouse/trackpad) including platform "unknown" / "web".
-   */
   const useDesktopScroll = !isMobileTg && (isHardDesktopTg || finePointer)
 
   root.classList.toggle('app-desktop-embed', useDesktopScroll)
 
   if (useDesktopScroll) {
-    // Desktop must not inherit phone notch insets from Telegram APIs.
     root.style.setProperty('--safe-area-top', '0px')
     root.style.setProperty('--safe-area-bottom', '0px')
+    // Drop JS pixel height — it was thrashing on viewportChanged/resize and
+    // resetting #root.scrollTop (HUD: 498→500 then back to 0). CSS 100dvh is enough
+    // inside Telegram's iframe.
+    root.style.removeProperty('--tg-viewport-stable-height')
+    installDesktopRootWheelBridge()
   } else {
     syncTelegramSafeArea(webApp)
   }
-
-  syncDesktopViewportHeight(webApp)
 }
 
-/** Scrollport for desktop embed (#root). Null on mobile document-scroll path. */
 export function getAppScrollRoot(): HTMLElement | null {
   if (typeof document === 'undefined') {
     return null
@@ -120,9 +111,7 @@ export function getAppScrollRoot(): HTMLElement | null {
   return document.getElementById('root')
 }
 
-import { withScrollResetMarker } from '@/lib/roll-scroll-debug'
-
-/** Reset scroll so route changes / late layout do not leave Header above the fold. */
+/** Reset scroll on route change only. */
 export function resetAppScrollPosition(): void {
   withScrollResetMarker(() => {
     const root = document.getElementById('root')
@@ -142,32 +131,69 @@ export function resetAppScrollPosition(): void {
   })
 }
 
-function syncDesktopViewportHeight(webApp: TelegramWebApp | null): void {
-  const root = document.documentElement
-  if (!root.classList.contains('app-desktop-embed')) {
-    root.style.removeProperty('--tg-viewport-stable-height')
+/**
+ * Telegram Desktop WebView often delivers wheel to document/BODY while BODY is
+ * overflow:hidden — so #root never moves despite scrollHeight > clientHeight.
+ * Forward wheel deltas to #root (capture). Nested overflow lists still win first.
+ */
+let wheelBridgeInstalled = false
+
+export function installDesktopRootWheelBridge(): void {
+  if (wheelBridgeInstalled || typeof window === 'undefined') {
     return
   }
+  wheelBridgeInstalled = true
 
-  const vv = window.visualViewport?.height
-  const winH = typeof vv === 'number' && vv > 0 ? vv : window.innerHeight
-  const tgH =
-    webApp && Number(webApp.viewportStableHeight) > 0
-      ? Number(webApp.viewportStableHeight)
-      : webApp && Number(webApp.viewportHeight) > 0
-        ? Number(webApp.viewportHeight)
-        : 0
+  window.addEventListener(
+    'wheel',
+    (event) => {
+      if (!document.documentElement.classList.contains('app-desktop-embed')) {
+        return
+      }
+      if (event.ctrlKey) {
+        return
+      }
 
-  // Prefer the smaller positive height — TG sometimes reports a taller value than
-  // the visible Mini App iframe, which freezes mid-page content outside the iframe.
-  const candidates = [tgH, winH].filter((n) => Number.isFinite(n) && n > 0)
-  const h = candidates.length ? Math.min(...candidates) : winH
-  if (h > 0) {
-    root.style.setProperty('--tg-viewport-stable-height', `${Math.round(h)}px`)
-  }
+      const root = document.getElementById('root')
+      if (!root || root.scrollHeight <= root.clientHeight + 1) {
+        return
+      }
+
+      const path = event.composedPath()
+      for (const node of path) {
+        if (!(node instanceof HTMLElement)) {
+          continue
+        }
+        if (node === root || node === document.body || node === document.documentElement) {
+          break
+        }
+        const style = getComputedStyle(node)
+        const oy = style.overflowY
+        if (oy !== 'auto' && oy !== 'scroll') {
+          continue
+        }
+        if (node.scrollHeight <= node.clientHeight + 1) {
+          continue
+        }
+        const atTop = node.scrollTop <= 0 && event.deltaY < 0
+        const atBottom =
+          node.scrollTop + node.clientHeight >= node.scrollHeight - 1 && event.deltaY > 0
+        if (!atTop && !atBottom) {
+          // Nested scroller can consume this wheel.
+          return
+        }
+      }
+
+      const before = root.scrollTop
+      root.scrollTop = before + event.deltaY
+      if (root.scrollTop !== before) {
+        event.preventDefault()
+      }
+    },
+    { passive: false, capture: true },
+  )
 }
 
-/** Prefer Telegram content/safe insets when env(safe-area-*) is 0 in WebView. */
 function syncTelegramSafeArea(webApp: TelegramWebApp | null): void {
   if (!webApp) {
     return
@@ -186,7 +212,6 @@ function syncTelegramSafeArea(webApp: TelegramWebApp | null): void {
       Number(anyApp.contentSafeAreaInset?.bottom) || 0,
       Number(anyApp.safeAreaInset?.bottom) || 0,
     )
-    // Cap absurd insets (some Desktop builds report large title-bar values).
     if (top > 0 && top < 120) {
       root.style.setProperty('--safe-area-top', `${top}px`)
     }
@@ -194,7 +219,7 @@ function syncTelegramSafeArea(webApp: TelegramWebApp | null): void {
       root.style.setProperty('--safe-area-bottom', `${bottom}px`)
     }
   } catch {
-    // ignore — CSS env() fallback remains
+    // ignore
   }
 }
 
