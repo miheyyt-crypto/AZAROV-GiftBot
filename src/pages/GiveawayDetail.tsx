@@ -1,5 +1,6 @@
 import { ArrowLeft, Gift, Trophy, Users, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import {
@@ -270,53 +271,56 @@ export function GiveawayDetail() {
         </div>
       </article>
 
-      {eligibilityModal ? (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 p-4 sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="giveaway-eligibility-title"
-        >
-          <div className="w-full max-w-md rounded-[22px] border border-white/10 bg-[#17141c] p-5 shadow-2xl">
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <h2 id="giveaway-eligibility-title" className="text-lg font-bold text-white">
-                {eligibilityModal.denyTitle}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setEligibilityModal(null)}
-                className="rounded-full p-1.5 text-muted hover:bg-white/5 hover:text-white"
-                aria-label="Закрыть"
-              >
-                <X size={18} aria-hidden />
-              </button>
-            </div>
-            <p className="text-sm leading-relaxed text-text-secondary">
-              {eligibilityModal.denyDescription}
-            </p>
-            <div className="mt-5 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const path = eligibilityModal.actionPath
-                  setEligibilityModal(null)
-                  navigate(path)
-                }}
-                className="flex min-h-11 w-full items-center justify-center rounded-[14px] bg-kick px-4 text-sm font-semibold text-white hover:brightness-110"
-              >
-                {eligibilityModal.actionLabel}
-              </button>
-              <button
-                type="button"
-                onClick={() => setEligibilityModal(null)}
-                className="flex min-h-11 w-full items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white/85"
-              >
-                Закрыть
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {eligibilityModal
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[100] flex items-end justify-center bg-black/65 p-4 sm:items-center"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="giveaway-eligibility-title"
+            >
+              <div className="w-full max-w-md rounded-[22px] border border-white/10 bg-[#17141c] p-5 shadow-2xl">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <h2 id="giveaway-eligibility-title" className="text-lg font-bold text-white">
+                    {eligibilityModal.denyTitle}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setEligibilityModal(null)}
+                    className="rounded-full p-1.5 text-muted hover:bg-white/5 hover:text-white"
+                    aria-label="Закрыть"
+                  >
+                    <X size={18} aria-hidden />
+                  </button>
+                </div>
+                <p className="text-sm leading-relaxed text-text-secondary">
+                  {eligibilityModal.denyDescription}
+                </p>
+                <div className="mt-5 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const path = eligibilityModal.actionPath
+                      setEligibilityModal(null)
+                      navigate(path)
+                    }}
+                    className="flex min-h-11 w-full items-center justify-center rounded-[14px] bg-kick px-4 text-sm font-semibold text-white hover:brightness-110"
+                  >
+                    {eligibilityModal.actionLabel}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEligibilityModal(null)}
+                    className="flex min-h-11 w-full items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white/85"
+                  >
+                    Закрыть
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }

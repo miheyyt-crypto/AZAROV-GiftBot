@@ -159,6 +159,13 @@ export function OrderDetailSheet({ order, onClose }: OrderDetailSheetProps) {
           )}
         </dl>
 
+        {order.rejectionReason ? (
+          <div className="mt-4 rounded-[18px] border border-pink/25 bg-pink/10 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-pink">Причина отклонения</p>
+            <p className="mt-2 text-sm leading-relaxed text-white/90">{order.rejectionReason}</p>
+          </div>
+        ) : null}
+
         {order.comment && (
           <div className="mt-4 rounded-[18px] border border-white/10 bg-white/[0.03] p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted">Комментарий</p>

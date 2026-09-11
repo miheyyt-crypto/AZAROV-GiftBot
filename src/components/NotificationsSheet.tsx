@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { ProfileSheet } from '@/components/ProfileSheet'
 import { CoinIcon } from '@/components/CoinIcon'
@@ -60,7 +61,7 @@ function NotificationDetail({
       ? meta.reward
       : null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[490] flex items-end justify-center">
       <button
         type="button"
@@ -117,7 +118,8 @@ function NotificationDetail({
           Закрыть
         </button>
       </section>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

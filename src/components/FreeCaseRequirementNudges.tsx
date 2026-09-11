@@ -54,7 +54,7 @@ export function FreeCaseRequirementNudges() {
 
   return createPortal(
     <div
-      className="pointer-events-none fixed inset-x-0 z-[55] mx-auto w-full max-w-lg px-4"
+      className="pointer-events-none fixed inset-x-0 z-[61] mx-auto w-full max-w-lg px-4"
       style={{
         bottom: 'calc(var(--nav-height) + var(--safe-area-bottom) + 0.5rem)',
       }}

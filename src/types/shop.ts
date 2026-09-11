@@ -63,6 +63,7 @@ export interface ShopOrder {
   createdAt: string
   updatedAt?: string
   completedAt?: string | null
+  rejectionReason?: string | null
   metadata?: Record<string, string>
 }
 

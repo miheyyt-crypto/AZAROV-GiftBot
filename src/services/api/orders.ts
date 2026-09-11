@@ -14,7 +14,7 @@ function mapLegacyStatus(status: ShopOrder['status']): OrderStatus {
     case 'cancelled':
       return 'cancelled'
     case 'rejected':
-      return 'cancelled'
+      return 'rejected'
     default:
       return 'pending'
   }
@@ -22,6 +22,10 @@ function mapLegacyStatus(status: ShopOrder['status']): OrderStatus {
 
 export function mapShopOrderToOrder(order: ShopOrder): Order {
   const product = getProductById(order.productId)
+  const rejectionReason =
+    typeof order.rejectionReason === 'string' && order.rejectionReason.trim()
+      ? order.rejectionReason.trim()
+      : undefined
 
   return {
     id: order.orderId,
@@ -42,6 +46,7 @@ export function mapShopOrderToOrder(order: ShopOrder): Order {
     donateText: order.metadata?.donateText,
     trackUrl: order.metadata?.trackUrl,
     welvuraId: order.metadata?.welvuraId,
+    rejectionReason,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt ?? order.completedAt ?? order.createdAt,
   }

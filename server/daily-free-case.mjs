@@ -81,7 +81,7 @@ function grantDailyFreeCaseReward(store, user, reward, openingId) {
       source: 'daily_free_case',
       rewardId: reward.id,
     })
-    if (!credit.granted && credit.reason !== 'duplicate') {
+    if (!credit.granted && credit.reason !== 'already_granted') {
       return { ok: false, reason: credit.reason || 'credit_failed' }
     }
     return { ok: true, credited: 'COINS', amount }
