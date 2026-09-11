@@ -544,44 +544,147 @@ body {
   --roll-glass-bg: rgb(22 16 34 / 72%);
   --roll-glass-border: rgb(255 255 255 / 10%);
   --roll-glass-shadow: 0 8px 28px rgb(0 0 0 / 35%);
-  /* Header + stats + pot + status + bet chrome + nav + safe areas */
+  /*
+    Chrome ABOVE+BELOW the wheel canvas (header, stats, pot, bet, list peek, nav, safe).
+    Pointer/status live inside the shell — subtracted separately from height budget.
+  */
   --roll-chrome: calc(
-    var(--safe-area-top) + var(--safe-area-bottom) + var(--nav-height) + 18.5rem
+    var(--safe-area-top) + var(--safe-area-bottom) + var(--nav-height) + 22rem
   );
+  --roll-shell-extra: 4.25rem; /* nick+pointer row + status under canvas */
+  --roll-gap: clamp(0.35rem, 1.1vh, 0.75rem);
+  --roll-wheel-max: 18.75rem; /* 300px — never giant on desktop */
   position: relative;
   isolation: isolate;
+  container-type: inline-size;
+  container-name: roll;
   background: #140a22;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-bottom: clamp(0.75rem, 2vh, 1.5rem) !important;
 }
 
-/* Wheel diameter: fit width AND remaining viewport height (Telegram Mini App). */
+.roll-page > header {
+  margin-bottom: var(--roll-gap);
+  flex-shrink: 0;
+}
+
+.roll-page .roll-stats {
+  margin-bottom: var(--roll-gap);
+  flex-shrink: 0;
+}
+
+.roll-page .roll-pot-pill-wrap {
+  margin-bottom: var(--roll-gap);
+  flex-shrink: 0;
+}
+
+.roll-page .roll-players {
+  margin-bottom: var(--roll-gap);
+  flex-shrink: 0;
+  max-height: min(40vh, 22rem);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.roll-page .roll-players > [data-roll-players-scroll] {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Centered stage — wheel never stretches to full desktop width */
+.roll-wheel-stage {
+  display: flex;
+  width: 100%;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  margin-bottom: var(--roll-gap);
+}
+
+/*
+  Shell WIDTH = canvas diameter (aspect-square child).
+  Cap by: parent width, rem max, cqw, and remaining viewport height
+  (dvh/svh minus chrome minus pointer/status chrome inside shell).
+*/
 .roll-wheel-shell {
-  width: min(100%, 82vw, 360px, calc(100dvh - var(--roll-chrome)));
+  width: min(
+    100%,
+    var(--roll-wheel-max),
+    88cqw,
+    48dvh,
+    48svh,
+    calc(100dvh - var(--roll-chrome) - var(--roll-shell-extra)),
+    calc(100svh - var(--roll-chrome) - var(--roll-shell-extra))
+  );
   max-width: 100%;
   margin-inline: auto;
+  margin-bottom: 0;
 }
 
-@media (max-height: 760px) {
+.roll-wheel-shell .roll-wheel-canvas {
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  max-width: 100%;
+}
+
+@media (max-height: 780px) {
   .roll-page {
     --roll-chrome: calc(
-      var(--safe-area-top) + var(--safe-area-bottom) + var(--nav-height) + 20.5rem
+      var(--safe-area-top) + var(--safe-area-bottom) + var(--nav-height) + 23.5rem
     );
+    --roll-wheel-max: 16.5rem; /* 264px */
+    --roll-gap: clamp(0.25rem, 0.9vh, 0.55rem);
   }
 
   .roll-page.ui-page {
-    padding-top: calc(0.65rem + var(--safe-area-top));
-    padding-bottom: 1rem;
-  }
-
-  .roll-wheel-shell {
-    margin-bottom: 0.25rem;
+    padding-top: calc(0.55rem + var(--safe-area-top));
   }
 }
 
-@media (max-height: 680px) {
+@media (max-height: 700px) {
   .roll-page {
     --roll-chrome: calc(
-      var(--safe-area-top) + var(--safe-area-bottom) + var(--nav-height) + 21.5rem
+      var(--safe-area-top) + var(--safe-area-bottom) + var(--nav-height) + 24.5rem
     );
+    --roll-wheel-max: 14.5rem; /* 232px */
+    --roll-shell-extra: 3.5rem;
+  }
+}
+
+@media (max-height: 640px) {
+  .roll-page {
+    --roll-wheel-max: 12.75rem; /* 204px */
+  }
+}
+
+/* Wide / Telegram Desktop: keep Roll compact & centered, not stretched */
+@media (min-width: 540px) {
+  .roll-page {
+    --roll-wheel-max: 17.5rem; /* 280px */
+  }
+
+  .roll-wheel-shell {
+    width: min(
+      100%,
+      var(--roll-wheel-max),
+      70cqw,
+      42dvh,
+      42svh,
+      calc(100dvh - var(--roll-chrome) - var(--roll-shell-extra)),
+      calc(100svh - var(--roll-chrome) - var(--roll-shell-extra))
+    );
+  }
+}
+
+@media (min-width: 540px) and (min-height: 820px) {
+  .roll-page {
+    --roll-wheel-max: 19rem; /* 304px — still capped */
   }
 }
 

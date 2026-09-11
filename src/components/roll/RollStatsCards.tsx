@@ -56,7 +56,7 @@ function StatCard({
 
 export function RollStatsCards({ previousGame, topGame }: RollStatsCardsProps) {
   return (
-    <div className="mb-3 flex gap-2.5">
+    <div className="roll-stats flex gap-2.5">
       <StatCard label="Пред. игра" card={previousGame} accentClass="text-[#7dd3fc]" />
       <StatCard label="Топ игра" card={topGame} accentClass="text-[#f0c14b]" />
     </div>

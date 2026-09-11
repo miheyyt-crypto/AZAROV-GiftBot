@@ -498,9 +498,9 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
   }, [])
 
   return (
-    <div className="roll-wheel-shell relative mb-2">
+    <div className="roll-wheel-shell relative">
       {/* Nickname above pointer */}
-      <div className="relative z-30 flex h-[min(50px,8vw)] flex-col items-center justify-end">
+      <div className="relative z-30 flex h-[min(2.75rem,7.5cqw)] flex-col items-center justify-end">
         <div
           className={[
             'mb-0.5 flex h-7 max-w-[min(220px,70%)] items-center justify-center rounded-full border border-white/15 bg-[#1a1528]/95 px-3 shadow-lg backdrop-blur-sm transition-opacity',
@@ -514,8 +514,8 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
         {/* Pointer — rounded triangle, white stroke + dark fill, above rim */}
         <svg
           className="relative z-30 translate-y-[3px] drop-shadow-[0_2px_4px_rgba(0,0,0,0.55)]"
-          width="32"
-          height="28"
+          width="28"
+          height="24"
           viewBox="0 0 32 28"
           aria-hidden
         >
@@ -529,7 +529,7 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
         </svg>
       </div>
 
-      <div className="relative z-10 mx-auto aspect-square w-full">
+      <div className="roll-wheel-canvas relative z-10 mx-auto">
         <canvas
           ref={canvasRef}
           className="size-full"
@@ -538,7 +538,7 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
         />
       </div>
 
-      <p className="mt-2.5 text-center text-[13px] font-semibold text-white/55">
+      <p className="mt-1.5 text-center text-[12px] font-semibold text-white/55 sm:text-[13px]">
         {statusLabel(round)}
       </p>
     </div>

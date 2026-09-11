@@ -42,7 +42,7 @@ export function RollPlayerList({ round }: RollPlayerListProps) {
   const slice = virtualized ? players.slice(start, end) : players
 
   return (
-    <section className="roll-glass rounded-[20px] p-3.5">
+    <section className="roll-glass roll-players rounded-[20px] p-3.5">
       <div className="mb-3 flex items-center justify-between gap-2">
         <p className="text-[14px] font-bold text-white">
           {formatPlayersCountLabel(count)}
@@ -60,6 +60,7 @@ export function RollPlayerList({ round }: RollPlayerListProps) {
       ) : virtualized ? (
         <div
           ref={scrollRef}
+          data-roll-players-scroll
           className="overflow-y-auto overscroll-contain"
           style={{ maxHeight: viewportH }}
           onScroll={(e) => setScrollTop((e.target as HTMLDivElement).scrollTop)}
@@ -73,11 +74,13 @@ export function RollPlayerList({ round }: RollPlayerListProps) {
           </ul>
         </div>
       ) : (
-        <ul className="space-y-2">
-          {slice.map((player) => (
-            <PlayerRow key={player.userId} player={player} />
-          ))}
-        </ul>
+        <div data-roll-players-scroll className="min-h-0 overflow-y-auto overscroll-contain">
+          <ul className="space-y-2">
+            {slice.map((player) => (
+              <PlayerRow key={player.userId} player={player} />
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   )

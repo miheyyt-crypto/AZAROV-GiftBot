@@ -538,7 +538,7 @@ export function RollPage() {
 
   return (
     <div
-      className="roll-page ui-page relative overflow-x-hidden pb-8"
+      className="roll-page ui-page relative overflow-x-hidden"
       data-roll-phase={round?.status || 'waiting'}
     >
       <RollLavaBackground phase={round?.status || 'waiting'} />
@@ -553,7 +553,7 @@ export function RollPage() {
 
       <RollConfetti active={showConfetti && winnerCardOpen} burstKey={confettiKey} />
 
-      <header className="mb-3 flex items-center gap-3">
+      <header className="flex items-center gap-3">
         <button
           type="button"
           onClick={() => navigate(ROUTES.home)}
@@ -584,16 +584,18 @@ export function RollPage() {
         round?.status === 'completed') &&
         potPill(round)}
 
-      <RollWheel
-        round={displayRound}
-        countdownMs={countdownMs}
-        spinClock={spinClock}
-      />
+      <div className="roll-wheel-stage">
+        <RollWheel
+          round={displayRound}
+          countdownMs={countdownMs}
+          spinClock={spinClock}
+        />
+      </div>
 
       {bettingOpen ? (
-        <section className="roll-glass mb-3 rounded-[20px] p-4">
+        <section className="roll-glass roll-bet-panel rounded-[20px] p-3.5 sm:p-4">
           {addMode ? (
-            <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="mb-2.5 flex items-center justify-between gap-2 sm:mb-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[#9b96ab]">
                 Добавить к ставке
               </p>
@@ -604,27 +606,27 @@ export function RollPage() {
               </p>
             </div>
           ) : (
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[#9b96ab]">
+            <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-[#9b96ab] sm:mb-3">
               Сумма ставки
             </p>
           )}
 
-          <div className="mb-3 flex items-center gap-2">
+          <div className="mb-2.5 flex items-center gap-2 sm:mb-3">
             <button
               type="button"
               onClick={() => updateBet(Math.max(amountFloor, Math.floor(bet / 2)))}
-              className="flex size-11 items-center justify-center rounded-[12px] border border-white/10 bg-[#1a1524] text-sm font-bold text-white active:scale-95"
+              className="flex size-10 shrink-0 items-center justify-center rounded-[12px] border border-white/10 bg-[#1a1524] text-sm font-bold text-white active:scale-95 sm:size-11"
             >
               ½
             </button>
             <button
               type="button"
               onClick={() => updateBet(bet * 2)}
-              className="flex size-11 items-center justify-center rounded-[12px] border border-white/10 bg-[#1a1524] text-sm font-bold text-white active:scale-95"
+              className="flex size-10 shrink-0 items-center justify-center rounded-[12px] border border-white/10 bg-[#1a1524] text-sm font-bold text-white active:scale-95 sm:size-11"
             >
               2×
             </button>
-            <label className="flex min-h-11 min-w-0 flex-1 items-center justify-between rounded-full border border-[rgb(139_61_255/35%)] bg-[#0c0914] px-4">
+            <label className="flex min-h-10 min-w-0 flex-1 items-center justify-between rounded-full border border-[rgb(139_61_255/35%)] bg-[#0c0914] px-3 sm:min-h-11 sm:px-4">
               <input
                 type="text"
                 inputMode="numeric"
@@ -635,20 +637,20 @@ export function RollPage() {
                 onBlur={() => syncBetValue(bet)}
                 placeholder="Введите сумму"
                 aria-label={addMode ? 'Сумма пополнения' : 'Сумма ставки'}
-                className="min-w-0 flex-1 bg-transparent text-lg font-bold tabular-nums text-white outline-none placeholder:text-white/30"
+                className="min-w-0 flex-1 bg-transparent text-base font-bold tabular-nums text-white outline-none placeholder:text-white/30 sm:text-lg"
               />
               <CoinIcon className="size-5 shrink-0" />
             </label>
             <button
               type="button"
               onClick={() => updateBet(amount)}
-              className="min-h-11 rounded-[12px] border border-white/10 bg-[#1a1524] px-3 text-xs font-bold text-white active:scale-95"
+              className="min-h-10 shrink-0 rounded-[12px] border border-white/10 bg-[#1a1524] px-2.5 text-[11px] font-bold text-white active:scale-95 sm:min-h-11 sm:px-3 sm:text-xs"
             >
               МАКС
             </button>
           </div>
 
-          <div className="mb-3 flex flex-wrap gap-2">
+          <div className="mb-2.5 flex flex-wrap gap-2 sm:mb-3">
             {quickBets.map((value) => {
               const disabled = value > amount
               const active = bet === value
@@ -676,7 +678,7 @@ export function RollPage() {
             type="button"
             disabled={!canSubmit}
             onClick={() => void handleBet()}
-            className="flex w-full items-center justify-center gap-2 rounded-[16px] bg-[linear-gradient(180deg,#ffb020,#f59e0b)] px-4 py-3.5 text-[15px] font-bold text-[#1a1000] shadow-[0_8px_24px_rgb(245_158_11/35%)] transition active:scale-[0.98] disabled:opacity-45"
+            className="flex w-full items-center justify-center gap-2 rounded-[16px] bg-[linear-gradient(180deg,#ffb020,#f59e0b)] px-4 py-3 text-[15px] font-bold text-[#1a1000] shadow-[0_8px_24px_rgb(245_158_11/35%)] transition active:scale-[0.98] disabled:opacity-45 sm:py-3.5"
           >
             {busy
               ? addMode
@@ -697,19 +699,19 @@ export function RollPage() {
       ) : null}
 
       {viewerInRound && round?.status === 'waiting' ? (
-        <p className="roll-glass mb-3 rounded-[14px] px-3 py-2.5 text-center text-[13px] text-white/65">
+        <p className="roll-glass roll-hint rounded-[14px] px-3 py-2.5 text-center text-[13px] text-white/65">
           Можно увеличить ставку, пока ждём второго игрока.
         </p>
       ) : null}
 
       {viewerInRound && round?.status === 'betting' ? (
-        <p className="roll-glass mb-3 rounded-[14px] px-3 py-2.5 text-center text-[13px] text-white/65">
+        <p className="roll-glass roll-hint rounded-[14px] px-3 py-2.5 text-center text-[13px] text-white/65">
           Можно увеличить ставку до конца отсчёта.
         </p>
       ) : null}
 
       {viewerInRound && !bettingOpen ? (
-        <p className="roll-glass mb-3 rounded-[14px] px-3 py-2.5 text-center text-[13px] text-white/65">
+        <p className="roll-glass roll-hint rounded-[14px] px-3 py-2.5 text-center text-[13px] text-white/65">
           Ставки закрыты
         </p>
       ) : null}
@@ -722,7 +724,7 @@ export function RollPage() {
 function potPill(round: RollRound | null) {
   const pot = Number(round?.pot) || 0
   return (
-    <div className="mb-2 flex justify-center">
+    <div className="roll-pot-pill-wrap flex justify-center">
       <div className="roll-pot-pill">
         <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/45">
           Всего
