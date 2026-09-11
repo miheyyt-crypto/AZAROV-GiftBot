@@ -47,7 +47,30 @@
         pointer-events: none;
       }
       #azarov-boot-splash picture {
-        display: contents;
+        display: block;
+        line-height: 0;
+      }
+      #azarov-boot-splash .splash-media-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        isolation: isolate;
+      }
+      /* Soft dark haze over edges — blends media into pure black */
+      #azarov-boot-splash .splash-media-wrap::after {
+        content: '';
+        position: absolute;
+        inset: -14%;
+        z-index: 1;
+        pointer-events: none;
+        background: radial-gradient(
+          ellipse 56% 54% at 50% 44%,
+          transparent 38%,
+          rgb(0 0 0 / 28%) 58%,
+          rgb(0 0 0 / 78%) 78%,
+          #000 100%
+        );
       }
       #azarov-boot-splash .splash-media {
         width: min(58vw, 14rem);
@@ -58,6 +81,27 @@
         display: block;
         user-select: none;
         -webkit-user-drag: none;
+        /* Feathered alpha at edges (transparent rim) */
+        -webkit-mask-image: radial-gradient(
+          ellipse 74% 70% at 50% 44%,
+          #000 0%,
+          #000 42%,
+          rgb(0 0 0 / 0.75) 62%,
+          rgb(0 0 0 / 0.25) 82%,
+          transparent 100%
+        );
+        mask-image: radial-gradient(
+          ellipse 74% 70% at 50% 44%,
+          #000 0%,
+          #000 42%,
+          rgb(0 0 0 / 0.75) 62%,
+          rgb(0 0 0 / 0.25) 82%,
+          transparent 100%
+        );
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-size: 100% 100%;
+        mask-size: 100% 100%;
       }
       #azarov-boot-splash .splash-brand {
         margin: 1.25rem 0 0;
@@ -113,20 +157,22 @@
       aria-hidden="false"
       data-shown-at=""
     >
-      <picture>
-        <source
-          srcset="/splash-loading.webp?v=%ASSET_BUILD_ID%"
-          type="image/webp"
-        />
-        <img
-          class="splash-media"
-          src="/splash-loading.gif?v=%ASSET_BUILD_ID%"
-          alt=""
-          width="240"
-          height="318"
-          decoding="async"
-        />
-      </picture>
+      <div class="splash-media-wrap">
+        <picture>
+          <source
+            srcset="/splash-loading.webp?v=%ASSET_BUILD_ID%"
+            type="image/webp"
+          />
+          <img
+            class="splash-media"
+            src="/splash-loading.gif?v=%ASSET_BUILD_ID%"
+            alt=""
+            width="240"
+            height="318"
+            decoding="async"
+          />
+        </picture>
+      </div>
       <p class="splash-brand">Загрузка Бота...</p>
     </div>
     <script>
