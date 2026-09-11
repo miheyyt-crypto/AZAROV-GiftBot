@@ -20,7 +20,6 @@ import {
   installDesktopScrollTrace,
   runRollScrollTimeline,
 } from '@/lib/roll-scroll-debug'
-import { resetAppScrollPosition } from '@/lib/telegram'
 import {
   ROLL_MAX_PLAYERS,
   ROLL_MIN_BET,
@@ -114,8 +113,8 @@ export function RollPage() {
   useLayoutEffect(() => {
     installDesktopScrollTrace()
     captureScrollTrace('T2-roll-mount-layout')
-    resetAppScrollPosition()
-    captureScrollTrace('T3-roll-after-layout-reset')
+    // Route-level reset lives in AppLayout. Do NOT re-zero here after mount —
+    // late resets (and former debug probes) made Desktop appear unscrollable.
   }, [])
 
   useEffect(() => {
@@ -126,9 +125,7 @@ export function RollPage() {
     if (!bootstrapped) {
       return
     }
-    captureScrollTrace('T11-bootstrapped-before-reset')
-    resetAppScrollPosition()
-    captureScrollTrace('T11-bootstrapped-after-reset')
+    captureScrollTrace('T11-bootstrapped')
     runRollScrollTimeline(true)
   }, [bootstrapped])
 
@@ -568,7 +565,7 @@ export function RollPage() {
 
   return (
     <div
-      className="roll-page ui-page relative overflow-x-hidden overflow-y-visible pb-8"
+      className="roll-page ui-page relative pb-8"
       data-roll-phase={round?.status || 'waiting'}
     >
       <RollLavaBackground phase={round?.status || 'waiting'} />

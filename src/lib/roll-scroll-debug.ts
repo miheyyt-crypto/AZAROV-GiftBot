@@ -163,10 +163,15 @@ function updateHud(store: TraceStore): void {
     'ROLL SCROLL TRACE (desktop diag)',
     `route=${last?.route ?? '?'} rest=${last?.scrollRestoration ?? '?'}`,
     `root.scrollTop=${last?.rootTop ?? '?'}  winY=${last?.scrollY ?? '?'}`,
+    `root.clientH=${last?.rootClientH ?? '?'} scrollH=${last?.rootScrollH ?? '?'}`,
+    `canScrollRoot=${last && last.rootScrollH > last.rootClientH + 1 ? 'YES' : 'NO'}`,
+    `root.overflowY=${last?.rootOverflowY ?? '?'}`,
     `docTop=${last?.docTop ?? '?'} bodyTop=${last?.bodyTop ?? '?'}`,
     `header.top=${last?.headerTop ?? 'n/a'} wheel.top=${last?.wheelTop ?? 'n/a'}`,
     `bet.top=${last?.betTop ?? 'n/a'} list.top=${last?.listTop ?? 'n/a'}`,
-    `rootRect.top=${last?.rootRectTop ?? '?'} clientH=${last?.rootClientH ?? '?'}`,
+    `rootRect.top=${last?.rootRectTop ?? '?'}`,
+    `body.ovY=${getComputedStyle(document.body).overflowY} html.ovY=${getComputedStyle(document.documentElement).overflowY}`,
+    `scrollingElement=${document.scrollingElement?.tagName ?? '?'}`,
     `active=${last?.active ?? '?'}`,
     lastChange
       ? `LAST CHANGE ${lastChange.from}→${lastChange.to} via=${lastChange.via}`
@@ -174,7 +179,7 @@ function updateHud(store: TraceStore): void {
     '--- timeline ---',
     ...store.points.slice(-12).map((p) => {
       const dt = p.t - store.startedAt
-      return `T+${dt}ms ${p.label} root=${p.rootTop} H=${p.headerTop} W=${p.wheelTop}`
+      return `T+${dt}ms ${p.label} root=${p.rootTop} H=${p.headerTop} W=${p.wheelTop} sH=${p.rootScrollH}`
     }),
   ]
   hud.textContent = lines.join('\n')
@@ -313,7 +318,7 @@ export function withScrollResetMarker(fn: () => void): void {
   }
 }
 
-/** Full post-navigation timeline (debug timers only — not a fix). */
+/** Full post-navigation timeline — READ ONLY (never forces scrollTop). */
 export function runRollScrollTimeline(bootstrapped: boolean): void {
   if (!isDesktopScrollTraceEnabled()) {
     return
@@ -328,22 +333,6 @@ export function runRollScrollTimeline(bootstrapped: boolean): void {
   })
   window.setTimeout(() => captureScrollTrace('T8-100ms'), 100)
   window.setTimeout(() => captureScrollTrace('T9-300ms'), 300)
-
-  // Diagnostic probe: force 0, then watch whether something bumps it back.
-  window.setTimeout(() => {
-    withScrollResetMarker(() => {
-      const root = document.getElementById('root')
-      if (root) {
-        root.scrollTop = 0
-      }
-      window.scrollTo(0, 0)
-    })
-    captureScrollTrace('T-probe-forced-zero')
-  }, 320)
-  window.setTimeout(() => captureScrollTrace('T-probe-0ms-after-zero'), 320)
-  window.setTimeout(() => captureScrollTrace('T-probe-16ms-after-zero'), 336)
-  window.setTimeout(() => captureScrollTrace('T-probe-100ms-after-zero'), 420)
-  window.setTimeout(() => captureScrollTrace('T-probe-300ms-after-zero'), 620)
 }
 
 export function traceBeforeNavigate(to: string): void {

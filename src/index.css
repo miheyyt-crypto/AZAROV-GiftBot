@@ -116,9 +116,17 @@ body {
 
 /*
  * Desktop / Telegram Desktop ONLY (class set in telegram.ts).
- * Outer Mini App iframe has a FIXED height and does not scroll the document.
- * Put the single vertical scroll on #root so Header→Bet→List→Nav stay reachable.
- * Mobile never gets this class — iPhone/Android keep document scroll above.
+ *
+ * LIVE HUD proved (cda0e1a):
+ *   root.scrollTop=0, header.top=16, bet.top=566, root.clientHeight=561
+ *   active document scroller reported as BODY
+ * So this is NOT mid-page scrollTop — Bet/List sit below a locked viewport
+ * while BODY is hidden and nested pages steal overflow-y (see below).
+ *
+ * Contract:
+ *   html/body → overflow hidden, fixed viewport height
+ *   #root → ONLY vertical scroller, scrollHeight must grow with Roll flow
+ *   .ui-page/.roll-page → must NOT become nested scrollports
  */
 html.app-desktop-embed,
 html.app-desktop-embed body {
@@ -134,12 +142,12 @@ html.app-desktop-embed #root {
   height: var(--tg-viewport-stable-height, 100dvh);
   max-height: var(--tg-viewport-stable-height, 100dvh);
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: scroll;
+  /* !important: beat base #root overflow-y:visible and any TG injection */
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   touch-action: pan-y;
-  /* Prevent browser scroll anchoring from shifting #root when Roll content mounts */
   overflow-anchor: none;
 }
 
@@ -148,20 +156,32 @@ html.app-desktop-embed {
   --safe-area-bottom: 0px;
 }
 
-/* Desktop Roll: same structure, slightly tighter wheel on short windows so
-   bet panel sits closer without hiding anything. Scroll still available. */
+/*
+ * CRITICAL: overflow-x:hidden + overflow-y:visible computes to overflow-y:auto
+ * (CSS2.1). That turns .ui-page/.roll-page into nested scrollports. On Desktop
+ * body is overflow:hidden, so the wheel never reaches #root → Bet/List unreachable
+ * even though they are in normal flow (header.top=16, bet.top=566).
+ *
+ * overflow-x: clip does NOT force overflow-y to auto. Keep content in flow.
+ */
+html.app-desktop-embed .ui-page,
+html.app-desktop-embed .roll-page {
+  overflow-x: clip !important;
+  overflow-y: visible !important;
+  height: auto !important;
+  max-height: none !important;
+}
+
+html.app-desktop-embed #root > * {
+  /* Ensure React tree sizes to content so #root.scrollHeight > clientHeight */
+  height: auto;
+  max-height: none;
+  min-height: min-content;
+}
+
+/* Desktop Roll: keep existing column; do not shrink wheel further here. */
 html.app-desktop-embed .roll-page.ui-page {
   padding-top: 1rem;
-}
-
-html.app-desktop-embed .roll-wheel-stage {
-  max-width: min(82vw, 340px);
-}
-
-@media (max-height: 780px) {
-  html.app-desktop-embed .roll-wheel-stage {
-    max-width: min(70vw, 280px);
-  }
 }
 
 body {
