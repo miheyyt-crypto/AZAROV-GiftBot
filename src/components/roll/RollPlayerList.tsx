@@ -93,19 +93,23 @@ function PlayerRow({
     chance: number
   }
 }) {
+  const [imgFailed, setImgFailed] = useState(false)
+  const hasPhoto = Boolean(player.photoUrl) && !imgFailed
+
   return (
     <li className="flex h-[54px] items-center gap-3 rounded-[16px] border border-white/[0.06] bg-[#181322] px-3 py-2.5">
-      {player.photoUrl ? (
+      {hasPhoto ? (
         <img
           src={player.photoUrl}
           alt=""
           className="size-10 shrink-0 rounded-full object-cover"
           draggable={false}
           loading="lazy"
+          onError={() => setImgFailed(true)}
         />
       ) : (
         <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-bold text-white/70">
-          {formatRollUser(player).slice(1, 2).toUpperCase()}
+          {formatRollUser(player).replace('@', '').slice(0, 1).toUpperCase()}
         </div>
       )}
       <div className="min-w-0 flex-1">

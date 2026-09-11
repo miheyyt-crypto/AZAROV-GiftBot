@@ -111,15 +111,21 @@ export type RollStatePayload = {
   config: RollConfig
 }
 
-/** Smooth deceleration — fast start, soft stop (easeOutQuint). */
-export function easeOutQuint(t: number): number {
+/** Smooth long deceleration for 10s spin (continuous derivative, soft stop). */
+export function easeOutSpin(t: number): number {
   const x = Math.min(1, Math.max(0, t))
-  return 1 - (1 - x) ** 5
+  // Power 6 → fast start, long soft tail; no discontinuous jump at t=0/1.
+  return 1 - (1 - x) ** 6
 }
 
-/** @deprecated use easeOutQuint */
+/** @deprecated alias — prefer easeOutSpin */
+export function easeOutQuint(t: number): number {
+  return easeOutSpin(t)
+}
+
+/** @deprecated use easeOutSpin */
 export function easeOutQuart(t: number): number {
-  return easeOutQuint(t)
+  return easeOutSpin(t)
 }
 
 export function normalizeDeg(deg: number): number {

@@ -118,7 +118,7 @@ test('target angle lands inside winner segment under pointer', () => {
   assert.equal(normalizeDeg(370), 10)
 })
 
-test('first bet starts countdown; more players can join; double bet rejected', async () => {
+test('second bet starts countdown; more players can join; double bet rejected', async () => {
   await withTempStore(async () => {
     const joined = withStore((store) => {
       seedUser(store, 101, 10_000, 'alice')
@@ -126,13 +126,14 @@ test('first bet starts countdown; more players can join; double bet rejected', a
       seedUser(store, 103, 10_000, 'carol')
       const a = placeRollBetOnStore(store, 101, { bet: 900, requestId: 'r1' })
       assert.equal(a.success, true)
-      assert.equal(a.round.status, 'betting')
-      assert.ok(a.round.bettingEndsAt)
+      assert.equal(a.round.status, 'waiting')
+      assert.equal(a.round.players.length, 1)
       assert.equal(store.users['101'].balance, 9100)
 
       const b = placeRollBetOnStore(store, 102, { bet: 100, requestId: 'r2' })
       assert.equal(b.success, true)
       assert.equal(b.round.status, 'betting')
+      assert.ok(b.round.bettingEndsAt)
       assert.equal(b.round.players[0].chance, 90)
       assert.equal(b.round.players[1].chance, 10)
 
@@ -245,26 +246,22 @@ test('bet after deadline rejected; settle pays once; reload settle noop', async 
   })
 })
 
-test('solo player: first bet starts timer and can win alone', async () => {
+test('solo player waits — timer does not start until second player', async () => {
   await withTempStore(async () => {
     withStore((store) => {
       seedUser(store, 901, 5_000, 'solo')
       const bet = placeRollBetOnStore(store, 901, { bet: 500, requestId: 'solo1' })
       assert.equal(bet.success, true)
-      assert.equal(bet.round.status, 'betting')
+      assert.equal(bet.round.status, 'waiting')
       assert.equal(bet.round.players.length, 1)
+      assert.equal(bet.round.bettingStartedAt, null)
+      assert.equal(bet.round.bettingEndsAt, null)
 
-      const ends = Date.parse(bet.round.bettingEndsAt)
-      advanceRollRoundOnStore(store, ends)
-      const spinning = peekRollRoundOnStore(store)
-      assert.equal(spinning.status, 'spinning')
-      assert.equal(spinning.winnerUserId, 901)
-      assert.equal(spinning.payout, 500)
-
-      advanceRollRoundOnStore(store, Date.parse(spinning.spinEndsAt) + 10)
-      const finished = store.rollRounds[store.rollMeta.lastResultRoundId]
-      assert.equal(finished.status, 'completed')
-      assert.equal(store.users['901'].balance, 5_000)
+      // Advancing time must NOT start spin with a single player.
+      advanceRollRoundOnStore(store, Date.now() + 60_000)
+      const still = peekRollRoundOnStore(store)
+      assert.equal(still.status, 'waiting')
+      assert.equal(still.players.length, 1)
     })
   })
 })

@@ -173,14 +173,9 @@ export function RollPage() {
           endsAtMs,
           targetAngle: Number(r.targetAngle),
         }
+        // Freeze clock for this round — poll/SSE skew must NOT rewrite timeline mid-spin.
         setSpinClock((prev) => {
-          if (
-            prev &&
-            prev.roundId === next.roundId &&
-            prev.targetAngle === next.targetAngle &&
-            Math.abs(prev.startedAtMs - next.startedAtMs) < 2 &&
-            Math.abs(prev.endsAtMs - next.endsAtMs) < 2
-          ) {
+          if (prev && prev.roundId === next.roundId && prev.targetAngle === next.targetAngle) {
             return prev
           }
           return next
@@ -478,7 +473,13 @@ export function RollPage() {
         </section>
       ) : null}
 
-      {viewerInRound && (round?.status === 'waiting' || round?.status === 'betting') ? (
+      {viewerInRound && round?.status === 'waiting' ? (
+        <p className="mb-3 rounded-[14px] border border-white/10 bg-[#120e1a] px-3 py-2.5 text-center text-[13px] text-white/65">
+          Ставка принята. Ожидаем второго игрока…
+        </p>
+      ) : null}
+
+      {viewerInRound && round?.status === 'betting' ? (
         <p className="mb-3 rounded-[14px] border border-white/10 bg-[#120e1a] px-3 py-2.5 text-center text-[13px] text-white/65">
           Ставка принята. Можно присоединяться другим игрокам…
         </p>

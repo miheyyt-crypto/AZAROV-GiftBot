@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
-  easeOutQuint,
+  easeOutSpin,
   findSegmentAtLocalDeg,
   formatRollUser,
   pointerLocalDeg,
@@ -29,30 +29,37 @@ const OUTER_RATIO = 0.48
 const HUB_RATIO = 0.165
 const AVATAR_RATIO = 0.31
 
-const avatarCache = new Map<string, HTMLImageElement | 'error'>()
+type AvatarCacheEntry = { img: HTMLImageElement; status: 'loading' | 'ready' | 'error' }
 
-function loadAvatar(url: string, onReady: () => void): HTMLImageElement | null {
+const avatarCache = new Map<string, AvatarCacheEntry>()
+
+/**
+ * Telegram CDN does not send CORS headers. Setting crossOrigin='anonymous'
+ * causes the load to fail → letter fallback. Draw without CORS (display-only).
+ */
+function loadAvatar(url: string, onReady: () => void): AvatarCacheEntry | null {
   if (!url) {
     return null
   }
   const cached = avatarCache.get(url)
-  if (cached === 'error') {
-    return null
-  }
-  if (cached instanceof HTMLImageElement) {
-    return cached.complete ? cached : null
+  if (cached) {
+    return cached
   }
   const img = new Image()
   img.decoding = 'async'
-  img.crossOrigin = 'anonymous'
-  avatarCache.set(url, img)
-  img.onload = () => onReady()
+  // Do NOT set crossOrigin — Telegram photo URLs are not CORS-enabled.
+  const entry: AvatarCacheEntry = { img, status: 'loading' }
+  avatarCache.set(url, entry)
+  img.onload = () => {
+    entry.status = 'ready'
+    onReady()
+  }
   img.onerror = () => {
-    avatarCache.set(url, 'error')
+    entry.status = 'error'
     onReady()
   }
   img.src = url
-  return null
+  return entry
 }
 
 function avatarScaleForSegment(sizeDeg: number): number {
@@ -71,7 +78,7 @@ function avatarScaleForSegment(sizeDeg: number): number {
 function rotationAt(spinClock: RollSpinClock, nowMs: number): number {
   const duration = Math.max(1, spinClock.endsAtMs - spinClock.startedAtMs)
   const t = Math.min(1, Math.max(0, (nowMs - spinClock.startedAtMs) / duration))
-  return spinClock.targetAngle * easeOutQuint(t)
+  return spinClock.targetAngle * easeOutSpin(t)
 }
 
 function pickAvatarSegments(segments: RollSegment[]): RollSegment[] {
@@ -90,15 +97,39 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const rotationRef = useRef(0)
   const rafRef = useRef<number | null>(null)
+  const spinLoopKeyRef = useRef<string | null>(null)
+  const segmentsRef = useRef(segments)
+  const statusRef = useRef(round?.status || 'waiting')
+  const potRef = useRef(round?.pot || 0)
+  const countdownRef = useRef(countdownMs)
   const lastNickRef = useRef<string | null>(null)
   const [pointerUser, setPointerUser] = useState<string | null>(null)
-  const [avatarTick, setAvatarTick] = useState(0)
+  const avatarTickRef = useRef(0)
 
   const pot = round?.pot || 0
   const status = round?.status || 'waiting'
   const showNick = status === 'spinning' || status === 'completed' || status === 'locked'
 
-  const bumpAvatars = () => setAvatarTick((n) => n + 1)
+  segmentsRef.current = segments
+  statusRef.current = status
+  potRef.current = pot
+  countdownRef.current = countdownMs
+
+  const bumpAvatars = () => {
+    avatarTickRef.current += 1
+    // Repaint at current rotation without restarting the spin loop.
+    paint(rotationRef.current)
+  }
+
+  const syncNickname = (angle: number, segs: RollSegment[]) => {
+    const local = pointerLocalDeg(angle)
+    const seg = findSegmentAtLocalDeg(segs, local)
+    const nick = seg ? formatRollUser(seg) : null
+    if (nick !== lastNickRef.current) {
+      lastNickRef.current = nick
+      setPointerUser(nick)
+    }
+  }
 
   const paint = (rotationDeg: number) => {
     const canvas = canvasRef.current
@@ -109,6 +140,11 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
     if (!ctx) {
       return
     }
+
+    const segs = segmentsRef.current
+    const curStatus = statusRef.current
+    const curPot = potRef.current
+    const curCountdown = countdownRef.current
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
     const cssSize = canvas.clientWidth || 300
@@ -131,7 +167,7 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
     ctx.translate(cx, cy)
     ctx.rotate((rotationDeg * Math.PI) / 180)
 
-    if (segments.length === 0) {
+    if (segs.length === 0) {
       ctx.beginPath()
       ctx.arc(0, 0, outerR, 0, Math.PI * 2)
       ctx.fillStyle = '#1a1524'
@@ -142,7 +178,7 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
       ctx.arc(0, 0, outerR, 0, Math.PI * 2)
       ctx.clip()
 
-      for (const seg of segments) {
+      for (const seg of segs) {
         const start = ((seg.startDeg - 90) * Math.PI) / 180
         const end = ((seg.endDeg - 90) * Math.PI) / 180
         ctx.beginPath()
@@ -151,14 +187,11 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
         ctx.closePath()
         ctx.fillStyle = seg.color
         ctx.fill()
-        ctx.strokeStyle = 'rgba(0,0,0,0.25)'
-        ctx.lineWidth = Math.max(0.5, size * 0.0015)
-        ctx.stroke()
       }
       ctx.restore()
     }
 
-    const avatars = pickAvatarSegments(segments)
+    const avatars = pickAvatarSegments(segs)
     for (const seg of avatars) {
       const mid = seg.startDeg + seg.sizeDeg / 2
       const rad = ((mid - 90) * Math.PI) / 180
@@ -175,15 +208,22 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
       ctx.lineWidth = Math.max(1, size * 0.0045)
       ctx.stroke()
 
-      const img = seg.photoUrl ? loadAvatar(seg.photoUrl, bumpAvatars) : null
-      if (img) {
+      const entry = seg.photoUrl ? loadAvatar(seg.photoUrl, bumpAvatars) : null
+      if (entry?.status === 'ready') {
         ctx.save()
         ctx.beginPath()
         ctx.arc(x, y, r, 0, Math.PI * 2)
         ctx.clip()
-        ctx.drawImage(img, x - r, y - r, r * 2, r * 2)
+        ctx.drawImage(entry.img, x - r, y - r, r * 2, r * 2)
         ctx.restore()
+      } else if (entry?.status === 'loading') {
+        // Soft placeholder while photo loads — not a letter.
+        ctx.beginPath()
+        ctx.arc(x, y, r, 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(255,255,255,0.12)'
+        ctx.fill()
       } else {
+        // No photo or load error → initial fallback.
         ctx.fillStyle = 'rgba(255,255,255,0.8)'
         ctx.font = `bold ${Math.max(10, r * 0.9)}px system-ui, sans-serif`
         ctx.textAlign = 'center'
@@ -194,14 +234,12 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
 
     ctx.restore()
 
-    // Outer ring (screen space — does not rotate with wheel content borders already clipped)
     ctx.beginPath()
     ctx.arc(cx, cy, outerR, 0, Math.PI * 2)
     ctx.strokeStyle = 'rgba(255,255,255,0.22)'
     ctx.lineWidth = Math.max(2, size * 0.012)
     ctx.stroke()
 
-    // Hub
     const grad = ctx.createRadialGradient(cx, cy - hubR * 0.2, 0, cx, cy, hubR)
     grad.addColorStop(0, '#1c1728')
     grad.addColorStop(1, '#0a0810')
@@ -217,13 +255,12 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
     ctx.fillStyle = grad
     ctx.fill()
 
-    // Center label
-    const label = centerLabelText(status, countdownMs, pot)
+    const label = centerLabelText(curStatus, curCountdown, curPot)
     ctx.fillStyle = label.fill
     ctx.font = label.font(size)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    if (status === 'waiting' && pot > 0) {
+    if (curStatus === 'waiting' && curPot > 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.4)'
       ctx.font = `600 ${Math.max(9, size * 0.026)}px system-ui, sans-serif`
       ctx.fillText('Всего', cx, cy - size * 0.04)
@@ -235,75 +272,92 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
     }
   }
 
-  const syncNickname = (angle: number) => {
-    const local = pointerLocalDeg(angle)
-    const seg = findSegmentAtLocalDeg(segments, local)
-    const nick = seg ? formatRollUser(seg) : null
-    if (nick !== lastNickRef.current) {
-      lastNickRef.current = nick
-      setPointerUser(nick)
-    }
-  }
-
   const applyRotation = (angle: number) => {
     rotationRef.current = angle
     paint(angle)
-    syncNickname(angle)
+    syncNickname(angle, segmentsRef.current)
   }
 
+  // Static / betting / completed paints — never restarts an active spin loop.
   useEffect(() => {
+    if (spinLoopKeyRef.current) {
+      // Spin loop owns painting; just refresh nickname/segments via next frame.
+      return
+    }
     paint(rotationRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [segments, status, pot, countdownMs, avatarTick])
+  }, [segments, status, pot, countdownMs])
 
+  // One continuous rAF loop per spin identity. Poll/SSE must NOT restart it.
   useEffect(() => {
-    if (rafRef.current != null) {
-      cancelAnimationFrame(rafRef.current)
-      rafRef.current = null
-    }
-
-    if (spinClock && (status === 'spinning' || status === 'locked')) {
-      const tick = () => {
-        const angle = rotationAt(spinClock, Date.now())
-        applyRotation(angle)
-        if (Date.now() < spinClock.endsAtMs) {
-          rafRef.current = requestAnimationFrame(tick)
-        } else {
-          applyRotation(spinClock.targetAngle)
-          rafRef.current = null
-        }
-      }
-      applyRotation(rotationAt(spinClock, Date.now()))
-      rafRef.current = requestAnimationFrame(tick)
-      return () => {
+    if (!spinClock || (status !== 'spinning' && status !== 'locked')) {
+      if (status === 'completed' && round?.targetAngle != null) {
+        spinLoopKeyRef.current = null
         if (rafRef.current != null) {
           cancelAnimationFrame(rafRef.current)
           rafRef.current = null
         }
+        applyRotation(Number(round.targetAngle))
+        return
       }
-    }
-
-    if (status === 'completed' && round?.targetAngle != null) {
-      applyRotation(Number(round.targetAngle))
+      if (status === 'waiting' || status === 'betting') {
+        spinLoopKeyRef.current = null
+        if (rafRef.current != null) {
+          cancelAnimationFrame(rafRef.current)
+          rafRef.current = null
+        }
+        applyRotation(0)
+        lastNickRef.current = null
+        setPointerUser(null)
+      }
       return
     }
 
-    if (status === 'waiting' || status === 'betting') {
-      applyRotation(0)
-      lastNickRef.current = null
-      setPointerUser(null)
+    const key = `${spinClock.roundId}:${spinClock.targetAngle}:${spinClock.startedAtMs}:${spinClock.endsAtMs}`
+    if (spinLoopKeyRef.current === key && rafRef.current != null) {
+      // Same frozen clock — keep running loop; do not restart.
+      return
     }
 
-    return undefined
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+    spinLoopKeyRef.current = key
+    const clock = spinClock
+
+    const tick = () => {
+      const now = Date.now()
+      const angle = rotationAt(clock, now)
+      applyRotation(angle)
+      if (now < clock.endsAtMs) {
+        rafRef.current = requestAnimationFrame(tick)
+      } else {
+        applyRotation(clock.targetAngle)
+        rafRef.current = null
+      }
+    }
+    applyRotation(rotationAt(clock, Date.now()))
+    rafRef.current = requestAnimationFrame(tick)
+
+    return () => {
+      // Only cancel if this effect instance still owns the loop key.
+      if (spinLoopKeyRef.current === key && rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+        spinLoopKeyRef.current = null
+      }
+    }
+    // Intentionally omit segments — updates flow through refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spinClock, status, round?.targetAngle, segments])
+  }, [spinClock, status, round?.targetAngle])
 
   useEffect(() => {
     const onResize = () => paint(rotationRef.current)
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [segments, status, pot, countdownMs])
+  }, [])
 
   return (
     <div className="relative mx-auto mb-3 w-full max-w-[340px]">
@@ -381,8 +435,12 @@ function centerLabelText(
 
 function statusLabel(round: RollRound | null): string {
   const status = round?.status
+  const count = round?.players?.length || 0
   if (status === 'waiting') {
-    return 'Ожидаем первую ставку...'
+    if (count === 0) {
+      return 'Ожидаем первую ставку...'
+    }
+    return 'Ожидаем второго игрока...'
   }
   if (status === 'betting') {
     return 'Приём ставок'

@@ -299,7 +299,7 @@ export function advanceRollRoundOnStore(store, atMs = nowMs()) {
 
   const before = roundFingerprint(round)
 
-  if (round.status === 'waiting' && (round.players || []).length >= 1) {
+  if (round.status === 'waiting' && (round.players || []).length >= 2) {
     round.status = 'betting'
     round.bettingStartedAt = new Date(atMs).toISOString()
     round.bettingEndsAt = new Date(atMs + ROLL_BETTING_DURATION_MS).toISOString()

@@ -81,12 +81,23 @@ export function RollWinnerCard({ round, open, onClose, onEntered }: RollWinnerCa
                 alt=""
                 className="size-10 shrink-0 rounded-full object-cover shadow-[0_2px_8px_rgb(0_0_0/45%)] ring-[1.5px] ring-white/20"
                 draggable={false}
+                onError={(e) => {
+                  ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+                  const fallback = e.currentTarget.nextElementSibling
+                  if (fallback instanceof HTMLElement) {
+                    fallback.classList.remove('hidden')
+                  }
+                }}
               />
-            ) : (
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-bold text-white/70 ring-[1.5px] ring-white/20">
-                {formatRollUser(round.winner).replace('@', '').slice(0, 1).toUpperCase()}
-              </div>
-            )}
+            ) : null}
+            <div
+              className={[
+                'flex size-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-bold text-white/70 ring-[1.5px] ring-white/20',
+                round.winner.photoUrl ? 'hidden' : '',
+              ].join(' ')}
+            >
+              {formatRollUser(round.winner).replace('@', '').slice(0, 1).toUpperCase()}
+            </div>
 
             <div className="min-w-0 flex-1">
               <p className="truncate text-[15px] font-bold leading-tight text-white">
