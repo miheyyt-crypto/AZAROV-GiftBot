@@ -3,7 +3,6 @@ import { Route, Routes } from 'react-router-dom'
 import { AuthGate } from '@/components/AuthGate'
 import { PresenceHeartbeat } from '@/components/PresenceHeartbeat'
 import { ServerNotificationToasts } from '@/components/ServerNotificationToasts'
-import { WelvuraPopup } from '@/components/WelvuraPopup'
 import { useAppSession } from '@/hooks/useAppSession'
 import { AppLayout } from '@/layouts/AppLayout'
 import { ROUTES } from '@/lib/constants'
@@ -37,7 +36,6 @@ export default function App() {
       <AuthenticatedSessionEffects />
       <PresenceHeartbeat />
       <ServerNotificationToasts />
-      <WelvuraPopup />
       <Routes>
         <Route element={<AppLayout />}>
           <Route path={ROUTES.home} element={<HomePage />} />
