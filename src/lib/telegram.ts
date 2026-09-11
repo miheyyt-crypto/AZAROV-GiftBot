@@ -37,6 +37,17 @@ export function initTelegramWebApp(): TelegramWebApp | null {
   webApp.expand()
   syncTelegramSafeArea(webApp)
 
+  // Re-sync when Telegram chrome / viewport changes (Android bars, Desktop resize).
+  const anyApp = webApp as TelegramWebApp & {
+    onEvent?: (event: string, cb: () => void) => void
+  }
+  if (typeof anyApp.onEvent === 'function') {
+    const resync = () => syncTelegramSafeArea(webApp)
+    anyApp.onEvent('viewportChanged', resync)
+    anyApp.onEvent('safeAreaChanged', resync)
+    anyApp.onEvent('contentSafeAreaChanged', resync)
+  }
+
   return webApp
 }
 
@@ -56,10 +67,12 @@ function syncTelegramSafeArea(webApp: TelegramWebApp): void {
       Number(anyApp.contentSafeAreaInset?.bottom) || 0,
       Number(anyApp.safeAreaInset?.bottom) || 0,
     )
-    if (top > 0) {
+    // Cap absurd insets (some Desktop builds report large title-bar values).
+    // Keep env() fallbacks if Telegram reports nothing useful.
+    if (top > 0 && top < 120) {
       root.style.setProperty('--safe-area-top', `${top}px`)
     }
-    if (bottom > 0) {
+    if (bottom > 0 && bottom < 80) {
       root.style.setProperty('--safe-area-bottom', `${bottom}px`)
     }
   } catch {

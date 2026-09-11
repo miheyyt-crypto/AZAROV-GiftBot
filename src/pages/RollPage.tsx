@@ -536,7 +536,7 @@ export function RollPage() {
 
   return (
     <div
-      className="roll-page ui-page relative overflow-x-hidden pb-8"
+      className="roll-page ui-page relative overflow-x-hidden overflow-y-visible pb-8"
       data-roll-phase={round?.status || 'waiting'}
     >
       <RollLavaBackground phase={round?.status || 'waiting'} />

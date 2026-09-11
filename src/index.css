@@ -92,8 +92,30 @@
 html,
 body,
 #root {
-  height: 100%;
+  /* CRITICAL: min-height (not height) so Roll/content can grow and scroll.
+     height:100% + overflow-x:hidden locked the viewport and clipped
+     bet controls on Android / Telegram Desktop WebViews. iOS often still
+     allowed rubber-band access — which is why only iPhone looked fine. */
+  min-height: 100%;
+  min-height: 100dvh;
+  height: auto;
   overflow-x: hidden;
+}
+
+html,
+body {
+  /* Prefer document scroll. Telegram Desktop sometimes injects overflow:hidden —
+     keep auto so betting controls stay reachable below the fold. */
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+#root {
+  overflow-y: visible;
+  min-height: 100%;
+  min-height: 100dvh;
 }
 
 body {
@@ -127,11 +149,12 @@ body {
 .ui-page {
   min-height: 100%;
   overflow-x: hidden;
+  overflow-y: visible;
   background: transparent;
   padding-left: 1rem;
   padding-right: 1rem;
   padding-bottom: 1.5rem;
-  padding-top: calc(1rem + var(--safe-area-top));
+  padding-top: calc(1rem + var(--safe-area-top, env(safe-area-inset-top, 0px)));
 }
 
 .ui-card {
