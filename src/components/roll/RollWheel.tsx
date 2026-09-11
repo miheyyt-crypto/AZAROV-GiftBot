@@ -28,9 +28,10 @@ const MAX_AVATARS = 48
 const OUTER_RATIO = 0.48
 const HUB_RATIO = 0.165
 const AVATAR_RATIO = 0.31
-/** Waiting placeholder — matches reference 50/50 orange + lavender. */
-const WAITING_ORANGE = '#ff6a2b'
-const WAITING_PURPLE = '#b39ddb'
+/** Waiting placeholder — 8 alternating purple wedges (reference). */
+const WAITING_PURPLE_A = '#6236ab'
+const WAITING_PURPLE_B = '#3a2468'
+const WAITING_SEGMENTS = 8
 
 type AvatarCacheEntry = { img: HTMLImageElement; status: 'loading' | 'ready' | 'error' }
 
@@ -187,18 +188,17 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
       ctx.beginPath()
       ctx.arc(0, 0, outerR, 0, Math.PI * 2)
       ctx.clip()
-      // Two equal 180° sectors — orange then purple (reference waiting look)
-      for (const [startDeg, endDeg, color] of [
-        [0, 180, WAITING_ORANGE],
-        [180, 360, WAITING_PURPLE],
-      ] as const) {
+      const slice = 360 / WAITING_SEGMENTS
+      for (let i = 0; i < WAITING_SEGMENTS; i += 1) {
+        const startDeg = i * slice
+        const endDeg = startDeg + slice
         const start = ((startDeg - 90) * Math.PI) / 180
         const end = ((endDeg - 90) * Math.PI) / 180
         ctx.beginPath()
         ctx.moveTo(0, 0)
         ctx.arc(0, 0, outerR, start, end, false)
         ctx.closePath()
-        ctx.fillStyle = color
+        ctx.fillStyle = i % 2 === 0 ? WAITING_PURPLE_A : WAITING_PURPLE_B
         ctx.fill()
       }
       ctx.restore()
@@ -291,7 +291,13 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
     ctx.fillStyle = grad
     ctx.fill()
 
-    const label = centerLabelText(curStatus, curCountdown, curPot, waitingPlaceholder)
+    const label = centerLabelText(
+      curStatus,
+      curCountdown,
+      curPot,
+      waitingPlaceholder,
+      segs.length,
+    )
     ctx.fillStyle = label.fill
     ctx.font = label.font(size)
     ctx.textAlign = 'center'
@@ -429,8 +435,9 @@ function centerLabelText(
   countdownMs: number | null,
   pot: number,
   waitingPlaceholder: boolean,
+  playerCount: number,
 ): { text: string; fill: string; font: (size: number) => string } {
-  if (waitingPlaceholder || (status === 'waiting' && pot <= 0)) {
+  if (waitingPlaceholder || (status === 'waiting' && playerCount === 0)) {
     return {
       text: 'Ожидание',
       fill: '#ffffff',
@@ -449,21 +456,22 @@ function centerLabelText(
   }
   if (status === 'spinning' || status === 'locked' || status === 'completed') {
     return {
-      text: 'ИГРА',
-      fill: '#8cff4a',
-      font: (size) => `800 ${Math.max(14, size * 0.06)}px system-ui, sans-serif`,
+      text: 'Игра',
+      fill: '#ffffff',
+      font: (size) => `800 ${Math.max(14, size * 0.055)}px system-ui, sans-serif`,
     }
   }
+  // 1+ players while waiting for second — show «Игра», never the stake sum.
   if (status === 'waiting') {
     return {
-      text: pot > 0 ? pot.toLocaleString('ru-RU') : 'Ожидание',
-      fill: 'rgba(255,255,255,0.92)',
-      font: (size) => `700 ${Math.max(12, size * 0.045)}px system-ui, sans-serif`,
+      text: 'Игра',
+      fill: '#ffffff',
+      font: (size) => `700 ${Math.max(12, size * 0.048)}px system-ui, sans-serif`,
     }
   }
   return {
     text: 'Ожидание',
-    fill: 'rgba(255,255,255,0.85)',
+    fill: '#ffffff',
     font: (size) => `700 ${Math.max(11, size * 0.042)}px system-ui, sans-serif`,
   }
 }
