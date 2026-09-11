@@ -538,6 +538,156 @@ body {
   will-change: transform;
 }
 
+/* ── Roll visual theme ───────────────────────────────────────────── */
+
+.roll-page {
+  --roll-glass-bg: rgb(22 16 34 / 72%);
+  --roll-glass-border: rgb(255 255 255 / 10%);
+  --roll-glass-shadow: 0 8px 28px rgb(0 0 0 / 35%);
+  position: relative;
+  isolation: isolate;
+  background: #07050f;
+}
+
+.roll-glass {
+  border: 1px solid var(--roll-glass-border);
+  background: var(--roll-glass-bg);
+  box-shadow: var(--roll-glass-shadow);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.roll-balance-pill {
+  border: 1px solid rgb(251 191 36 / 32%);
+  background: rgb(8 6 14 / 65%);
+  box-shadow: 0 0 16px rgb(251 191 36 / 12%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.roll-pot-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid rgb(125 211 252 / 22%);
+  background: rgb(14 10 24 / 70%);
+  padding: 0.4rem 0.9rem;
+  box-shadow: 0 4px 18px rgb(0 0 0 / 28%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.roll-lava {
+  --roll-lava-opacity: 0.55;
+}
+
+.roll-lava--spin {
+  --roll-lava-opacity: 0.72;
+}
+
+.roll-lava--result {
+  --roll-lava-opacity: 0.8;
+}
+
+.roll-lava__base {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 120% 80% at 50% -10%, rgb(88 40 160 / 35%), transparent 55%),
+    radial-gradient(ellipse 90% 70% at 100% 100%, rgb(40 20 90 / 45%), transparent 50%),
+    linear-gradient(180deg, #120a1c 0%, #08050f 45%, #05030a 100%);
+}
+
+.roll-lava__blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(56px);
+  opacity: calc(0.45 * var(--roll-lava-opacity));
+  will-change: transform, opacity;
+  transform: translate3d(0, 0, 0);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+.roll-lava__blob--a {
+  width: 58%;
+  height: 42%;
+  left: -12%;
+  top: 8%;
+  background: radial-gradient(circle, rgb(148 80 220 / 70%) 0%, transparent 70%);
+  animation-name: roll-lava-drift-a;
+  animation-duration: 22s;
+}
+
+.roll-lava__blob--b {
+  width: 52%;
+  height: 38%;
+  right: -16%;
+  top: 28%;
+  background: radial-gradient(circle, rgb(90 120 255 / 55%) 0%, transparent 70%);
+  animation-name: roll-lava-drift-b;
+  animation-duration: 28s;
+}
+
+.roll-lava__blob--c {
+  width: 60%;
+  height: 44%;
+  left: 10%;
+  bottom: -8%;
+  background: radial-gradient(circle, rgb(200 70 180 / 45%) 0%, transparent 70%);
+  animation-name: roll-lava-drift-c;
+  animation-duration: 26s;
+}
+
+.roll-lava__blob--d {
+  width: 40%;
+  height: 30%;
+  left: 35%;
+  top: 42%;
+  background: radial-gradient(circle, rgb(110 60 200 / 40%) 0%, transparent 70%);
+  animation-name: roll-lava-drift-d;
+  animation-duration: 32s;
+  opacity: calc(0.3 * var(--roll-lava-opacity));
+}
+
+.roll-lava__vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at center, transparent 35%, rgb(0 0 0 / 45%) 100%);
+  pointer-events: none;
+}
+
+@keyframes roll-lava-drift-a {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(8%, 6%, 0) scale(1.08); }
+}
+
+@keyframes roll-lava-drift-b {
+  from { transform: translate3d(0, 0, 0) scale(1.05); }
+  to { transform: translate3d(-10%, 8%, 0) scale(1); }
+}
+
+@keyframes roll-lava-drift-c {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(6%, -7%, 0) scale(1.1); }
+}
+
+@keyframes roll-lava-drift-d {
+  from { transform: translate3d(0, 0, 0) scale(0.95); }
+  to { transform: translate3d(-5%, 4%, 0) scale(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roll-lava__blob {
+    animation: none !important;
+    opacity: 0.28;
+  }
+}
+
 @keyframes level-up-burst {
   0% {
     opacity: 0;

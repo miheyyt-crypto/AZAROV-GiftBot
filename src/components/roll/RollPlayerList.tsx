@@ -42,7 +42,7 @@ export function RollPlayerList({ round }: RollPlayerListProps) {
   const slice = virtualized ? players.slice(start, end) : players
 
   return (
-    <section className="rounded-[20px] border border-white/[0.08] bg-[#120e1a]/95 p-3.5">
+    <section className="roll-glass rounded-[20px] p-3.5">
       <div className="mb-3 flex items-center justify-between gap-2">
         <p className="text-[14px] font-bold text-white">
           {formatPlayersCountLabel(count)}
@@ -54,7 +54,9 @@ export function RollPlayerList({ round }: RollPlayerListProps) {
       </div>
 
       {players.length === 0 ? (
-        <p className="py-3 text-center text-[13px] text-white/40">Ожидаем игроков...</p>
+        <p className="py-3 text-center text-[13px] text-white/45">
+          Сделайте ставку, чтобы начать игру
+        </p>
       ) : virtualized ? (
         <div
           ref={scrollRef}
@@ -97,7 +99,7 @@ function PlayerRow({
   const hasPhoto = Boolean(player.photoUrl) && !imgFailed
 
   return (
-    <li className="flex h-[54px] items-center gap-3 rounded-[16px] border border-white/[0.06] bg-[#181322] px-3 py-2.5">
+    <li className="flex h-[54px] items-center gap-3 rounded-[16px] border border-white/[0.07] bg-[rgb(18_12_28/75%)] px-3 py-2.5">
       {hasPhoto ? (
         <img
           src={player.photoUrl}

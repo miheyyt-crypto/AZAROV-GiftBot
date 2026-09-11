@@ -16,19 +16,19 @@ function StatCard({
   accentClass: string
 }) {
   return (
-    <div className="min-w-0 flex-1 rounded-[16px] border border-white/10 bg-[#14101c]/95 px-3 py-2.5 shadow-[0_4px_16px_rgb(0_0_0/25%)]">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-white/45">{label}</p>
+    <div className="roll-glass min-w-0 flex-1 rounded-[16px] px-3 py-2.5">
+      <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-white/45">{label}</p>
       {card ? (
         <div className="mt-1.5 flex items-center gap-2">
           {card.winnerPhotoUrl ? (
             <img
               src={card.winnerPhotoUrl}
               alt=""
-              className="size-8 shrink-0 rounded-full object-cover"
+              className="size-8 shrink-0 rounded-full object-cover ring-1 ring-white/15"
               draggable={false}
             />
           ) : (
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold text-white/70">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold text-white/70 ring-1 ring-white/15">
               {(card.winnerUsername || '?').slice(0, 1).toUpperCase()}
             </div>
           )}
@@ -36,8 +36,11 @@ function StatCard({
             <p className="truncate text-[12px] font-semibold text-white">
               {formatRollUser({ username: card.winnerUsername })}
             </p>
-            <p className="text-[11px] tabular-nums text-[#7dd3fc]">
-              {Number(card.winnerChance || 0).toFixed(0)}%
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/40">
+              Шанс{' '}
+              <span className="tabular-nums text-[#7dd3fc]">
+                {Number(card.winnerChance || 0).toFixed(0)}%
+              </span>
             </p>
           </div>
           <p className={`shrink-0 text-[12px] font-bold tabular-nums ${accentClass}`}>

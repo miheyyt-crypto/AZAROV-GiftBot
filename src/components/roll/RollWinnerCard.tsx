@@ -47,9 +47,10 @@ export function RollWinnerCard({ round, open, onClose, onEntered }: RollWinnerCa
         <div
           className={[
             'relative overflow-hidden rounded-[22px]',
-            'border border-white/[0.08]',
-            'bg-[linear-gradient(180deg,#1c1826_0%,#141018_55%,#100e16_100%)]',
-            'shadow-[0_16px_48px_rgb(0_0_0/55%),0_0_0_1px_rgb(139_61_255/12%),0_0_40px_rgb(88_40_160/18%)]',
+            'border border-white/[0.1]',
+            'bg-[linear-gradient(180deg,rgb(36_28_52/96%)_0%,rgb(18_14_28/98%)_55%,rgb(12_10_20/99%)_100%)]',
+            'shadow-[0_16px_48px_rgb(0_0_0/55%),0_0_0_1px_rgb(139_61_255/18%),0_0_48px_rgb(88_40_160/28%)]',
+            'backdrop-blur-md',
             'px-4 pb-4 pt-2.5',
           ].join(' ')}
         >

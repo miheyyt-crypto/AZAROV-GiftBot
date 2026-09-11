@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { CoinIcon } from '@/components/CoinIcon'
 import { useNotifications } from '@/components/NotificationProvider'
 import { RollConfetti } from '@/components/roll/RollConfetti'
+import { RollLavaBackground } from '@/components/roll/RollLavaBackground'
 import { RollPlayerList } from '@/components/roll/RollPlayerList'
 import { RollStatsCards } from '@/components/roll/RollStatsCards'
 import { RollWheel, type RollSpinClock } from '@/components/roll/RollWheel'
@@ -391,7 +392,12 @@ export function RollPage() {
   }
 
   return (
-    <div className="roll-page ui-page relative overflow-x-hidden pb-8">
+    <div
+      className="roll-page ui-page relative overflow-x-hidden pb-8"
+      data-roll-phase={round?.status || 'waiting'}
+    >
+      <RollLavaBackground phase={round?.status || 'waiting'} />
+
       {winnerCardRound ? (
         <RollWinnerCard
           round={winnerCardRound}
@@ -417,17 +423,17 @@ export function RollPage() {
         <button
           type="button"
           onClick={() => navigate(ROUTES.home)}
-          className="flex size-10 shrink-0 items-center justify-center rounded-[12px] border border-white/10 bg-[#16121f] text-white/80 transition active:scale-95"
+          className="roll-glass flex size-10 shrink-0 items-center justify-center rounded-[12px] text-white/85 transition active:scale-95"
           aria-label="В главное меню"
         >
           <ArrowLeft size={18} aria-hidden />
         </button>
-        <h1 className="flex min-w-0 flex-1 items-center gap-2 text-xl font-bold text-white">
+        <h1 className="flex min-w-0 flex-1 items-center gap-2 text-xl font-bold text-white drop-shadow-[0_2px_12px_rgb(0_0_0/45%)]">
           <span aria-hidden>🍥</span>
           <span>Roll</span>
         </h1>
         <div
-          className="inline-flex items-center gap-1.5 rounded-full border border-gold/35 bg-black/40 px-2.5 py-1.5 text-sm font-semibold text-white"
+          className="roll-balance-pill inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-semibold text-white"
           aria-label={`Баланс ${formatted}`}
         >
           <CoinIcon className="size-4" />
@@ -437,16 +443,21 @@ export function RollPage() {
 
       <RollStatsCards previousGame={previousGame} topGame={topGame} />
 
+      {(round?.status === 'waiting' ||
+        round?.status === 'betting' ||
+        round?.status === 'spinning' ||
+        round?.status === 'locked' ||
+        round?.status === 'completed') &&
+        potPill(round)}
+
       <RollWheel
         round={displayRound}
         countdownMs={countdownMs}
         spinClock={spinClock}
       />
 
-      {(round?.status === 'waiting' || round?.status === 'betting') && potLabel(round)}
-
       {bettingOpen ? (
-        <section className="mb-3 rounded-[20px] border border-white/[0.08] bg-[#120e1a] p-4">
+        <section className="roll-glass mb-3 rounded-[20px] p-4">
           {addMode ? (
             <div className="mb-3 flex items-center justify-between gap-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[#9b96ab]">
@@ -552,19 +563,19 @@ export function RollPage() {
       ) : null}
 
       {viewerInRound && round?.status === 'waiting' ? (
-        <p className="mb-3 rounded-[14px] border border-white/10 bg-[#120e1a] px-3 py-2.5 text-center text-[13px] text-white/65">
+        <p className="roll-glass mb-3 rounded-[14px] px-3 py-2.5 text-center text-[13px] text-white/65">
           Можно увеличить ставку, пока ждём второго игрока.
         </p>
       ) : null}
 
       {viewerInRound && round?.status === 'betting' ? (
-        <p className="mb-3 rounded-[14px] border border-white/10 bg-[#120e1a] px-3 py-2.5 text-center text-[13px] text-white/65">
+        <p className="roll-glass mb-3 rounded-[14px] px-3 py-2.5 text-center text-[13px] text-white/65">
           Можно увеличить ставку до конца отсчёта.
         </p>
       ) : null}
 
       {viewerInRound && !bettingOpen ? (
-        <p className="mb-3 rounded-[14px] border border-white/10 bg-[#120e1a] px-3 py-2.5 text-center text-[13px] text-white/65">
+        <p className="roll-glass mb-3 rounded-[14px] px-3 py-2.5 text-center text-[13px] text-white/65">
           Ставки закрыты
         </p>
       ) : null}
@@ -574,14 +585,20 @@ export function RollPage() {
   )
 }
 
-function potLabel(round: RollRound) {
-  if (!round.pot) {
-    return null
-  }
+function potPill(round: RollRound | null) {
+  const pot = Number(round?.pot) || 0
   return (
-    <p className="mb-2 text-center text-[12px] font-semibold text-white/50">
-      Банк: {formatBalance(round.pot)} монет
-    </p>
+    <div className="mb-2 flex justify-center">
+      <div className="roll-pot-pill">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/45">
+          Всего
+        </span>
+        <span className="text-[13px] font-bold tabular-nums text-[#7dd3fc]">
+          {formatBalance(pot)}
+        </span>
+        <CoinIcon className="size-3.5" />
+      </div>
+    </div>
   )
 }
 

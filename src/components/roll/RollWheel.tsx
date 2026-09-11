@@ -28,6 +28,9 @@ const MAX_AVATARS = 48
 const OUTER_RATIO = 0.48
 const HUB_RATIO = 0.165
 const AVATAR_RATIO = 0.31
+/** Waiting placeholder — matches reference 50/50 orange + lavender. */
+const WAITING_ORANGE = '#ff6a2b'
+const WAITING_PURPLE = '#b39ddb'
 
 type AvatarCacheEntry = { img: HTMLImageElement; status: 'loading' | 'ready' | 'error' }
 
@@ -163,15 +166,42 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
     const baseAvatar = size * 0.09
 
     ctx.clearRect(0, 0, size, size)
+
+    // Soft outer glow (screen space, under rotating content)
+    const glow = ctx.createRadialGradient(cx, cy, outerR * 0.55, cx, cy, outerR * 1.18)
+    glow.addColorStop(0, 'rgba(139,61,255,0.0)')
+    glow.addColorStop(0.55, 'rgba(139,61,255,0.12)')
+    glow.addColorStop(1, 'rgba(139,61,255,0)')
+    ctx.beginPath()
+    ctx.arc(cx, cy, outerR * 1.12, 0, Math.PI * 2)
+    ctx.fillStyle = glow
+    ctx.fill()
+
     ctx.save()
     ctx.translate(cx, cy)
     ctx.rotate((rotationDeg * Math.PI) / 180)
 
-    if (segs.length === 0) {
+    const waitingPlaceholder = segs.length === 0
+    if (waitingPlaceholder) {
+      ctx.save()
       ctx.beginPath()
       ctx.arc(0, 0, outerR, 0, Math.PI * 2)
-      ctx.fillStyle = '#1a1524'
-      ctx.fill()
+      ctx.clip()
+      // Two equal 180° sectors — orange then purple (reference waiting look)
+      for (const [startDeg, endDeg, color] of [
+        [0, 180, WAITING_ORANGE],
+        [180, 360, WAITING_PURPLE],
+      ] as const) {
+        const start = ((startDeg - 90) * Math.PI) / 180
+        const end = ((endDeg - 90) * Math.PI) / 180
+        ctx.beginPath()
+        ctx.moveTo(0, 0)
+        ctx.arc(0, 0, outerR, start, end, false)
+        ctx.closePath()
+        ctx.fillStyle = color
+        ctx.fill()
+      }
+      ctx.restore()
     } else {
       ctx.save()
       ctx.beginPath()
@@ -191,7 +221,7 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
       ctx.restore()
     }
 
-    const avatars = pickAvatarSegments(segs)
+    const avatars = waitingPlaceholder ? [] : pickAvatarSegments(segs)
     for (const seg of avatars) {
       const mid = seg.startDeg + seg.sizeDeg / 2
       const rad = ((mid - 90) * Math.PI) / 180
@@ -234,20 +264,26 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
 
     ctx.restore()
 
+    // Crisp rim + soft highlight
     ctx.beginPath()
     ctx.arc(cx, cy, outerR, 0, Math.PI * 2)
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)'
-    ctx.lineWidth = Math.max(2, size * 0.012)
+    ctx.strokeStyle = 'rgba(255,255,255,0.28)'
+    ctx.lineWidth = Math.max(2, size * 0.014)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.arc(cx, cy, outerR - size * 0.008, 0, Math.PI * 2)
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'
+    ctx.lineWidth = Math.max(1, size * 0.006)
     ctx.stroke()
 
-    const grad = ctx.createRadialGradient(cx, cy - hubR * 0.2, 0, cx, cy, hubR)
-    grad.addColorStop(0, '#1c1728')
+    const grad = ctx.createRadialGradient(cx, cy - hubR * 0.25, 0, cx, cy, hubR)
+    grad.addColorStop(0, '#241c34')
     grad.addColorStop(1, '#0a0810')
     ctx.beginPath()
     ctx.arc(cx, cy, hubR, 0, Math.PI * 2)
     ctx.fillStyle = '#0a0810'
     ctx.fill()
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)'
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)'
     ctx.lineWidth = Math.max(1, size * 0.006)
     ctx.stroke()
     ctx.beginPath()
@@ -255,21 +291,12 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
     ctx.fillStyle = grad
     ctx.fill()
 
-    const label = centerLabelText(curStatus, curCountdown, curPot)
+    const label = centerLabelText(curStatus, curCountdown, curPot, waitingPlaceholder)
     ctx.fillStyle = label.fill
     ctx.font = label.font(size)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    if (curStatus === 'waiting' && curPot > 0) {
-      ctx.fillStyle = 'rgba(255,255,255,0.4)'
-      ctx.font = `600 ${Math.max(9, size * 0.026)}px system-ui, sans-serif`
-      ctx.fillText('Всего', cx, cy - size * 0.04)
-      ctx.fillStyle = label.fill
-      ctx.font = label.font(size)
-      ctx.fillText(label.text, cx, cy + size * 0.018)
-    } else {
-      ctx.fillText(label.text, cx, cy)
-    }
+    ctx.fillText(label.text, cx, cy)
   }
 
   const applyRotation = (angle: number) => {
@@ -384,13 +411,13 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
       <div className="relative mx-auto aspect-square w-[min(100%,300px)]">
         <canvas
           ref={canvasRef}
-          className="size-full drop-shadow-[0_0_28px_rgb(139_61_255/18%)]"
+          className="size-full drop-shadow-[0_0_36px_rgb(139_61_255/28%)]"
           role="img"
           aria-label="Roll wheel"
         />
       </div>
 
-      <p className="mt-3 text-center text-[14px] font-semibold text-white/85">
+      <p className="mt-3 text-center text-[13px] font-semibold text-white/55">
         {statusLabel(round)}
       </p>
     </div>
@@ -401,7 +428,15 @@ function centerLabelText(
   status: string,
   countdownMs: number | null,
   pot: number,
+  waitingPlaceholder: boolean,
 ): { text: string; fill: string; font: (size: number) => string } {
+  if (waitingPlaceholder || (status === 'waiting' && pot <= 0)) {
+    return {
+      text: 'Ожидание',
+      fill: '#ffffff',
+      font: (size) => `700 ${Math.max(11, size * 0.042)}px system-ui, sans-serif`,
+    }
+  }
   if (status === 'betting' && countdownMs != null) {
     const sec = Math.max(0, Math.ceil(countdownMs / 1000))
     const mm = String(Math.floor(sec / 60)).padStart(2, '0')
@@ -421,15 +456,15 @@ function centerLabelText(
   }
   if (status === 'waiting') {
     return {
-      text: pot > 0 ? pot.toLocaleString('ru-RU') : '…',
-      fill: 'rgba(255,255,255,0.85)',
-      font: (size) => `700 ${Math.max(14, size * 0.055)}px system-ui, sans-serif`,
+      text: pot > 0 ? pot.toLocaleString('ru-RU') : 'Ожидание',
+      fill: 'rgba(255,255,255,0.92)',
+      font: (size) => `700 ${Math.max(12, size * 0.045)}px system-ui, sans-serif`,
     }
   }
   return {
-    text: '…',
-    fill: 'rgba(255,255,255,0.5)',
-    font: (size) => `700 ${Math.max(14, size * 0.055)}px system-ui, sans-serif`,
+    text: 'Ожидание',
+    fill: 'rgba(255,255,255,0.85)',
+    font: (size) => `700 ${Math.max(11, size * 0.042)}px system-ui, sans-serif`,
   }
 }
 
@@ -438,7 +473,7 @@ function statusLabel(round: RollRound | null): string {
   const count = round?.players?.length || 0
   if (status === 'waiting') {
     if (count === 0) {
-      return 'Ожидаем первую ставку...'
+      return ''
     }
     return 'Ожидаем второго игрока...'
   }
