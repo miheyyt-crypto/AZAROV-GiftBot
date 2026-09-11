@@ -52,23 +52,24 @@
       }
       #azarov-boot-splash .splash-media-wrap {
         position: relative;
+        z-index: 1;
         display: flex;
         align-items: center;
         justify-content: center;
         isolation: isolate;
       }
-      /* Soft dark haze over edges — blends media into pure black */
+      /* Light edge haze only — keep most of the face sharp */
       #azarov-boot-splash .splash-media-wrap::after {
         content: '';
         position: absolute;
-        inset: -14%;
+        inset: -10%;
         z-index: 1;
         pointer-events: none;
         background: radial-gradient(
-          ellipse 56% 54% at 50% 44%,
-          transparent 38%,
-          rgb(0 0 0 / 28%) 58%,
-          rgb(0 0 0 / 78%) 78%,
+          ellipse 78% 74% at 50% 46%,
+          transparent 58%,
+          rgb(0 0 0 / 22%) 78%,
+          rgb(0 0 0 / 72%) 92%,
           #000 100%
         );
       }
@@ -81,21 +82,19 @@
         display: block;
         user-select: none;
         -webkit-user-drag: none;
-        /* Feathered alpha at edges (transparent rim) */
+        /* Soft rim only near the outer edge */
         -webkit-mask-image: radial-gradient(
-          ellipse 74% 70% at 50% 44%,
+          ellipse 88% 86% at 50% 46%,
           #000 0%,
-          #000 42%,
-          rgb(0 0 0 / 0.75) 62%,
-          rgb(0 0 0 / 0.25) 82%,
+          #000 72%,
+          rgb(0 0 0 / 0.7) 88%,
           transparent 100%
         );
         mask-image: radial-gradient(
-          ellipse 74% 70% at 50% 44%,
+          ellipse 88% 86% at 50% 46%,
           #000 0%,
-          #000 42%,
-          rgb(0 0 0 / 0.75) 62%,
-          rgb(0 0 0 / 0.25) 82%,
+          #000 72%,
+          rgb(0 0 0 / 0.7) 88%,
           transparent 100%
         );
         -webkit-mask-repeat: no-repeat;
@@ -104,6 +103,8 @@
         mask-size: 100% 100%;
       }
       #azarov-boot-splash .splash-brand {
+        position: relative;
+        z-index: 5;
         margin: 1.25rem 0 0;
         font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
         font-size: clamp(1.05rem, 4.2vw, 1.35rem);
@@ -113,6 +114,8 @@
         text-align: center;
         color: #f8fafc;
         text-transform: none;
+        text-shadow: 0 1px 10px rgb(0 0 0 / 85%);
+        pointer-events: none;
       }
       #root {
         min-height: 100%;
