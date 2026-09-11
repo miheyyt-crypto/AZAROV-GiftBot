@@ -2,6 +2,7 @@ import {
   Award,
   Bell,
   ChevronRight,
+  Headset,
   History,
   LogOut,
   Package,
@@ -58,6 +59,12 @@ const items: Array<{
     label: 'Достижения',
     icon: Award,
     iconClass: 'bg-fuchsia-500/20 text-fuchsia-400',
+  },
+  {
+    id: 'support',
+    label: 'Тех. поддержка',
+    icon: Headset,
+    iconClass: 'bg-emerald-500/20 text-emerald-300',
   },
 ]
 

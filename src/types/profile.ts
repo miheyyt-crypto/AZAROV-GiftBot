@@ -76,4 +76,5 @@ export type ProfileMenuId =
   | 'inventory'
   | 'orders'
   | 'achievements'
+  | 'support'
   | 'logout'

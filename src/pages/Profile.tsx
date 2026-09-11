@@ -23,7 +23,8 @@ import { useBalance } from '@/hooks/useBalance'
 import { useUserAccount } from '@/hooks/useUserAccount'
 import { useUserProfile } from '@/hooks/useUserProfile'
 import { isMiniAppAuthAvailable } from '@/lib/auth'
-import { ROUTES } from '@/lib/constants'
+import { ROUTES, TELEGRAM_SUPPORT_URL } from '@/lib/constants'
+import { getTelegramWebApp } from '@/lib/telegram'
 import { roundGram } from '@/lib/gramm'
 import { fetchUnreadNotificationCount } from '@/lib/notifications'
 import { subscribeNotificationsUpdated } from '@/lib/notification-events'
@@ -103,6 +104,15 @@ export function Profile() {
     }
     if (id === 'orders') {
       navigate(ROUTES.orders)
+      return
+    }
+    if (id === 'support') {
+      const webApp = getTelegramWebApp()
+      if (webApp?.openTelegramLink) {
+        webApp.openTelegramLink(TELEGRAM_SUPPORT_URL)
+      } else {
+        window.open(TELEGRAM_SUPPORT_URL, '_blank', 'noopener,noreferrer')
+      }
       return
     }
     if (id === 'logout') {
