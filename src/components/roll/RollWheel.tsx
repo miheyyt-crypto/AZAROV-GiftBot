@@ -498,7 +498,7 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
   }, [])
 
   return (
-    <div className="relative mx-auto mb-2 w-full max-w-[min(82vw,360px)]">
+    <div className="roll-wheel-stage relative mx-auto mb-2 w-full max-w-[min(82vw,360px)]">
       {/* Nickname above pointer */}
       <div className="relative z-30 flex h-[50px] flex-col items-center justify-end">
         <div

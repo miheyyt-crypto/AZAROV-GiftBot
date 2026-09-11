@@ -92,10 +92,8 @@
 html,
 body,
 #root {
-  /* CRITICAL: min-height (not height) so Roll/content can grow and scroll.
-     height:100% + overflow-x:hidden locked the viewport and clipped
-     bet controls on Android / Telegram Desktop WebViews. iOS often still
-     allowed rubber-band access — which is why only iPhone looked fine. */
+  /* Mobile (iOS/Android): document grows + scrolls. Do NOT use height:100% here —
+     that clipped bet controls on Android. Desktop uses .app-desktop-embed below. */
   min-height: 100%;
   min-height: 100dvh;
   height: auto;
@@ -104,8 +102,6 @@ body,
 
 html,
 body {
-  /* Prefer document scroll. Telegram Desktop sometimes injects overflow:hidden —
-     keep auto so betting controls stay reachable below the fold. */
   overflow-y: auto !important;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
@@ -116,6 +112,53 @@ body {
   overflow-y: visible;
   min-height: 100%;
   min-height: 100dvh;
+}
+
+/*
+ * Desktop / Telegram Desktop ONLY (class set in telegram.ts).
+ * Outer Mini App iframe has a FIXED height and does not scroll the document.
+ * Put the single vertical scroll on #root so Header→Bet→List→Nav stay reachable.
+ * Mobile never gets this class — iPhone/Android keep document scroll above.
+ */
+html.app-desktop-embed,
+html.app-desktop-embed body {
+  height: var(--tg-viewport-stable-height, 100dvh);
+  max-height: var(--tg-viewport-stable-height, 100dvh);
+  min-height: 0;
+  overflow: hidden !important;
+  overscroll-behavior: none;
+  touch-action: auto;
+}
+
+html.app-desktop-embed #root {
+  height: var(--tg-viewport-stable-height, 100dvh);
+  max-height: var(--tg-viewport-stable-height, 100dvh);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+html.app-desktop-embed {
+  --safe-area-top: 0px;
+  --safe-area-bottom: 0px;
+}
+
+/* Desktop Roll: same structure, slightly tighter wheel on short windows so
+   bet panel sits closer without hiding anything. Scroll still available. */
+html.app-desktop-embed .roll-page.ui-page {
+  padding-top: 1rem;
+}
+
+html.app-desktop-embed .roll-wheel-stage {
+  max-width: min(82vw, 340px);
+}
+
+@media (max-height: 780px) {
+  html.app-desktop-embed .roll-wheel-stage {
+    max-width: min(70vw, 280px);
+  }
 }
 
 body {
