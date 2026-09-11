@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { createPortal } from 'react-dom'
 
 import { useUserAccount } from '@/hooks/useUserAccount'
 import {
@@ -51,9 +52,9 @@ export function FreeCaseRequirementNudges() {
     return null
   }
 
-  return (
+  return createPortal(
     <div
-      className="pointer-events-none fixed inset-x-0 z-40 mx-auto w-full max-w-lg px-4"
+      className="pointer-events-none fixed inset-x-0 z-[55] mx-auto w-full max-w-lg px-4"
       style={{
         bottom: 'calc(var(--nav-height) + var(--safe-area-bottom) + 0.5rem)',
       }}
@@ -77,6 +78,7 @@ export function FreeCaseRequirementNudges() {
           />
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

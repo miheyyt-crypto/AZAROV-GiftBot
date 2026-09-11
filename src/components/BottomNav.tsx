@@ -1,19 +1,26 @@
+import { createPortal } from 'react-dom'
 import { NavLink } from 'react-router-dom'
 
 import { navigationItems } from '@/data/navigation'
 import { ROUTES } from '@/lib/constants'
 
 export function BottomNav() {
-  return (
+  return createPortal(
     <nav
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-50 px-3"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] px-3"
       style={{ paddingBottom: 'calc(0.7rem + var(--safe-area-bottom))' }}
       aria-label="Main navigation"
     >
+      {/* Opaque chrome so page scroll/padding never paints over or through the nav. */}
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 -z-[1] h-[calc(100%+1.25rem)] bg-gradient-to-t from-[#0b0912] from-40% via-[#0b0912]/92 to-transparent"
+        aria-hidden
+      />
+
       <ul
         className={[
           'pointer-events-auto relative mx-auto flex h-[4.25rem] max-w-lg items-end overflow-visible',
-          'rounded-full border border-white/[0.08] bg-[#11101a]/82 px-1.5 pb-2 pt-1.5',
+          'rounded-full border border-white/[0.08] bg-[#11101a]/92 px-1.5 pb-2 pt-1.5',
           'shadow-[0_10px_32px_rgb(0_0_0/40%),inset_0_1px_0_rgb(255_255_255/6%)]',
           'backdrop-blur-xl',
         ].join(' ')}
@@ -82,6 +89,7 @@ export function BottomNav() {
           )
         })}
       </ul>
-    </nav>
+    </nav>,
+    document.body,
   )
 }

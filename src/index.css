@@ -97,7 +97,8 @@ body,
   min-height: 100%;
   min-height: 100dvh;
   height: auto;
-  overflow-x: hidden;
+  overflow-x: clip;
+  background-color: var(--color-bg-dark);
 }
 
 html,
@@ -220,7 +221,8 @@ body {
 
 .ui-page {
   min-height: 100%;
-  overflow-x: hidden;
+  /* clip avoids CSS2.1 overflow-x:hidden → overflow-y:auto nested scrollports */
+  overflow-x: clip;
   overflow-y: visible;
   background: transparent;
   padding-left: 1rem;
