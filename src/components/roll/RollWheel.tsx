@@ -433,7 +433,7 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
 function centerLabelText(
   status: string,
   countdownMs: number | null,
-  pot: number,
+  _pot: number,
   waitingPlaceholder: boolean,
   playerCount: number,
 ): { text: string; fill: string; font: (size: number) => string } {
