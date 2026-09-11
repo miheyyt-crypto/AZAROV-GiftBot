@@ -5,20 +5,21 @@ type RollConfettiProps = {
   burstKey?: string | null
 }
 
-const COLORS = ['#ff6a2b', '#b39ddb', '#4fc3f7', '#66bb6a', '#ffca28', '#ef5350', '#ce93d8']
+const COLORS = ['#ff6a2b', '#b39ddb', '#4fc3f7', '#66bb6a', '#ffca28', '#ef5350', '#ce93d8', '#4ADE80']
 
 export function RollConfetti({ active, burstKey }: RollConfettiProps) {
   const [visible, setVisible] = useState(false)
   const pieces = useMemo(
     () =>
-      Array.from({ length: 28 }, (_, index) => ({
+      Array.from({ length: 22 }, (_, index) => ({
         id: index,
-        left: 8 + ((index * 17) % 84),
-        delay: (index % 7) * 0.05,
-        duration: 1.1 + (index % 5) * 0.12,
+        left: 6 + ((index * 19) % 88),
+        delay: (index % 6) * 0.04,
+        duration: 0.95 + (index % 4) * 0.1,
         color: COLORS[index % COLORS.length],
-        rotate: (index * 47) % 360,
-        size: 6 + (index % 4) * 2,
+        rotate: (index * 51) % 360,
+        size: 5 + (index % 3) * 2,
+        drift: (index % 2 === 0 ? 1 : -1) * (8 + (index % 5) * 3),
       })),
     [],
   )
@@ -29,7 +30,7 @@ export function RollConfetti({ active, burstKey }: RollConfettiProps) {
       return
     }
     setVisible(true)
-    const timer = window.setTimeout(() => setVisible(false), 2200)
+    const timer = window.setTimeout(() => setVisible(false), 1800)
     return () => window.clearTimeout(timer)
   }, [active, burstKey])
 
@@ -38,18 +39,19 @@ export function RollConfetti({ active, burstKey }: RollConfettiProps) {
   }
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden" aria-hidden>
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-[70] h-[280px] overflow-hidden" aria-hidden>
       {pieces.map((piece) => (
         <span
-          key={piece.id}
-          className="roll-confetti-piece absolute top-0 rounded-[2px]"
+          key={`${burstKey}-${piece.id}`}
+          className="roll-confetti-piece absolute top-2 rounded-[1.5px]"
           style={{
             left: `${piece.left}%`,
             width: piece.size,
-            height: piece.size * 1.4,
+            height: piece.size * 1.35,
             background: piece.color,
             animationDelay: `${piece.delay}s`,
             animationDuration: `${piece.duration}s`,
+            ['--roll-confetti-x' as string]: `${piece.drift}px`,
             transform: `rotate(${piece.rotate}deg)`,
           }}
         />

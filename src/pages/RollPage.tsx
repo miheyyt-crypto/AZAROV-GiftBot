@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { CoinIcon } from '@/components/CoinIcon'
 import { useNotifications } from '@/components/NotificationProvider'
+import { RollConfetti } from '@/components/roll/RollConfetti'
 import { RollPlayerList } from '@/components/roll/RollPlayerList'
 import { RollStatsCards } from '@/components/roll/RollStatsCards'
 import { RollWheel, type RollSpinClock } from '@/components/roll/RollWheel'
@@ -190,23 +191,14 @@ export function RollPage() {
         setSpinClock(null)
       }
 
-      const completed =
-        r?.status === 'completed'
-          ? r
-          : payload.lastResult?.status === 'completed'
-            ? payload.lastResult
-            : null
+      const completed = r?.status === 'completed' ? r : null
 
       if (completed && Number(completed.winnerUserId) === Number(account.telegramId) && account.telegramId > 0) {
         if (winnerCardForRound.current !== completed.id) {
           winnerCardForRound.current = completed.id
           setWinnerCardRound(completed)
           setWinnerCardOpen(true)
-          if (confettiForRound.current !== completed.id) {
-            confettiForRound.current = completed.id
-            setConfettiKey(completed.id)
-            setShowConfetti(true)
-          }
+          // Confetti starts after slide-in via onEntered — not here.
         }
       } else if (
         completed &&
@@ -367,8 +359,21 @@ export function RollPage() {
           round={winnerCardRound}
           open={winnerCardOpen}
           onClose={() => setWinnerCardOpen(false)}
+          onEntered={() => {
+            if (!winnerCardRound) {
+              return
+            }
+            if (confettiForRound.current === winnerCardRound.id) {
+              return
+            }
+            confettiForRound.current = winnerCardRound.id
+            setConfettiKey(winnerCardRound.id)
+            setShowConfetti(true)
+          }}
         />
       ) : null}
+
+      <RollConfetti active={showConfetti && winnerCardOpen} burstKey={confettiKey} />
 
       <header className="mb-3 flex items-center gap-3">
         <button
@@ -398,8 +403,6 @@ export function RollPage() {
         round={displayRound}
         countdownMs={countdownMs}
         spinClock={spinClock}
-        showConfetti={showConfetti && winnerCardOpen}
-        confettiKey={confettiKey}
       />
 
       {(round?.status === 'waiting' || round?.status === 'betting') && potLabel(round)}

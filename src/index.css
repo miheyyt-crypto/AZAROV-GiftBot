@@ -506,26 +506,36 @@ body {
 
 @keyframes roll-confetti-fall {
   0% {
-    transform: translate3d(0, -12px, 0) rotate(0deg);
+    transform: translate3d(0, -8px, 0) rotate(0deg);
     opacity: 1;
   }
   100% {
-    transform: translate3d(12px, 220px, 0) rotate(220deg);
+    transform: translate3d(var(--roll-confetti-x, 12px), 200px, 0) rotate(200deg);
     opacity: 0;
   }
 }
 
+.roll-confetti-piece {
+  animation-name: roll-confetti-fall;
+  animation-timing-function: cubic-bezier(0.25, 0.8, 0.35, 1);
+  animation-fill-mode: both;
+  will-change: transform, opacity;
+}
+
 @keyframes roll-winner-in {
   from {
-    transform: translate3d(0, -110%, 0);
+    transform: translate3d(0, -105%, 0);
+    opacity: 1;
   }
   to {
     transform: translate3d(0, 0, 0);
+    opacity: 1;
   }
 }
 
 .roll-winner-card-enter {
-  animation: roll-winner-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: roll-winner-in 320ms cubic-bezier(0.22, 0.9, 0.32, 1) both;
+  will-change: transform;
 }
 
 @keyframes level-up-burst {

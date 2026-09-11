@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { RollConfetti } from '@/components/roll/RollConfetti'
 import {
   easeOutQuint,
   findSegmentAtLocalDeg,
@@ -22,8 +21,6 @@ type RollWheelProps = {
   round: RollRound | null
   countdownMs: number | null
   spinClock: RollSpinClock | null
-  showConfetti: boolean
-  confettiKey?: string | null
 }
 
 const MIN_AVATAR_DEG = 8
@@ -85,7 +82,7 @@ function pickAvatarSegments(segments: RollSegment[]): RollSegment[] {
   return [...eligible].sort((a, b) => b.sizeDeg - a.sizeDeg).slice(0, MAX_AVATARS)
 }
 
-export function RollWheel({ round, countdownMs, spinClock, showConfetti, confettiKey }: RollWheelProps) {
+export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
   const segments = useMemo(
     () => resolveRollSegments(round),
     [round?.id, round?.status, round?.pot, round?.version, round?.players, round?.segments],
@@ -337,7 +334,6 @@ export function RollWheel({ round, countdownMs, spinClock, showConfetti, confett
           role="img"
           aria-label="Roll wheel"
         />
-        <RollConfetti active={showConfetti} burstKey={confettiKey} />
       </div>
 
       <p className="mt-3 text-center text-[14px] font-semibold text-white/85">
@@ -395,7 +391,7 @@ function statusLabel(round: RollRound | null): string {
     return '⚔️ PvP начался'
   }
   if (status === 'completed') {
-    return '⚔️ PvP завершён'
+    return 'Раунд завершён'
   }
   return ''
 }
