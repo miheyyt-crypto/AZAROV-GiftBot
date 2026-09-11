@@ -99,6 +99,9 @@ export function RollPage() {
   const lastRoundIdRef = useRef<string | null>(null)
   const streamOpenRef = useRef(false)
   const forcedFetchAtZero = useRef(false)
+  const forcedFetchAtSpinEnd = useRef(false)
+  const spinClockRef = useRef<RollSpinClock | null>(null)
+  const roundRef = useRef<RollRound | null>(null)
 
   const minBet = config?.minBet ?? ROLL_MIN_BET
   const quickBets = config?.quickBets?.length ? config.quickBets : [...ROLL_QUICK_BETS]
@@ -133,6 +136,90 @@ export function RollPage() {
   )
 
   const serverNowApprox = useCallback(() => Date.now() + skewRef.current, [])
+
+  /** Local spin timeline finished — safe to reveal result UI. */
+  const localSpinFinished = useCallback((roundId: string) => {
+    const clock = spinClockRef.current
+    if (!clock || clock.roundId !== roundId) {
+      return true
+    }
+    return Date.now() >= clock.endsAtMs - 8
+  }, [])
+
+  const revealWinnerUi = useCallback(
+    (r: RollRound) => {
+      if (!r?.id || !r.winner || account.telegramId <= 0) {
+        return
+      }
+      if (Number(r.winnerUserId) !== Number(account.telegramId)) {
+        return
+      }
+      if (winnerCardForRound.current === r.id) {
+        return
+      }
+      if (!localSpinFinished(r.id)) {
+        return
+      }
+      winnerCardForRound.current = r.id
+      setWinnerCardRound(r)
+      setWinnerCardOpen(true)
+      // Confetti starts with card enter — do not wait for slide-in end.
+      if (confettiForRound.current !== r.id) {
+        confettiForRound.current = r.id
+        setConfettiKey(r.id)
+        setShowConfetti(true)
+      }
+    },
+    [account.telegramId, localSpinFinished],
+  )
+
+  const revealLoseToast = useCallback(
+    (r: RollRound) => {
+      if (!r?.id || account.telegramId <= 0) {
+        return
+      }
+      if (!viewerParticipated(r, account.telegramId)) {
+        return
+      }
+      if (Number(r.winnerUserId) === Number(account.telegramId)) {
+        return
+      }
+      if (loseToastForRound.current === r.id) {
+        return
+      }
+      if (!localSpinFinished(r.id)) {
+        return
+      }
+      loseToastForRound.current = r.id
+      showNotification({
+        type: 'warning',
+        title: 'Раунд завершён',
+        message: `Победитель: ${r.winner ? formatUser(r) : '—'}`,
+      })
+    },
+    [account.telegramId, localSpinFinished, showNotification],
+  )
+
+  const tryRevealResult = useCallback(
+    (r: RollRound | null | undefined) => {
+      if (!r) {
+        return
+      }
+      // Winner is fixed at spin lock — spinning payload already has winnerId/payout.
+      const resultReady =
+        (r.status === 'spinning' || r.status === 'completed') &&
+        r.winnerUserId != null &&
+        Boolean(r.winner)
+      if (!resultReady) {
+        return
+      }
+      revealWinnerUi(r)
+      if (r.status === 'completed') {
+        revealLoseToast(r)
+      }
+    },
+    [revealLoseToast, revealWinnerUi],
+  )
 
   const applyState = useCallback(
     (payload: Awaited<ReturnType<typeof fetchRollState>>) => {
@@ -173,6 +260,7 @@ export function RollPage() {
             (r?.players || []).some((p) => Number(p.userId) === Number(viewerId))),
       )
 
+      roundRef.current = r
       setRound(r)
       setPreviousGame(payload.previousGame)
       setTopGame(payload.topGame)
@@ -202,49 +290,39 @@ export function RollPage() {
           endsAtMs,
           targetAngle: Number(r.targetAngle),
         }
+        forcedFetchAtSpinEnd.current = false
         // Freeze clock for this round — poll/SSE skew must NOT rewrite timeline mid-spin.
         setSpinClock((prev) => {
           if (prev && prev.roundId === next.roundId && prev.targetAngle === next.targetAngle) {
+            spinClockRef.current = prev
             return prev
           }
+          spinClockRef.current = next
           return next
         })
       } else if (r?.status === 'completed') {
-        setSpinClock(null)
+        // Keep local spin clock until wheel timeline ends — avoid aborting animation early.
+        setSpinClock((prev) => {
+          if (prev && prev.roundId === r.id && Date.now() < prev.endsAtMs) {
+            spinClockRef.current = prev
+            return prev
+          }
+          spinClockRef.current = null
+          return null
+        })
       } else if (r?.status === 'waiting' || r?.status === 'betting') {
+        spinClockRef.current = null
         setSpinClock(null)
       }
 
-      const completed = r?.status === 'completed' ? r : null
-
-      if (completed && Number(completed.winnerUserId) === Number(account.telegramId) && account.telegramId > 0) {
-        if (winnerCardForRound.current !== completed.id) {
-          winnerCardForRound.current = completed.id
-          setWinnerCardRound(completed)
-          setWinnerCardOpen(true)
-          // Confetti starts after slide-in via onEntered — not here.
-        }
-      } else if (
-        completed &&
-        viewerParticipated(completed, account.telegramId) &&
-        Number(completed.winnerUserId) !== Number(account.telegramId)
-      ) {
-        if (loseToastForRound.current !== completed.id) {
-          loseToastForRound.current = completed.id
-          showNotification({
-            type: 'warning',
-            title: 'Раунд завершён',
-            message: `Победитель: ${completed.winner ? formatUser(completed) : '—'}`,
-          })
-        }
-      }
+      tryRevealResult(r)
 
       if (r?.status === 'waiting' && (r.players?.length || 0) === 0 && !payload.lastResult) {
         setWinnerCardOpen(false)
         lastVersionRef.current = Number(r.version) || 0
       }
     },
-    [account.telegramId, serverNowApprox, showNotification],
+    [account.telegramId, serverNowApprox, tryRevealResult],
   )
 
   useEffect(() => {
@@ -315,6 +393,32 @@ export function RollPage() {
     }, 100)
     return () => window.clearInterval(timer)
   }, [applyState, round?.status, round?.bettingEndsAt, serverNowApprox])
+
+  // Reveal result the instant the local spin timeline ends (winner already known from SPIN_STARTED).
+  useEffect(() => {
+    if (!spinClock) {
+      return
+    }
+    const clock = spinClock
+    spinClockRef.current = clock
+    const delay = Math.max(0, clock.endsAtMs - Date.now())
+    const timer = window.setTimeout(() => {
+      tryRevealResult(roundRef.current)
+      if (!forcedFetchAtSpinEnd.current) {
+        forcedFetchAtSpinEnd.current = true
+        void fetchRollState().then(applyState)
+      }
+      // Drop clock after landing so completed state can take over cleanly.
+      setSpinClock((prev) => {
+        if (prev && prev.roundId === clock.roundId && Date.now() >= prev.endsAtMs) {
+          spinClockRef.current = null
+          return null
+        }
+        return prev
+      })
+    }, delay)
+    return () => window.clearTimeout(timer)
+  }, [applyState, spinClock, tryRevealResult])
 
   useEffect(() => {
     if (!bettingOpen) {
@@ -403,17 +507,6 @@ export function RollPage() {
           round={winnerCardRound}
           open={winnerCardOpen}
           onClose={() => setWinnerCardOpen(false)}
-          onEntered={() => {
-            if (!winnerCardRound) {
-              return
-            }
-            if (confettiForRound.current === winnerCardRound.id) {
-              return
-            }
-            confettiForRound.current = winnerCardRound.id
-            setConfettiKey(winnerCardRound.id)
-            setShowConfetti(true)
-          }}
         />
       ) : null}
 

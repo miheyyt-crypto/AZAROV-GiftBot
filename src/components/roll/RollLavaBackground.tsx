@@ -14,6 +14,7 @@ export function RollLavaBackground({ phase }: { phase: string }) {
       <div className="roll-lava__blob roll-lava__blob--b" />
       <div className="roll-lava__blob roll-lava__blob--c" />
       <div className="roll-lava__blob roll-lava__blob--d" />
+      <div className="roll-lava__sparks" />
       <div className="roll-lava__vignette" />
     </div>
   )

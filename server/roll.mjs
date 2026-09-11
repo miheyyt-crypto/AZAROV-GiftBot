@@ -341,6 +341,7 @@ export function advanceRollRoundOnStore(store, atMs = nowMs()) {
     round.spinEndsAt = new Date(atMs + ROLL_SPIN_DURATION_MS).toISOString()
     round.status = 'spinning'
     bumpRoundVersion(round)
+    scheduleSpinSettle(round.spinEndsAt)
   }
 
   if (round.status === 'spinning') {
@@ -745,6 +746,33 @@ export function publishRollSnapshots() {
 }
 
 let tickerStarted = false
+let spinSettleTimer = null
+
+function scheduleSpinSettle(spinEndsAtIso) {
+  const ends = Date.parse(spinEndsAtIso || '')
+  if (!Number.isFinite(ends)) {
+    return
+  }
+  if (spinSettleTimer) {
+    clearTimeout(spinSettleTimer)
+    spinSettleTimer = null
+  }
+  const delay = Math.max(0, ends - Date.now())
+  spinSettleTimer = setTimeout(() => {
+    spinSettleTimer = null
+    try {
+      withStore((store) => {
+        const result = advanceRollRoundOnStore(store)
+        if (result?.changed && getRollSseClientCount()) {
+          publishFromStore(store)
+        }
+      })
+    } catch (error) {
+      console.warn('[roll] spin settle timer failed', error)
+    }
+  }, delay)
+  spinSettleTimer.unref?.()
+}
 
 /**
  * Server-side clock: advances BETTING→SPINNING→RESULT without waiting for client polls.

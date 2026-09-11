@@ -1,5 +1,3 @@
-import { useEffect } from 'react'
-
 import { CoinIcon } from '@/components/CoinIcon'
 import { formatBalance } from '@/lib/balance'
 import { formatRollUser, type RollRound } from '@/types/roll'
@@ -8,22 +6,9 @@ type RollWinnerCardProps = {
   round: RollRound
   open: boolean
   onClose: () => void
-  /** Fired once when the slide-in animation finishes — start confetti after this. */
-  onEntered?: () => void
 }
 
-export function RollWinnerCard({ round, open, onClose, onEntered }: RollWinnerCardProps) {
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-    const timer = window.setTimeout(() => {
-      onEntered?.()
-    }, 320)
-    return () => window.clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, round.id])
-
+export function RollWinnerCard({ round, open, onClose }: RollWinnerCardProps) {
   if (!open || !round.winner) {
     return null
   }
