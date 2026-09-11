@@ -118,6 +118,47 @@ test('ranking counts only active/rewarded Kick referrals and tie-breaks by reach
   assert.ok(Date.parse(ranked[0].reachedAt) < Date.parse(ranked[1].reachedAt))
 })
 
+test('ranking ignores Kick activations before contest start and undated referrals', () => {
+  const config = {
+    ...getReferralContestConfig(),
+    startsAt: '2026-09-11T12:50:00.000Z',
+    endsAt: '2026-10-11T21:00:00.000Z',
+  }
+
+  const store = {
+    users: {
+      1: { telegramId: 1, username: 'old', firstName: 'Old' },
+      2: { telegramId: 2, username: 'fresh', firstName: 'Fresh' },
+    },
+    referrals: {
+      old: {
+        referrerUserId: 1,
+        referredUserId: 10,
+        status: 'rewarded',
+        activatedAt: '2026-09-10T10:00:00.000Z',
+        createdAt: '2026-09-11T13:00:00.000Z',
+      },
+      undated: {
+        referrerUserId: 1,
+        referredUserId: 11,
+        status: 'active',
+        createdAt: '2026-09-11T13:00:00.000Z',
+      },
+      fresh: {
+        referrerUserId: 2,
+        referredUserId: 12,
+        status: 'active',
+        activatedAt: '2026-09-11T13:00:00.000Z',
+      },
+    },
+  }
+
+  const ranked = buildReferralContestRanking(store, config)
+  assert.equal(ranked.length, 1)
+  assert.equal(ranked[0].telegramId, 2)
+  assert.equal(ranked[0].score, 1)
+})
+
 test('motivation: start, climb, enter_top, leader', () => {
   const ranking = [
     { score: 50 },

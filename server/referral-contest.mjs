@@ -59,7 +59,7 @@ function displayName(user) {
 export function getReferralContestConfig() {
   const enabled = envFlag('REFERRAL_CONTEST_ENABLED', true)
   const adminOnly = envFlag('REFERRAL_CONTEST_ADMIN_ONLY', true)
-  const startsAt = envIso('REFERRAL_CONTEST_START_AT', '2026-09-11T00:00:00.000Z')
+  const startsAt = envIso('REFERRAL_CONTEST_START_AT', '2026-09-11T12:50:00.000Z')
   const endsAt = envIso('REFERRAL_CONTEST_END_AT', '2026-10-11T21:00:00.000Z')
   return {
     id: REFERRAL_CONTEST_ID,
@@ -103,8 +103,9 @@ export function prizeForPlace(place) {
   return row ? row.amount : 0
 }
 
+/** Kick-link timestamp only — invite createdAt must not inflate contest score. */
 function referralEventAt(referral) {
-  return referral?.activatedAt || referral?.rewardedAt || referral?.createdAt || null
+  return referral?.activatedAt || referral?.rewardedAt || null
 }
 
 function isValidContestReferral(referral, config) {
@@ -114,11 +115,11 @@ function isValidContestReferral(referral, config) {
   }
   const at = referralEventAt(referral)
   if (!at) {
-    return true
+    return false
   }
   const ms = Date.parse(at)
   if (!Number.isFinite(ms)) {
-    return true
+    return false
   }
   const start = Date.parse(config.startsAt)
   const end = Date.parse(config.endsAt)
