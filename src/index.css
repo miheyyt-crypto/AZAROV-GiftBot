@@ -110,6 +110,8 @@ html {
   overflow-y: auto;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -123,6 +125,17 @@ body {
   overflow: visible;
   min-height: 100%;
   min-height: 100dvh;
+}
+
+/*
+ * iOS / Telegram WebView zoom on focus: browsers zoom when control font-size < 16px.
+ * Keep controls ≥16px and disable pinch/double-tap zoom gestures on fields.
+ */
+input,
+textarea,
+select {
+  font-size: 16px;
+  touch-action: manipulation;
 }
 
 /*

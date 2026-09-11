@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { CoinIcon } from '@/components/CoinIcon'
 import { useNotifications } from '@/components/NotificationProvider'
 import { formatBalance } from '@/lib/balance'
-import { KICK_REQUIRED_CHANNEL_URL, getLaunchBotTaskUrl, TELEGRAM_CHANNEL_URL } from '@/lib/constants'
+import { KICK_REQUIRED_CHANNEL_URL, TELEGRAM_CHANNEL_URL } from '@/lib/constants'
 import { handleTaskAction } from '@/lib/tasks'
 import { getTelegramWebApp } from '@/lib/telegram'
 import type { Task, TaskCategory } from '@/types'
@@ -48,20 +48,6 @@ function openKickRequiredChannel(): void {
     return
   }
   window.open(KICK_REQUIRED_CHANNEL_URL, '_blank', 'noopener,noreferrer')
-}
-
-function openLaunchBotTask(): void {
-  const url = getLaunchBotTaskUrl()
-  const webApp = getTelegramWebApp()
-
-  if (webApp?.openTelegramLink) {
-    // Opens bot chat and minimizes the Mini App into Telegram’s app bar
-    // (does not destroy the session — unlike WebApp.close()).
-    webApp.openTelegramLink(url)
-    return
-  }
-
-  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 const LAUNCH_BOT_AWAITING_KEY = 'task:launch-bot:awaiting'
@@ -131,9 +117,15 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
           message: 'После подписки вернись и нажми «Проверить».',
         })
       } else if (isLaunchBotTask) {
+        // Do NOT openTelegramLink / t.me?start=… — Telegram closes the Mini App on mobile.
+        // User is already inside the authenticated Mini App; «Проверить» awards via initData.
         writeLaunchBotAwaiting(true)
         setAwaitingCheck(true)
-        openLaunchBotTask()
+        showNotification({
+          type: 'info',
+          title: 'Мини-приложение остаётся открытым',
+          message: 'Нажми «Проверить», чтобы получить награду за запуск бота.',
+        })
         return
       } else {
         openKickRequiredChannel()
@@ -178,7 +170,7 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
             : result.code === 'NOT_FOLLOWING'
               ? 'Сначала зафолловь канал kick.com/azarov7777.'
               : result.code === 'NOT_STARTED'
-                ? 'Сначала запусти бота @AZAROV_GiftBot и нажми Start.'
+                ? 'Нажми «Проверить» ещё раз — приложение уже открыто через бота.'
                 : notDone
                   ? 'Сначала подпишись на канал @azarov222.'
                   : 'Не удалось проверить задание. Попробуй ещё раз позже.'),

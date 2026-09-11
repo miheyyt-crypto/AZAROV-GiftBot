@@ -51,7 +51,8 @@ export const tasks: Task[] = [
   {
     id: 'launch-bot',
     title: 'Запустить нашего бота',
-    description: 'Запусти @AZAROV_GiftBot и получи награду',
+    description:
+      'Открой AZAROV GiftBot в Telegram и нажми «Проверить» в задании — мини-приложение можно не закрывать.',
     category: 'telegram',
     reward: 600,
     type: 'telegram_bot_start',

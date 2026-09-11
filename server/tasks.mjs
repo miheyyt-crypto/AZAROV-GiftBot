@@ -636,14 +636,17 @@ export function checkLaunchBot(userId, requestId) {
     }
 
     if (!userHasBotLaunchProof(store, user)) {
-      return {
-        success: false,
-        code: 'NOT_STARTED',
-        completed: false,
-        rewarded: false,
-        reward: 0,
-        message: 'Сначала запусти бота @AZAROV_GiftBot через кнопку задания и нажми Start.',
+      // Authenticated Mini App request (initData verified in Express) proves Telegram identity.
+      // Do not force openTelegramLink → Start: that closes the Mini App on mobile clients.
+      const at = new Date().toISOString()
+      store.botLaunchStarts = store.botLaunchStarts || {}
+      store.botLaunchStarts[String(user.telegramId)] = {
+        at,
+        telegramId: user.telegramId,
+        source: 'mini_app',
       }
+      user.botLaunchVerifiedAt = at
+      logTask('bot_launch_verified', { userId: user.telegramId, source: 'mini_app' })
     }
 
     // Copy pending proof onto user if only store map had it.

@@ -43,16 +43,20 @@ test('isLaunchBotStartPayload accepts launch_bot variants', async () => {
   })
 })
 
-test('launch-bot check denies without /start proof', async () => {
+test('launch-bot check accepts Mini App session without prior /start payload', async () => {
   await withIsolated(async ({ tasks, withStore, userId }) => {
-    const denied = tasks.checkLaunchBot(userId, 'req-launch-1')
-    assert.equal(denied.success, false)
-    assert.equal(denied.code, 'NOT_STARTED')
-    assert.equal(denied.rewarded, false)
+    const awarded = tasks.checkLaunchBot(userId, 'req-launch-1')
+    assert.equal(awarded.success, true)
+    assert.equal(awarded.completed, true)
+    assert.equal(awarded.rewarded, true)
+    assert.equal(awarded.reward, LAUNCH_BOT_REWARD)
 
     withStore((store) => {
-      assert.equal(store.users[String(userId)].completedTasks.includes(LAUNCH_BOT_TASK_ID), false)
-      assert.equal(store.users[String(userId)].balance, 0)
+      const user = store.users[String(userId)]
+      assert.equal(user.completedTasks.includes(LAUNCH_BOT_TASK_ID), true)
+      assert.equal(user.balance, LAUNCH_BOT_REWARD)
+      assert.ok(user.botLaunchVerifiedAt)
+      assert.equal(store.botLaunchStarts[String(userId)]?.source, 'mini_app')
     })
   })
 })
