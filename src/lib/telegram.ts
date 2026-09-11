@@ -7,8 +7,6 @@ const HARD_DESKTOP_TG_PLATFORMS = new Set([
   'unigram',
 ])
 
-const AMBIGUOUS_WEB_TG_PLATFORMS = new Set(['web', 'weba', 'webb'])
-
 const MOBILE_TG_PLATFORMS = new Set([
   'ios',
   'android',
@@ -86,14 +84,17 @@ export function bootstrapViewportEnvironment(webApp: TelegramWebApp | null = get
 
   const isMobileTg = MOBILE_TG_PLATFORMS.has(platform)
   const isHardDesktopTg = HARD_DESKTOP_TG_PLATFORMS.has(platform)
-  const isAmbiguousWeb = AMBIGUOUS_WEB_TG_PLATFORMS.has(platform)
-  // Telegram Desktop Mini App is often ~420px wide — width media queries miss it.
-  // tdesktop/macos/linux: always. web/weba: only with fine pointer (real desktop).
-  const useDesktopScroll =
-    !isMobileTg &&
-    (isHardDesktopTg ||
-      (isAmbiguousWeb && finePointer) ||
-      (finePointer && (platform === 'browser' || !webApp)))
+
+  /*
+   * CRITICAL (eda9ee3 miss):
+   * telegram-web-app.js often reports platform "unknown" when WebApp exists.
+   * Old logic required platform==="browser" | !webApp for fine-pointer path →
+   * desktop scroll NEVER activated → Header/Stats stuck above fold.
+   *
+   * Rule: never on ios/android; always on tdesktop/macos/linux; otherwise any
+   * fine pointer (mouse/trackpad) including platform "unknown" / "web".
+   */
+  const useDesktopScroll = !isMobileTg && (isHardDesktopTg || finePointer)
 
   root.classList.toggle('app-desktop-embed', useDesktopScroll)
 
@@ -108,6 +109,31 @@ export function bootstrapViewportEnvironment(webApp: TelegramWebApp | null = get
   syncDesktopViewportHeight(webApp)
 }
 
+/** Scrollport for desktop embed (#root). Null on mobile document-scroll path. */
+export function getAppScrollRoot(): HTMLElement | null {
+  if (typeof document === 'undefined') {
+    return null
+  }
+  if (!document.documentElement.classList.contains('app-desktop-embed')) {
+    return null
+  }
+  return document.getElementById('root')
+}
+
+/** Reset desktop scroll so Header/Stats are not stuck above the fold. */
+export function resetAppScrollPosition(): void {
+  const scroller = getAppScrollRoot()
+  if (scroller) {
+    scroller.scrollTop = 0
+  }
+  if (typeof window !== 'undefined') {
+    window.scrollTo(0, 0)
+    if (document.scrollingElement) {
+      document.scrollingElement.scrollTop = 0
+    }
+  }
+}
+
 function syncDesktopViewportHeight(webApp: TelegramWebApp | null): void {
   const root = document.documentElement
   if (!root.classList.contains('app-desktop-embed')) {
@@ -115,14 +141,19 @@ function syncDesktopViewportHeight(webApp: TelegramWebApp | null): void {
     return
   }
 
+  const vv = window.visualViewport?.height
+  const winH = typeof vv === 'number' && vv > 0 ? vv : window.innerHeight
   const tgH =
     webApp && Number(webApp.viewportStableHeight) > 0
       ? Number(webApp.viewportStableHeight)
       : webApp && Number(webApp.viewportHeight) > 0
         ? Number(webApp.viewportHeight)
         : 0
-  const vv = window.visualViewport?.height
-  const h = tgH || (typeof vv === 'number' && vv > 0 ? vv : window.innerHeight)
+
+  // Prefer the smaller positive height — TG sometimes reports a taller value than
+  // the visible Mini App iframe, which freezes mid-page content outside the iframe.
+  const candidates = [tgH, winH].filter((n) => Number.isFinite(n) && n > 0)
+  const h = candidates.length ? Math.min(...candidates) : winH
   if (h > 0) {
     root.style.setProperty('--tg-viewport-stable-height', `${Math.round(h)}px`)
   }

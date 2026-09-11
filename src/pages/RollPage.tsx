@@ -15,6 +15,7 @@ import { useUserAccount } from '@/hooks/useUserAccount'
 import { ROUTES } from '@/lib/constants'
 import { formatBalance } from '@/lib/balance'
 import { fetchRollState, placeRollBet, subscribeRollStream } from '@/lib/roll'
+import { resetAppScrollPosition } from '@/lib/telegram'
 import {
   ROLL_MAX_PLAYERS,
   ROLL_MIN_BET,
@@ -103,6 +104,12 @@ export function RollPage() {
   const forcedFetchAtSpinEnd = useRef(false)
   const spinClockRef = useRef<RollSpinClock | null>(null)
   const roundRef = useRef<RollRound | null>(null)
+
+  // Desktop embed: open at top so Header/Stats are not stuck above the fold
+  // (wheel scrollIntoView / focus can leave #root mid-page).
+  useEffect(() => {
+    resetAppScrollPosition()
+  }, [])
 
   const minBet = config?.minBet ?? ROLL_MIN_BET
   const quickBets = config?.quickBets?.length ? config.quickBets : [...ROLL_QUICK_BETS]
