@@ -440,6 +440,13 @@ test('telegram reject reason marks rejected, notifies user, allows resubmit', as
     assert.equal(created.success, true)
     assert.equal(created.submission.status, 'pending')
 
+    const markupEdits = []
+    const telegram = {
+      editMessageReplyMarkup: async (chatId, messageId, _inlineMessageId, markup) => {
+        markupEdits.push({ chatId, messageId, markup })
+      },
+    }
+
     await handlePartnerModerationCallback({
       from: { id: 424242 },
       callbackQuery: {
@@ -449,17 +456,25 @@ test('telegram reject reason marks rejected, notifies user, allows resubmit', as
       },
       answerCbQuery: async () => {},
       reply: async () => {},
+      telegram,
     })
-    assert.ok(getPendingRejectReason(424242))
+    const pending = getPendingRejectReason(424242)
+    assert.ok(pending)
+    assert.equal(pending.chatId, 424242)
+    assert.equal(pending.messageId, 11)
+    assert.equal(markupEdits.at(-1)?.markup?.inline_keyboard?.[0]?.[0]?.text, '⏳ Укажите причину…')
 
     const consumed = await handlePartnerRejectReasonMessage({
       from: { id: 424242 },
       message: { text: 'отменить' },
       reply: async () => {},
-      editMessageReplyMarkup: async () => {},
+      telegram,
     })
     assert.equal(consumed, true)
     assert.equal(getPendingRejectReason(424242), null)
+    assert.equal(markupEdits.at(-1)?.chatId, 424242)
+    assert.equal(markupEdits.at(-1)?.messageId, 11)
+    assert.equal(markupEdits.at(-1)?.markup?.inline_keyboard?.[0]?.[0]?.text, '❌ Rejected')
 
     const mine = listMyPartnerSubmissions(99001)
     const latest = mine.submissions.find(

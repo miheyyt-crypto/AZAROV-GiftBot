@@ -36,15 +36,26 @@ export function getPendingRejectReason(adminId) {
   return entry
 }
 
-function setPendingRejectReason(adminId, submissionId) {
+function setPendingRejectReason(adminId, submissionId, messageRef = null) {
   pendingRejectByAdmin.set(String(adminId), {
     submissionId: String(submissionId),
+    chatId: messageRef?.chatId ?? null,
+    messageId: messageRef?.messageId ?? null,
     expiresAt: Date.now() + REJECT_REASON_TTL_MS,
   })
 }
 
 function clearPendingRejectReason(adminId) {
   pendingRejectByAdmin.delete(String(adminId))
+}
+
+function getCallbackMessageRef(ctx) {
+  const chatId = ctx.callbackQuery?.message?.chat?.id
+  const messageId = ctx.callbackQuery?.message?.message_id
+  if (chatId == null || messageId == null) {
+    return null
+  }
+  return { chatId, messageId }
 }
 
 export function buildPartnerModerationKeyboard(submissionId) {
@@ -63,6 +74,10 @@ export function buildPartnerResultKeyboard(label) {
     inline_keyboard: [[{ text: label, callback_data: 'vellur:noop' }]],
   }
 }
+
+const PARTNER_APPROVED_LABEL = '✅ Approved'
+const PARTNER_REJECTED_LABEL = '❌ Rejected'
+const PARTNER_WAITING_REASON_LABEL = '⏳ Укажите причину…'
 
 export function parsePartnerModerationCallback(data) {
   const raw = String(data || '').trim()
@@ -148,26 +163,34 @@ export async function answerPartnerCallback(ctx, text = '', showAlert = false) {
   return Boolean(result.ok)
 }
 
-async function markModerationResult(ctx, label) {
-  const markup = buildPartnerResultKeyboard(label)
-  try {
-    if (typeof ctx.editMessageReplyMarkup === 'function') {
-      await ctx.editMessageReplyMarkup(markup)
-      return
+async function editPartnerReplyMarkup(ctx, markup, messageRef = null) {
+  const chatId = messageRef?.chatId ?? ctx.callbackQuery?.message?.chat?.id
+  const messageId = messageRef?.messageId ?? ctx.callbackQuery?.message?.message_id
+
+  if (chatId != null && messageId != null && typeof ctx.telegram?.editMessageReplyMarkup === 'function') {
+    try {
+      await ctx.telegram.editMessageReplyMarkup(chatId, messageId, undefined, markup)
+      return true
+    } catch {
+      // fall through
     }
-  } catch {
-    // fall through
   }
 
-  try {
-    const chatId = ctx.callbackQuery?.message?.chat?.id
-    const messageId = ctx.callbackQuery?.message?.message_id
-    if (chatId != null && messageId != null && typeof ctx.telegram?.editMessageReplyMarkup === 'function') {
-      await ctx.telegram.editMessageReplyMarkup(chatId, messageId, undefined, markup)
+  // Only safe for callback ctx on the original moderation message (approve path).
+  if (!messageRef && typeof ctx.editMessageReplyMarkup === 'function') {
+    try {
+      await ctx.editMessageReplyMarkup(markup)
+      return true
+    } catch {
+      // Best-effort
     }
-  } catch {
-    // Best-effort
   }
+
+  return false
+}
+
+async function markModerationResult(ctx, label, messageRef = null) {
+  await editPartnerReplyMarkup(ctx, buildPartnerResultKeyboard(label), messageRef)
 }
 
 /**
@@ -355,7 +378,7 @@ export async function handlePartnerModerationCallback(ctx) {
     }
 
     await answerPartnerCallback(ctx, '✅ Заявка подтверждена')
-    await markModerationResult(ctx, '✅ APPROVED')
+    await markModerationResult(ctx, PARTNER_APPROVED_LABEL)
     try {
       await notifyUserPartnerDecision(result.submission)
     } catch (error) {
@@ -376,8 +399,12 @@ export async function handlePartnerModerationCallback(ctx) {
   }
 
   // reject → ask for reason (does NOT reject yet; «отмена» cancels this step only)
-  setPendingRejectReason(adminId, parsed.submissionId)
+  const messageRef = getCallbackMessageRef(ctx)
+  setPendingRejectReason(adminId, parsed.submissionId, messageRef)
   await answerPartnerCallback(ctx, 'Введите причину отклонения')
+  if (messageRef) {
+    await editPartnerReplyMarkup(ctx, buildPartnerResultKeyboard(PARTNER_WAITING_REASON_LABEL), messageRef)
+  }
   try {
     await ctx.reply(
       [
@@ -419,7 +446,18 @@ export async function handlePartnerRejectReasonMessage(ctx) {
   }
 
   if (/^(отмена|cancel)$/i.test(text)) {
+    const messageRef =
+      pending.chatId != null && pending.messageId != null
+        ? { chatId: pending.chatId, messageId: pending.messageId }
+        : null
     clearPendingRejectReason(adminId)
+    if (messageRef) {
+      await editPartnerReplyMarkup(
+        ctx,
+        buildPartnerModerationKeyboard(pending.submissionId),
+        messageRef,
+      )
+    }
     await ctx.reply('Отклонение отменено. Заявка по-прежнему на проверке.')
     return true
   }
@@ -434,6 +472,10 @@ export async function handlePartnerRejectReasonMessage(ctx) {
     return true
   }
 
+  const messageRef =
+    pending.chatId != null && pending.messageId != null
+      ? { chatId: pending.chatId, messageId: pending.messageId }
+      : null
   clearPendingRejectReason(adminId)
   let result
   try {
@@ -448,6 +490,13 @@ export async function handlePartnerRejectReasonMessage(ctx) {
       submissionId: pending.submissionId,
       message: error instanceof Error ? error.message : 'unknown_error',
     })
+    if (messageRef) {
+      await editPartnerReplyMarkup(
+        ctx,
+        buildPartnerModerationKeyboard(pending.submissionId),
+        messageRef,
+      )
+    }
     await ctx.reply('Не удалось отклонить заявку.')
     return true
   }
@@ -460,11 +509,25 @@ export async function handlePartnerRejectReasonMessage(ctx) {
   })
 
   if (!result?.success) {
+    const status = String(result?.submission?.status || '').toLowerCase()
+    if (messageRef) {
+      if (status === 'approved') {
+        await markModerationResult(ctx, PARTNER_APPROVED_LABEL, messageRef)
+      } else if (status === 'rejected') {
+        await markModerationResult(ctx, PARTNER_REJECTED_LABEL, messageRef)
+      } else {
+        await editPartnerReplyMarkup(
+          ctx,
+          buildPartnerModerationKeyboard(pending.submissionId),
+          messageRef,
+        )
+      }
+    }
     await ctx.reply(result?.message || 'Не удалось отклонить заявку.')
     return true
   }
 
-  await markModerationResult(ctx, '❌ REJECTED')
+  await markModerationResult(ctx, PARTNER_REJECTED_LABEL, messageRef)
   try {
     await notifyUserPartnerDecision(result.submission)
   } catch (error) {

@@ -37,15 +37,26 @@ export function getPendingCommunityRejectReason(adminId) {
   return entry
 }
 
-function setPendingRejectReason(adminId, requestId) {
+function setPendingRejectReason(adminId, requestId, messageRef = null) {
   pendingRejectByAdmin.set(String(adminId), {
     requestId: String(requestId),
+    chatId: messageRef?.chatId ?? null,
+    messageId: messageRef?.messageId ?? null,
     expiresAt: Date.now() + REJECT_REASON_TTL_MS,
   })
 }
 
 function clearPendingRejectReason(adminId) {
   pendingRejectByAdmin.delete(String(adminId))
+}
+
+function getCallbackMessageRef(ctx) {
+  const chatId = ctx.callbackQuery?.message?.chat?.id
+  const messageId = ctx.callbackQuery?.message?.message_id
+  if (chatId == null || messageId == null) {
+    return null
+  }
+  return { chatId, messageId }
 }
 
 function escapeHtml(value) {
@@ -80,6 +91,10 @@ export function buildCommunityResultKeyboard(label) {
     inline_keyboard: [[{ text: label, callback_data: 'ca:noop' }]],
   }
 }
+
+const COMMUNITY_APPROVED_LABEL = '✅ Approved'
+const COMMUNITY_REJECTED_LABEL = '❌ Rejected'
+const COMMUNITY_WAITING_REASON_LABEL = '⏳ Укажите причину…'
 
 export function buildCommunityAdminMenuKeyboard() {
   return {
@@ -157,16 +172,33 @@ export async function answerCommunityCallback(ctx, text = '', showAlert = false)
   return Boolean(result.ok)
 }
 
-async function markModerationResult(ctx, label) {
-  const markup = buildCommunityResultKeyboard(label)
-  try {
-    if (typeof ctx.editMessageReplyMarkup === 'function') {
-      await ctx.editMessageReplyMarkup(markup)
-      return
+async function editCommunityReplyMarkup(ctx, markup, messageRef = null) {
+  const chatId = messageRef?.chatId ?? ctx.callbackQuery?.message?.chat?.id
+  const messageId = messageRef?.messageId ?? ctx.callbackQuery?.message?.message_id
+
+  if (chatId != null && messageId != null && typeof ctx.telegram?.editMessageReplyMarkup === 'function') {
+    try {
+      await ctx.telegram.editMessageReplyMarkup(chatId, messageId, undefined, markup)
+      return true
+    } catch {
+      // fall through
     }
-  } catch {
-    // best-effort
   }
+
+  if (!messageRef && typeof ctx.editMessageReplyMarkup === 'function') {
+    try {
+      await ctx.editMessageReplyMarkup(markup)
+      return true
+    } catch {
+      // best-effort
+    }
+  }
+
+  return false
+}
+
+async function markModerationResult(ctx, label, messageRef = null) {
+  await editCommunityReplyMarkup(ctx, buildCommunityResultKeyboard(label), messageRef)
 }
 
 async function replyHtml(ctx, text, extra = {}) {
@@ -488,7 +520,7 @@ export async function handleCommunityAdminCallback(ctx) {
       return true
     }
     await answerCommunityCallback(ctx, result.alreadyReviewed ? 'Уже одобрено' : '✅ Одобрено')
-    await markModerationResult(ctx, '✅ APPROVED')
+    await markModerationResult(ctx, COMMUNITY_APPROVED_LABEL)
     try {
       await notifyUserCommunityDecision(result.request)
     } catch {
@@ -502,8 +534,16 @@ export async function handleCommunityAdminCallback(ctx) {
   }
 
   if (parsed.action === 'reject') {
-    setPendingRejectReason(adminId, parsed.requestId)
+    const messageRef = getCallbackMessageRef(ctx)
+    setPendingRejectReason(adminId, parsed.requestId, messageRef)
     await answerCommunityCallback(ctx, 'Укажите причину')
+    if (messageRef) {
+      await editCommunityReplyMarkup(
+        ctx,
+        buildCommunityResultKeyboard(COMMUNITY_WAITING_REASON_LABEL),
+        messageRef,
+      )
+    }
     await replyHtml(
       ctx,
       [
@@ -535,8 +575,20 @@ export async function handleCommunityRejectReasonMessage(ctx) {
 
   const text = String(ctx.message?.text || '').trim()
   const lower = text.toLowerCase()
+  const messageRef =
+    pending.chatId != null && pending.messageId != null
+      ? { chatId: pending.chatId, messageId: pending.messageId }
+      : null
+
   if (lower === 'отмена' || lower === 'cancel') {
     clearPendingRejectReason(adminId)
+    if (messageRef) {
+      await editCommunityReplyMarkup(
+        ctx,
+        buildCommunityModerationKeyboard(pending.requestId),
+        messageRef,
+      )
+    }
     await replyHtml(ctx, 'Отклонение отменено.')
     return true
   }
@@ -545,9 +597,25 @@ export async function handleCommunityRejectReasonMessage(ctx) {
   clearPendingRejectReason(adminId)
 
   if (!result.success) {
+    const status = String(result?.request?.status || '').toLowerCase()
+    if (messageRef) {
+      if (status === 'approved') {
+        await markModerationResult(ctx, COMMUNITY_APPROVED_LABEL, messageRef)
+      } else if (status === 'rejected') {
+        await markModerationResult(ctx, COMMUNITY_REJECTED_LABEL, messageRef)
+      } else {
+        await editCommunityReplyMarkup(
+          ctx,
+          buildCommunityModerationKeyboard(pending.requestId),
+          messageRef,
+        )
+      }
+    }
     await replyHtml(ctx, `⚠ ${escapeHtml(result.message || 'Ошибка')}`)
     return true
   }
+
+  await markModerationResult(ctx, COMMUNITY_REJECTED_LABEL, messageRef)
 
   try {
     await notifyUserCommunityDecision(result.request)
