@@ -6,7 +6,8 @@ import { CoinIcon } from '@/components/CoinIcon'
 import { useNotifications } from '@/components/NotificationProvider'
 import { RollPlayerList } from '@/components/roll/RollPlayerList'
 import { RollStatsCards } from '@/components/roll/RollStatsCards'
-import { RollWheel } from '@/components/roll/RollWheel'
+import { RollWheel, type RollSpinClock } from '@/components/roll/RollWheel'
+import { RollWinnerCard } from '@/components/roll/RollWinnerCard'
 import { useBalance } from '@/hooks/useBalance'
 import { useUserAccount } from '@/hooks/useUserAccount'
 import { ROUTES } from '@/lib/constants'
@@ -16,8 +17,8 @@ import {
   ROLL_MIN_BET,
   ROLL_POLL_MS_ACTIVE,
   ROLL_POLL_MS_IDLE,
+  ROLL_POLL_MS_SPIN,
   ROLL_QUICK_BETS,
-  formatRollUser,
   type RollConfig,
   type RollGameCard,
   type RollRound,
@@ -31,6 +32,31 @@ function clampBet(value: number, balance: number, minBet: number): number {
   return Math.min(Math.max(minBet, Math.floor(value)), maxAffordable)
 }
 
+/** Estimate server − client clock offset using RTT midpoint. */
+function estimateSkew(
+  serverNowMs: number | undefined,
+  serverNowIso: string | undefined,
+  clientSentAt?: number,
+  clientReceivedAt?: number,
+): number {
+  const serverMs =
+    typeof serverNowMs === 'number' && Number.isFinite(serverNowMs)
+      ? serverNowMs
+      : Date.parse(serverNowIso || '')
+  if (!Number.isFinite(serverMs)) {
+    return 0
+  }
+  if (
+    typeof clientSentAt === 'number' &&
+    typeof clientReceivedAt === 'number' &&
+    clientReceivedAt >= clientSentAt
+  ) {
+    const midpoint = (clientSentAt + clientReceivedAt) / 2
+    return serverMs - midpoint
+  }
+  return serverMs - Date.now()
+}
+
 export function RollPage() {
   const navigate = useNavigate()
   const { amount, formatted } = useBalance()
@@ -41,24 +67,21 @@ export function RollPage() {
   const [busy, setBusy] = useState(false)
   const [bootstrapped, setBootstrapped] = useState(false)
   const [round, setRound] = useState<RollRound | null>(null)
-  const [lastResult, setLastResult] = useState<RollRound | null>(null)
   const [previousGame, setPreviousGame] = useState<RollGameCard | null>(null)
   const [topGame, setTopGame] = useState<RollGameCard | null>(null)
   const [viewerInRound, setViewerInRound] = useState(false)
   const [config, setConfig] = useState<RollConfig | null>(null)
   const [countdownMs, setCountdownMs] = useState<number | null>(null)
-  const [spinClock, setSpinClock] = useState<{
-    startedAtMs: number
-    endsAtMs: number
-    targetAngle: number
-  } | null>(null)
+  const [spinClock, setSpinClock] = useState<RollSpinClock | null>(null)
   const [showConfetti, setShowConfetti] = useState(false)
   const [confettiKey, setConfettiKey] = useState<string | null>(null)
-  const [showResult, setShowResult] = useState(false)
+  const [winnerCardOpen, setWinnerCardOpen] = useState(false)
+  const [winnerCardRound, setWinnerCardRound] = useState<RollRound | null>(null)
 
   const skewRef = useRef(0)
   const confettiForRound = useRef<string | null>(null)
-  const winToastForRound = useRef<string | null>(null)
+  const winnerCardForRound = useRef<string | null>(null)
+  const loseToastForRound = useRef<string | null>(null)
 
   const minBet = config?.minBet ?? ROLL_MIN_BET
   const quickBets = config?.quickBets?.length ? config.quickBets : [...ROLL_QUICK_BETS]
@@ -72,20 +95,22 @@ export function RollPage() {
     bet >= minBet &&
     bet <= amount
 
+  const serverNowApprox = useCallback(() => Date.now() + skewRef.current, [])
+
   const applyState = useCallback(
     (payload: Awaited<ReturnType<typeof fetchRollState>>) => {
       if (!payload.success && !payload.round) {
         return
       }
-      const clientNow = Date.now()
-      if (typeof payload.serverNowMs === 'number') {
-        skewRef.current = payload.serverNowMs - clientNow
-      } else if (payload.serverNow) {
-        skewRef.current = Date.parse(payload.serverNow) - clientNow
-      }
+
+      skewRef.current = estimateSkew(
+        payload.serverNowMs,
+        payload.serverNow,
+        payload.clientSentAt,
+        payload.clientReceivedAt,
+      )
 
       setRound(payload.round)
-      setLastResult(payload.lastResult)
       setPreviousGame(payload.previousGame)
       setTopGame(payload.topGame)
       setViewerInRound(Boolean(payload.viewerInRound))
@@ -96,8 +121,7 @@ export function RollPage() {
       const r = payload.round
       if (r?.status === 'betting' && r.bettingEndsAt) {
         const ends = Date.parse(r.bettingEndsAt)
-        const remaining = ends - (Date.now() + skewRef.current)
-        setCountdownMs(Math.max(0, remaining))
+        setCountdownMs(Math.max(0, ends - serverNowApprox()))
       } else {
         setCountdownMs(null)
       }
@@ -105,45 +129,69 @@ export function RollPage() {
       if (r?.status === 'spinning' && r.spinStartedAt && r.spinEndsAt && r.targetAngle != null) {
         const startedAtMs = Date.parse(r.spinStartedAt) - skewRef.current
         const endsAtMs = Date.parse(r.spinEndsAt) - skewRef.current
-        setSpinClock({
+        const next: RollSpinClock = {
+          roundId: r.id,
           startedAtMs,
           endsAtMs,
           targetAngle: Number(r.targetAngle),
+        }
+        setSpinClock((prev) => {
+          if (
+            prev &&
+            prev.roundId === next.roundId &&
+            prev.targetAngle === next.targetAngle &&
+            Math.abs(prev.startedAtMs - next.startedAtMs) < 2 &&
+            Math.abs(prev.endsAtMs - next.endsAtMs) < 2
+          ) {
+            return prev
+          }
+          return next
         })
-      } else if (r?.status === 'completed' && r.targetAngle != null) {
+      } else if (r?.status === 'completed') {
+        // Keep final angle via round.targetAngle in the wheel; drop live clock.
         setSpinClock(null)
       } else if (r?.status === 'waiting' || r?.status === 'betting') {
         setSpinClock(null)
       }
 
-      const resultRound =
-        r?.status === 'completed' || r?.status === 'spinning' ? r : payload.lastResult
-      if (resultRound?.status === 'completed') {
-        setShowResult(true)
-        if (confettiForRound.current !== resultRound.id) {
-          confettiForRound.current = resultRound.id
-          setConfettiKey(resultRound.id)
-          setShowConfetti(true)
+      const completed =
+        r?.status === 'completed'
+          ? r
+          : payload.lastResult?.status === 'completed'
+            ? payload.lastResult
+            : null
+
+      if (completed && Number(completed.winnerUserId) === Number(account.telegramId) && account.telegramId > 0) {
+        if (winnerCardForRound.current !== completed.id) {
+          winnerCardForRound.current = completed.id
+          setWinnerCardRound(completed)
+          setWinnerCardOpen(true)
+          if (confettiForRound.current !== completed.id) {
+            confettiForRound.current = completed.id
+            setConfettiKey(completed.id)
+            setShowConfetti(true)
+          }
         }
-        if (
-          winToastForRound.current !== resultRound.id &&
-          Number(resultRound.winnerUserId) === Number(account.telegramId) &&
-          account.telegramId > 0
-        ) {
-          winToastForRound.current = resultRound.id
+      } else if (
+        completed &&
+        viewerParticipated(completed, account.telegramId) &&
+        Number(completed.winnerUserId) !== Number(account.telegramId)
+      ) {
+        if (loseToastForRound.current !== completed.id) {
+          loseToastForRound.current = completed.id
           showNotification({
-            type: 'reward',
-            title: 'Победа в Roll!',
-            message: `+${formatBalance(resultRound.payout)} монет`,
+            type: 'warning',
+            title: 'Раунд завершён',
+            message: `Победитель: ${completed.winner ? formatUser(completed) : '—'}`,
           })
         }
-      } else if (r?.status === 'waiting' && !payload.lastResult) {
-        setShowResult(false)
-      } else if (r?.status === 'waiting' || r?.status === 'betting') {
-        setShowResult(Boolean(payload.lastResult?.status === 'completed' && r.players.length === 0))
+      }
+
+      if (r?.status === 'waiting' && (r.players?.length || 0) === 0 && !payload.lastResult) {
+        setWinnerCardOpen(false)
       }
     },
-    [account.telegramId, showNotification],
+    [account.telegramId, serverNowApprox, showNotification],
   )
 
   useEffect(() => {
@@ -164,13 +212,13 @@ export function RollPage() {
     if (!bootstrapped) {
       return
     }
-    const active =
-      round?.status === 'waiting' ||
-      round?.status === 'betting' ||
-      round?.status === 'locked' ||
-      round?.status === 'spinning' ||
-      round?.status === 'completed'
-    const ms = active ? ROLL_POLL_MS_ACTIVE : ROLL_POLL_MS_IDLE
+    const status = round?.status
+    const ms =
+      status === 'spinning' || status === 'locked'
+        ? ROLL_POLL_MS_SPIN
+        : status === 'betting' || status === 'completed' || status === 'waiting'
+          ? ROLL_POLL_MS_ACTIVE
+          : ROLL_POLL_MS_IDLE
     const timer = window.setInterval(() => {
       void fetchRollState().then(applyState)
     }, ms)
@@ -183,11 +231,10 @@ export function RollPage() {
     }
     const endsAt = round.bettingEndsAt
     const timer = window.setInterval(() => {
-      const ends = Date.parse(endsAt)
-      setCountdownMs(Math.max(0, ends - (Date.now() + skewRef.current)))
-    }, 200)
+      setCountdownMs(Math.max(0, Date.parse(endsAt) - serverNowApprox()))
+    }, 100)
     return () => window.clearInterval(timer)
-  }, [round?.status, round?.bettingEndsAt])
+  }, [round?.status, round?.bettingEndsAt, serverNowApprox])
 
   useEffect(() => {
     if (round?.status !== 'waiting') {
@@ -233,15 +280,12 @@ export function RollPage() {
     }
   }
 
-  const resultCard = useMemo(() => {
-    if (!showResult) {
-      return null
-    }
-    if (round?.status === 'completed' || round?.status === 'spinning') {
+  const displayRound = useMemo(() => {
+    if (round?.status === 'spinning' || round?.status === 'completed' || round?.status === 'locked') {
       return round
     }
-    return lastResult?.status === 'completed' ? lastResult : null
-  }, [lastResult, round, showResult])
+    return round
+  }, [round])
 
   if (!bootstrapped) {
     return (
@@ -253,7 +297,15 @@ export function RollPage() {
   }
 
   return (
-    <div className="roll-page ui-page relative pb-8">
+    <div className="roll-page ui-page relative overflow-x-hidden pb-8">
+      {winnerCardRound ? (
+        <RollWinnerCard
+          round={winnerCardRound}
+          open={winnerCardOpen}
+          onClose={() => setWinnerCardOpen(false)}
+        />
+      ) : null}
+
       <header className="mb-3 flex items-center gap-3">
         <button
           type="button"
@@ -276,49 +328,13 @@ export function RollPage() {
         </div>
       </header>
 
-      {resultCard?.status === 'completed' && resultCard.winner ? (
-        <div className="mb-3">
-          <p className="mb-2 text-center text-[13px] font-semibold text-white/70">
-            Игра #{resultCard.displayId} • Победитель
-          </p>
-          <div className="flex items-center gap-3 rounded-[18px] border border-[rgb(79_195_247/30%)] bg-[linear-gradient(120deg,#16122a,#12101c)] px-3.5 py-3 shadow-[0_0_24px_rgb(79_195_247/12%)]">
-            {resultCard.winner.photoUrl ? (
-              <img
-                src={resultCard.winner.photoUrl}
-                alt=""
-                className="size-12 shrink-0 rounded-full object-cover"
-                draggable={false}
-              />
-            ) : (
-              <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-bold">
-                ?
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[15px] font-bold text-white">
-                {formatRollUser(resultCard.winner)}
-              </p>
-              <p className="text-[12px] font-semibold text-[#7dd3fc]">
-                {(resultCard.winnerChance ?? resultCard.winner.chance).toFixed(2)}%
-              </p>
-            </div>
-            <div className="shrink-0 text-right">
-              <p className="text-[15px] font-bold tabular-nums text-[#7dd3fc]">
-                +{formatBalance(resultCard.payout)}
-              </p>
-              <p className="text-[12px] text-white/70">x{(resultCard.multiplier || 0).toFixed(2)}</p>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <RollStatsCards previousGame={previousGame} topGame={topGame} />
-      )}
+      <RollStatsCards previousGame={previousGame} topGame={topGame} />
 
       <RollWheel
-        round={round}
+        round={displayRound}
         countdownMs={countdownMs}
         spinClock={spinClock}
-        showConfetti={showConfetti && resultCard?.status === 'completed'}
+        showConfetti={showConfetti && winnerCardOpen}
         confettiKey={confettiKey}
       />
 
@@ -389,13 +405,8 @@ export function RollPage() {
           >
             {busy ? 'Отправка…' : 'Поставить'}
           </button>
-          {viewerInRound ? (
-            <p className="mt-2 text-center text-xs text-white/50">Вы уже в этом раунде</p>
-          ) : null}
           {account.telegramId > 0 && amount < minBet ? (
-            <p className="mt-2 text-xs text-amber-300/90">
-              Нужно минимум {minBet} монет.
-            </p>
+            <p className="mt-2 text-xs text-amber-300/90">Нужно минимум {minBet} монет.</p>
           ) : null}
         </section>
       ) : null}
@@ -420,4 +431,20 @@ function potLabel(round: RollRound) {
       Банк: {formatBalance(round.pot)} монет
     </p>
   )
+}
+
+function viewerParticipated(round: RollRound, telegramId: number): boolean {
+  return (round.players || []).some((p) => Number(p.userId) === Number(telegramId))
+}
+
+function formatUser(round: RollRound): string {
+  const w = round.winner
+  if (!w) {
+    return '—'
+  }
+  const u = String(w.username || '').trim()
+  if (u) {
+    return u.startsWith('@') ? u : `@${u}`
+  }
+  return w.firstName || 'игрок'
 }

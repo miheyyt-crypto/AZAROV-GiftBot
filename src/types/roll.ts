@@ -3,8 +3,9 @@ export const ROLL_MIN_BET = 100
 export const ROLL_BETTING_DURATION_MS = 20_000
 export const ROLL_SPIN_DURATION_MS = 5_000
 export const ROLL_RESULT_HOLD_MS = 8_000
-export const ROLL_POLL_MS_ACTIVE = 800
-export const ROLL_POLL_MS_IDLE = 2_500
+export const ROLL_POLL_MS_ACTIVE = 400
+export const ROLL_POLL_MS_IDLE = 2_000
+export const ROLL_POLL_MS_SPIN = 350
 export const ROLL_QUICK_BETS = [100, 250, 500, 1000, 2500] as const
 
 export type RollRoundStatus = 'waiting' | 'betting' | 'locked' | 'spinning' | 'completed'

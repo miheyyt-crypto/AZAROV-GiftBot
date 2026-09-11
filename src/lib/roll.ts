@@ -8,6 +8,8 @@ import type { UserAccount } from '@/types/account'
 
 type RollApiResponse = RollStatePayload & {
   user?: UserAccount
+  clientSentAt?: number
+  clientReceivedAt?: number
 }
 
 function apiUrl(path: string): string {
@@ -78,9 +80,15 @@ async function once(key: string, run: () => Promise<RollApiResponse>): Promise<R
 }
 
 export async function fetchRollState(): Promise<RollApiResponse> {
+  const clientSentAt = Date.now()
   const result = await rollRequest('/api/roll/state', { method: 'GET' })
+  const clientReceivedAt = Date.now()
   applyRemoteUser(result.user)
-  return result
+  return {
+    ...result,
+    clientSentAt,
+    clientReceivedAt,
+  }
 }
 
 export async function placeRollBet(input: {
@@ -89,6 +97,7 @@ export async function placeRollBet(input: {
 }): Promise<RollApiResponse> {
   const requestId = input.requestId || createPurchaseRequestId()
   return once(`bet:${requestId}`, async () => {
+    const clientSentAt = Date.now()
     const result = await rollRequest('/api/roll/bet', {
       method: 'POST',
       body: JSON.stringify({
@@ -96,7 +105,12 @@ export async function placeRollBet(input: {
         requestId,
       }),
     })
+    const clientReceivedAt = Date.now()
     applyRemoteUser(result.user)
-    return result
+    return {
+      ...result,
+      clientSentAt,
+      clientReceivedAt,
+    }
   })
 }
