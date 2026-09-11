@@ -308,6 +308,9 @@ export function DailyFreeCase() {
   if (!sessionReady) {
     return (
       <section className="w-full" aria-label="Бесплатный ежедневный кейс" aria-busy="true">
+        <h2 className="mb-3 text-center text-[22px] font-bold uppercase tracking-wide text-white">
+          Бесплатный кейс
+        </h2>
         <div
           className={[
             'relative overflow-hidden rounded-[22px] border border-neon-purple/30',
@@ -334,6 +337,9 @@ export function DailyFreeCase() {
 
   return (
     <section className="w-full" aria-label="Бесплатный ежедневный кейс">
+      <h2 className="mb-3 text-center text-[22px] font-bold uppercase tracking-wide text-white">
+        Бесплатный кейс
+      </h2>
       <div
         className={[
           'relative overflow-hidden rounded-[22px] border border-neon-purple/30',
