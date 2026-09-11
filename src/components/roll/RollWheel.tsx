@@ -25,17 +25,43 @@ type RollWheelProps = {
 
 const MIN_AVATAR_DEG = 8
 const MAX_AVATARS = 48
-const OUTER_RATIO = 0.48
-const HUB_RATIO = 0.165
-const AVATAR_RATIO = 0.31
-/** Waiting placeholder — 8 alternating purple wedges (reference). */
-const WAITING_PURPLE_A = '#6236ab'
-const WAITING_PURPLE_B = '#3a2468'
+/** Wheel fills most of the square canvas. */
+const OUTER_RATIO = 0.49
+/** Hub ≈ 28% of wheel diameter (reference). */
+const HUB_RATIO = 0.137
+const AVATAR_RATIO = 0.32
+
+/** Waiting state — translucent purple glass wedges (reference screenshot). */
 const WAITING_SEGMENTS = 8
+const WAITING_COLOR_A = 'rgba(148, 112, 198, 0.55)'
+const WAITING_COLOR_B = 'rgba(78, 52, 128, 0.50)'
+const SEGMENT_ALPHA = 0.72
 
 type AvatarCacheEntry = { img: HTMLImageElement; status: 'loading' | 'ready' | 'error' }
 
 const avatarCache = new Map<string, AvatarCacheEntry>()
+
+function hexToRgba(hex: string, alpha: number): string {
+  const raw = String(hex || '').replace('#', '').trim()
+  if (raw.length !== 3 && raw.length !== 6) {
+    return `rgba(139, 61, 255, ${alpha})`
+  }
+  const full =
+    raw.length === 3
+      ? raw
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : raw
+  const n = Number.parseInt(full, 16)
+  if (!Number.isFinite(n)) {
+    return `rgba(139, 61, 255, ${alpha})`
+  }
+  const r = (n >> 16) & 255
+  const g = (n >> 8) & 255
+  const b = n & 255
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
 
 /**
  * Telegram CDN does not send CORS headers. Setting crossOrigin='anonymous'
@@ -51,7 +77,6 @@ function loadAvatar(url: string, onReady: () => void): AvatarCacheEntry | null {
   }
   const img = new Image()
   img.decoding = 'async'
-  // Do NOT set crossOrigin — Telegram photo URLs are not CORS-enabled.
   const entry: AvatarCacheEntry = { img, status: 'loading' }
   avatarCache.set(url, entry)
   img.onload = () => {
@@ -93,6 +118,23 @@ function pickAvatarSegments(segments: RollSegment[]): RollSegment[] {
   return [...eligible].sort((a, b) => b.sizeDeg - a.sizeDeg).slice(0, MAX_AVATARS)
 }
 
+function drawWedge(
+  ctx: CanvasRenderingContext2D,
+  outerR: number,
+  startDeg: number,
+  endDeg: number,
+  fill: string,
+) {
+  const start = ((startDeg - 90) * Math.PI) / 180
+  const end = ((endDeg - 90) * Math.PI) / 180
+  ctx.beginPath()
+  ctx.moveTo(0, 0)
+  ctx.arc(0, 0, outerR, start, end, false)
+  ctx.closePath()
+  ctx.fillStyle = fill
+  ctx.fill()
+}
+
 export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
   const segments = useMemo(
     () => resolveRollSegments(round),
@@ -121,7 +163,6 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
 
   const bumpAvatars = () => {
     avatarTickRef.current += 1
-    // Repaint at current rotation without restarting the spin loop.
     paint(rotationRef.current)
   }
 
@@ -164,17 +205,17 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
     const outerR = size * OUTER_RATIO
     const hubR = size * HUB_RATIO
     const avatarR = size * AVATAR_RATIO
-    const baseAvatar = size * 0.09
+    const baseAvatar = size * 0.085
 
     ctx.clearRect(0, 0, size, size)
 
-    // Soft outer glow (screen space, under rotating content)
-    const glow = ctx.createRadialGradient(cx, cy, outerR * 0.55, cx, cy, outerR * 1.18)
-    glow.addColorStop(0, 'rgba(139,61,255,0.0)')
-    glow.addColorStop(0.55, 'rgba(139,61,255,0.12)')
-    glow.addColorStop(1, 'rgba(139,61,255,0)')
+    // Soft ambient glow under the disc
+    const glow = ctx.createRadialGradient(cx, cy, outerR * 0.65, cx, cy, outerR * 1.15)
+    glow.addColorStop(0, 'rgba(120, 70, 200, 0)')
+    glow.addColorStop(0.7, 'rgba(120, 70, 200, 0.14)')
+    glow.addColorStop(1, 'rgba(80, 40, 160, 0)')
     ctx.beginPath()
-    ctx.arc(cx, cy, outerR * 1.12, 0, Math.PI * 2)
+    ctx.arc(cx, cy, outerR * 1.1, 0, Math.PI * 2)
     ctx.fillStyle = glow
     ctx.fill()
 
@@ -182,44 +223,48 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
     ctx.translate(cx, cy)
     ctx.rotate((rotationDeg * Math.PI) / 180)
 
+    // Strict circular clip — no color escapes the rim
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(0, 0, outerR, 0, Math.PI * 2)
+    ctx.clip()
+
     const waitingPlaceholder = segs.length === 0
     if (waitingPlaceholder) {
-      ctx.save()
-      ctx.beginPath()
-      ctx.arc(0, 0, outerR, 0, Math.PI * 2)
-      ctx.clip()
       const slice = 360 / WAITING_SEGMENTS
       for (let i = 0; i < WAITING_SEGMENTS; i += 1) {
-        const startDeg = i * slice
-        const endDeg = startDeg + slice
-        const start = ((startDeg - 90) * Math.PI) / 180
-        const end = ((endDeg - 90) * Math.PI) / 180
-        ctx.beginPath()
-        ctx.moveTo(0, 0)
-        ctx.arc(0, 0, outerR, start, end, false)
-        ctx.closePath()
-        ctx.fillStyle = i % 2 === 0 ? WAITING_PURPLE_A : WAITING_PURPLE_B
-        ctx.fill()
+        drawWedge(
+          ctx,
+          outerR,
+          i * slice,
+          (i + 1) * slice,
+          i % 2 === 0 ? WAITING_COLOR_A : WAITING_COLOR_B,
+        )
       }
-      ctx.restore()
     } else {
-      ctx.save()
-      ctx.beginPath()
-      ctx.arc(0, 0, outerR, 0, Math.PI * 2)
-      ctx.clip()
-
       for (const seg of segs) {
-        const start = ((seg.startDeg - 90) * Math.PI) / 180
-        const end = ((seg.endDeg - 90) * Math.PI) / 180
-        ctx.beginPath()
-        ctx.moveTo(0, 0)
-        ctx.arc(0, 0, outerR, start, end, false)
-        ctx.closePath()
-        ctx.fillStyle = seg.color
-        ctx.fill()
+        drawWedge(ctx, outerR, seg.startDeg, seg.endDeg, hexToRgba(seg.color, SEGMENT_ALPHA))
       }
-      ctx.restore()
     }
+
+    // Soft radial vignette inside the glass disc
+    const innerShade = ctx.createRadialGradient(0, 0, hubR * 0.8, 0, 0, outerR)
+    innerShade.addColorStop(0, 'rgba(8, 4, 18, 0)')
+    innerShade.addColorStop(0.72, 'rgba(8, 4, 18, 0)')
+    innerShade.addColorStop(1, 'rgba(4, 2, 12, 0.28)')
+    ctx.beginPath()
+    ctx.arc(0, 0, outerR, 0, Math.PI * 2)
+    ctx.fillStyle = innerShade
+    ctx.fill()
+
+    // Soft top highlight for glass
+    const highlight = ctx.createLinearGradient(0, -outerR, 0, outerR * 0.2)
+    highlight.addColorStop(0, 'rgba(255, 255, 255, 0.1)')
+    highlight.addColorStop(0.45, 'rgba(255, 255, 255, 0)')
+    ctx.beginPath()
+    ctx.arc(0, 0, outerR, 0, Math.PI * 2)
+    ctx.fillStyle = highlight
+    ctx.fill()
 
     const avatars = waitingPlaceholder ? [] : pickAvatarSegments(segs)
     for (const seg of avatars) {
@@ -231,11 +276,11 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
       const r = (baseAvatar * scale) / 2
 
       ctx.beginPath()
-      ctx.arc(x, y, r + size * 0.0035, 0, Math.PI * 2)
+      ctx.arc(x, y, r + size * 0.003, 0, Math.PI * 2)
       ctx.fillStyle = '#0d0a14'
       ctx.fill()
-      ctx.strokeStyle = 'rgba(255,255,255,0.55)'
-      ctx.lineWidth = Math.max(1, size * 0.0045)
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)'
+      ctx.lineWidth = Math.max(1.2, size * 0.004)
       ctx.stroke()
 
       const entry = seg.photoUrl ? loadAvatar(seg.photoUrl, bumpAvatars) : null
@@ -247,14 +292,12 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
         ctx.drawImage(entry.img, x - r, y - r, r * 2, r * 2)
         ctx.restore()
       } else if (entry?.status === 'loading') {
-        // Soft placeholder while photo loads — not a letter.
         ctx.beginPath()
         ctx.arc(x, y, r, 0, Math.PI * 2)
         ctx.fillStyle = 'rgba(255,255,255,0.12)'
         ctx.fill()
       } else {
-        // No photo or load error → initial fallback.
-        ctx.fillStyle = 'rgba(255,255,255,0.8)'
+        ctx.fillStyle = 'rgba(255,255,255,0.85)'
         ctx.font = `bold ${Math.max(10, r * 0.9)}px system-ui, sans-serif`
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
@@ -262,33 +305,40 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
       }
     }
 
-    ctx.restore()
+    ctx.restore() // clip
+    ctx.restore() // rotation
 
-    // Crisp rim + soft highlight
+    // Thin outer rim (perfect circle, screen space)
     ctx.beginPath()
     ctx.arc(cx, cy, outerR, 0, Math.PI * 2)
-    ctx.strokeStyle = 'rgba(255,255,255,0.28)'
-    ctx.lineWidth = Math.max(2, size * 0.014)
+    ctx.strokeStyle = 'rgba(200, 170, 255, 0.35)'
+    ctx.lineWidth = Math.max(1.5, size * 0.007)
     ctx.stroke()
     ctx.beginPath()
-    ctx.arc(cx, cy, outerR - size * 0.008, 0, Math.PI * 2)
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)'
-    ctx.lineWidth = Math.max(1, size * 0.006)
+    ctx.arc(cx, cy, outerR - size * 0.005, 0, Math.PI * 2)
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)'
+    ctx.lineWidth = Math.max(1, size * 0.005)
     ctx.stroke()
 
-    const grad = ctx.createRadialGradient(cx, cy - hubR * 0.25, 0, cx, cy, hubR)
-    grad.addColorStop(0, '#241c34')
-    grad.addColorStop(1, '#0a0810')
+    // Dark glass hub
+    const hubGrad = ctx.createRadialGradient(cx, cy - hubR * 0.3, 0, cx, cy, hubR)
+    hubGrad.addColorStop(0, '#2a2038')
+    hubGrad.addColorStop(0.55, '#14101c')
+    hubGrad.addColorStop(1, '#08060e')
     ctx.beginPath()
     ctx.arc(cx, cy, hubR, 0, Math.PI * 2)
-    ctx.fillStyle = '#0a0810'
+    ctx.fillStyle = hubGrad
     ctx.fill()
-    ctx.strokeStyle = 'rgba(255,255,255,0.14)'
-    ctx.lineWidth = Math.max(1, size * 0.006)
+    ctx.strokeStyle = 'rgba(180, 150, 230, 0.18)'
+    ctx.lineWidth = Math.max(1, size * 0.005)
     ctx.stroke()
+    // Soft inner hub glow
+    const hubGlow = ctx.createRadialGradient(cx, cy, hubR * 0.2, cx, cy, hubR)
+    hubGlow.addColorStop(0, 'rgba(120, 80, 200, 0.12)')
+    hubGlow.addColorStop(1, 'rgba(0, 0, 0, 0)')
     ctx.beginPath()
-    ctx.arc(cx, cy, hubR - size * 0.004, 0, Math.PI * 2)
-    ctx.fillStyle = grad
+    ctx.arc(cx, cy, hubR, 0, Math.PI * 2)
+    ctx.fillStyle = hubGlow
     ctx.fill()
 
     const label = centerLabelText(
@@ -311,17 +361,14 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
     syncNickname(angle, segmentsRef.current)
   }
 
-  // Static / betting / completed paints — never restarts an active spin loop.
   useEffect(() => {
     if (spinLoopKeyRef.current) {
-      // Spin loop owns painting; just refresh nickname/segments via next frame.
       return
     }
     paint(rotationRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segments, status, pot, countdownMs])
 
-  // One continuous rAF loop per spin identity. Poll/SSE must NOT restart it.
   useEffect(() => {
     if (!spinClock || (status !== 'spinning' && status !== 'locked')) {
       if (status === 'completed' && round?.targetAngle != null) {
@@ -348,7 +395,6 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
 
     const key = `${spinClock.roundId}:${spinClock.targetAngle}:${spinClock.startedAtMs}:${spinClock.endsAtMs}`
     if (spinLoopKeyRef.current === key && rafRef.current != null) {
-      // Same frozen clock — keep running loop; do not restart.
       return
     }
 
@@ -374,14 +420,12 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
     rafRef.current = requestAnimationFrame(tick)
 
     return () => {
-      // Only cancel if this effect instance still owns the loop key.
       if (spinLoopKeyRef.current === key && rafRef.current != null) {
         cancelAnimationFrame(rafRef.current)
         rafRef.current = null
         spinLoopKeyRef.current = null
       }
     }
-    // Intentionally omit segments — updates flow through refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spinClock, status, round?.targetAngle])
 
@@ -393,11 +437,12 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
   }, [])
 
   return (
-    <div className="relative mx-auto mb-3 w-full max-w-[340px]">
-      <div className="relative z-30 flex h-[56px] flex-col items-center justify-end pb-0.5">
+    <div className="relative mx-auto mb-2 w-full max-w-[min(82vw,360px)]">
+      {/* Nickname above pointer */}
+      <div className="relative z-30 flex h-[50px] flex-col items-center justify-end">
         <div
           className={[
-            'mb-1.5 flex h-7 max-w-[min(220px,70%)] items-center justify-center rounded-full border border-white/15 bg-[#1a1528]/95 px-3 shadow-lg backdrop-blur-sm transition-opacity',
+            'mb-0.5 flex h-7 max-w-[min(220px,70%)] items-center justify-center rounded-full border border-white/15 bg-[#1a1528]/95 px-3 shadow-lg backdrop-blur-sm transition-opacity',
             showNick && pointerUser ? 'opacity-100' : 'opacity-0',
           ].join(' ')}
         >
@@ -405,25 +450,34 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
             {pointerUser || '\u00a0'}
           </span>
         </div>
-        <div className="relative z-30" aria-hidden>
-          <div
-            className="h-0 w-0 border-l-[14px] border-r-[14px] border-t-[22px] border-l-transparent border-r-transparent border-t-white"
-            style={{ filter: 'drop-shadow(0 3px 3px rgb(0 0 0 / 55%))' }}
+        {/* Pointer — rounded triangle, white stroke + dark fill, above rim */}
+        <svg
+          className="relative z-30 translate-y-[3px] drop-shadow-[0_2px_4px_rgba(0,0,0,0.55)]"
+          width="32"
+          height="28"
+          viewBox="0 0 32 28"
+          aria-hidden
+        >
+          <path
+            d="M16 25.5 C15.2 25.5 14.5 25.1 14.1 24.4 L3.4 5.8 C2.7 4.5 3.6 2.8 5.2 2.8 L26.8 2.8 C28.4 2.8 29.3 4.5 28.6 5.8 L17.9 24.4 C17.5 25.1 16.8 25.5 16 25.5 Z"
+            fill="#121018"
+            stroke="#ffffff"
+            strokeWidth="3.2"
+            strokeLinejoin="round"
           />
-          <div className="absolute left-1/2 top-[4px] h-0 w-0 -translate-x-1/2 border-l-[9px] border-r-[9px] border-t-[14px] border-l-transparent border-r-transparent border-t-[#121018]" />
-        </div>
+        </svg>
       </div>
 
-      <div className="relative mx-auto aspect-square w-[min(100%,300px)]">
+      <div className="relative z-10 mx-auto aspect-square w-full">
         <canvas
           ref={canvasRef}
-          className="size-full drop-shadow-[0_0_36px_rgb(139_61_255/28%)]"
+          className="size-full"
           role="img"
           aria-label="Roll wheel"
         />
       </div>
 
-      <p className="mt-3 text-center text-[13px] font-semibold text-white/55">
+      <p className="mt-2.5 text-center text-[13px] font-semibold text-white/55">
         {statusLabel(round)}
       </p>
     </div>
@@ -441,7 +495,7 @@ function centerLabelText(
     return {
       text: 'Ожидание',
       fill: '#ffffff',
-      font: (size) => `700 ${Math.max(11, size * 0.042)}px system-ui, sans-serif`,
+      font: (size) => `700 ${Math.max(13, Math.round(size * 0.042))}px system-ui, sans-serif`,
     }
   }
   if (status === 'betting' && countdownMs != null) {
@@ -451,28 +505,27 @@ function centerLabelText(
     return {
       text: `${mm}:${ss}`,
       fill: '#ffffff',
-      font: (size) => `700 ${Math.max(18, size * 0.07)}px system-ui, sans-serif`,
+      font: (size) => `700 ${Math.max(18, size * 0.068)}px system-ui, sans-serif`,
     }
   }
   if (status === 'spinning' || status === 'locked' || status === 'completed') {
     return {
       text: 'Игра',
       fill: '#ffffff',
-      font: (size) => `800 ${Math.max(14, size * 0.055)}px system-ui, sans-serif`,
+      font: (size) => `800 ${Math.max(14, size * 0.05)}px system-ui, sans-serif`,
     }
   }
-  // 1+ players while waiting for second — show «Игра», never the stake sum.
   if (status === 'waiting') {
     return {
       text: 'Игра',
       fill: '#ffffff',
-      font: (size) => `700 ${Math.max(12, size * 0.048)}px system-ui, sans-serif`,
+      font: (size) => `700 ${Math.max(13, size * 0.045)}px system-ui, sans-serif`,
     }
   }
   return {
     text: 'Ожидание',
     fill: '#ffffff',
-    font: (size) => `700 ${Math.max(11, size * 0.042)}px system-ui, sans-serif`,
+    font: (size) => `700 ${Math.max(12, size * 0.04)}px system-ui, sans-serif`,
   }
 }
 
