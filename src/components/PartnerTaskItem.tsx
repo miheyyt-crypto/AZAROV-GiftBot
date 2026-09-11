@@ -1,9 +1,37 @@
 import { Check, Lock } from 'lucide-react'
-import { useRef, useState, type ChangeEvent } from 'react'
+import { useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 
 import { CoinIcon } from '@/components/CoinIcon'
 import { formatBalance } from '@/lib/balance'
 import type { PartnerSubmission, PartnerTaskConfig, PartnerTaskStatus } from '@/types/partner'
+
+/** Renders `**bold**` segments without showing markdown markers. */
+function renderInlineBold(text: string): ReactNode[] {
+  const nodes: ReactNode[] = []
+  const pattern = /\*\*([^*]+)\*\*/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  let key = 0
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index))
+    }
+    nodes.push(
+      <strong key={`b-${key}`} className="font-semibold text-inherit">
+        {match[1]}
+      </strong>,
+    )
+    key += 1
+    lastIndex = match.index + match[0].length
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex))
+  }
+
+  return nodes
+}
 
 interface PartnerTaskItemProps {
   index: number
@@ -140,7 +168,7 @@ export function PartnerTaskItem({
               isLocked ? 'text-white/45' : 'text-white/65',
             ].join(' ')}
           >
-            {task.description}
+            {renderInlineBold(task.description)}
           </p>
 
           <div className="mt-3 flex items-end justify-between gap-3">

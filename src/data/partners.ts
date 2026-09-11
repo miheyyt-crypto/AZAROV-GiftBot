@@ -29,6 +29,16 @@ function formatRub(amount: number): string {
   return new Intl.NumberFormat('ru-RU').format(amount)
 }
 
+/** Deposit tasks (from #2) for Welvura — amount stays dynamic via formatRub. */
+function welvuraDepositDescription(amount: number): string {
+  return (
+    `Пополни счёт на **${formatRub(amount)} ₽ или больше** и пришли скриншот вместе со своим ID. ` +
+    `Засчитываются только новые депозиты начиная **с 11 сентября**. ` +
+    `(Депозит учитывается только после подтверждённой привязки аккаунта)`
+  )
+}
+
+/** Legacy deposit copy for other partners (e.g. hidden Stake). */
 function depositDescription(amount: number): string {
   return (
     `Пополни счёт на ${formatRub(amount)} ₽ или больше и пришли скриншот вместе со своим ID. ` +
@@ -42,6 +52,7 @@ function createPartnerTasks(
   partnerId: string,
   partnerName: string,
   actionUrl: string,
+  buildDepositDescription: (amount: number) => string = depositDescription,
 ): PartnerTaskConfig[] {
   const accountLink: PartnerTaskConfig = {
     id: `${partnerId}-task-1`,
@@ -66,7 +77,7 @@ function createPartnerTasks(
       order,
       type: 'deposit',
       title: `Депозит ${formatRub(item.amount)} ₽ в ${partnerName}`,
-      description: depositDescription(item.amount),
+      description: buildDepositDescription(item.amount),
       reward: item.reward,
       depositAmount: item.amount,
       actionUrl,
@@ -107,7 +118,12 @@ export const partners: PartnerConfig[] = [
     rewardSuffix: '+',
     theme: 'dragonmoney',
     image: welvuraCookie,
-    tasks: createPartnerTasks('dragonmoney', 'Welvura', 'https://welvar.link/?i=1485419'),
+    tasks: createPartnerTasks(
+      'dragonmoney',
+      'Welvura',
+      'https://welvar.link/?i=1485419',
+      welvuraDepositDescription,
+    ),
   },
 ]
 
