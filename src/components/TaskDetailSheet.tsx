@@ -1,5 +1,6 @@
 import { Check, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { CoinIcon } from '@/components/CoinIcon'
 import { useNotifications } from '@/components/NotificationProvider'
@@ -180,8 +181,9 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
       ? Math.min((progress.current / progress.required) * 100, 100)
       : 0
 
-  return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center">
+  // Portal above BottomNav (z-50): inline fixed sheets stay under nav due to layout stacking.
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-end justify-center">
       <button
         type="button"
         className={[
@@ -314,6 +316,7 @@ export function TaskDetailSheet({ task, onClose }: TaskDetailSheetProps) {
           </button>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   )
 }
