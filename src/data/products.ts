@@ -49,6 +49,27 @@ export const products: ShopProduct[] = [
     available: true,
   },
   {
+    id: 'welvura-balance-500',
+    name: '500 рублей на Welvura',
+    price: 5555,
+    currency: 'coins',
+    category: 'money',
+    image: welvura200Image,
+    imageClassName: 'object-contain scale-[0.92]',
+    description: '500 рублей на твой баланс Welvura, с вагером х1.',
+    detailText:
+      '500 рублей на твой баланс Welvura, с вагером х1. Покупай товар и получай 500 рублей себе на баланс! Для получения укажи свой ID аккаунта Welvura ниже, после чего деньги уже совсем скоро прийдут тебе на баланс!',
+    infoText: ADMIN_ORDERS_INFO,
+    checkoutField: {
+      type: 'welvura_id',
+      label: 'ID аккаунта Welvura',
+      placeholder: 'Например: 12345678',
+      hint: 'Только цифры — ID из твоего аккаунта Welvura.',
+      maxLength: 32,
+    },
+    available: true,
+  },
+  {
     id: 'cash-5000',
     name: '5 000 ₽',
     price: 199999,
