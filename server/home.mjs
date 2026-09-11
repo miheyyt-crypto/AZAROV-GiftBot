@@ -69,9 +69,13 @@ function chanceLabelFromStoredCard(card, roundId) {
   return `шанс ${shown}%`
 }
 
-function buildInviteCountMap(store) {
+function buildActiveReferralCountMap(store) {
   const counts = new Map()
   for (const referral of Object.values(store.referrals || {})) {
+    const status = String(referral?.status || '').toLowerCase()
+    if (status !== 'active' && status !== 'rewarded') {
+      continue
+    }
     const referrerId = Number(referral?.referrerUserId)
     if (!Number.isFinite(referrerId) || referrerId <= 0) {
       continue
@@ -119,7 +123,7 @@ export function getLeaderboard(limit = 3, options = {}) {
       : null
 
   return withStoreRead((store) => {
-    const inviteCounts = buildInviteCountMap(store)
+    const inviteCounts = buildActiveReferralCountMap(store)
     const ranked = Object.values(store.users || {})
       .map((user) => {
         const tid = Number(user.telegramId)
