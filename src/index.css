@@ -645,6 +645,49 @@ body {
   background: #140a22;
 }
 
+/* ── Desktop Roll shell (isolated from mobile ui-page) ───────────── */
+
+.roll-desktop {
+  --roll-glass-bg: rgb(22 16 34 / 72%);
+  --roll-glass-border: rgb(255 255 255 / 10%);
+  --roll-glass-shadow: 0 8px 28px rgb(0 0 0 / 35%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: min(100%, 100dvh);
+  /* Leave room for fixed BottomNav from AppLayout */
+  max-height: calc(100dvh - var(--nav-height, 5.75rem) - 0.5rem);
+  padding: 0.75rem 0.875rem 0.5rem;
+  background: #140a22;
+  box-sizing: border-box;
+}
+
+.roll-desktop__chrome {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 0.5rem;
+  position: relative;
+  z-index: 2;
+}
+
+.roll-desktop__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+  z-index: 1;
+  padding-bottom: 0.5rem;
+}
+
 .roll-glass {
   border: 1px solid var(--roll-glass-border);
   background: var(--roll-glass-bg);

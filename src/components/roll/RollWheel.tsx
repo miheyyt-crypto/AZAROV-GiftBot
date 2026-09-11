@@ -21,6 +21,8 @@ type RollWheelProps = {
   round: RollRound | null
   countdownMs: number | null
   spinClock: RollSpinClock | null
+  /** Optional override for stage max-width (desktop compact). */
+  stageClassName?: string
 }
 
 const MIN_AVATAR_DEG = 8
@@ -137,7 +139,7 @@ function drawWedge(
   ctx.fill()
 }
 
-export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
+export function RollWheel({ round, countdownMs, spinClock, stageClassName }: RollWheelProps) {
   const segments = useMemo(
     () => resolveRollSegments(round),
     [round?.id, round?.status, round?.pot, round?.version, round?.players, round?.segments],
@@ -498,8 +500,12 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
   }, [])
 
   return (
-    <div className="roll-wheel-stage relative mx-auto mb-2 w-full max-w-[min(82vw,360px)]">
-      {/* Nickname above pointer */}
+    <div
+      className={
+        stageClassName ||
+        'roll-wheel-stage relative mx-auto mb-2 w-full max-w-[min(82vw,360px)]'
+      }
+    >      {/* Nickname above pointer */}
       <div className="relative z-30 flex h-[50px] flex-col items-center justify-end">
         <div
           className={[

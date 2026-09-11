@@ -6,13 +6,15 @@ import { formatPlayersCountLabel, formatRollUser, type RollRound } from '@/types
 
 type RollPlayerListProps = {
   round: RollRound | null
+  /** Cap visible rows before list inner-scroll (desktop compact). Default 8. */
+  maxVisibleRows?: number
 }
 
 const ROW_H = 62
-const MAX_VISIBLE_ROWS = 8
+const DEFAULT_MAX_VISIBLE_ROWS = 8
 const VIRTUALIZE_FROM = 40
 
-export function RollPlayerList({ round }: RollPlayerListProps) {
+export function RollPlayerList({ round, maxVisibleRows = DEFAULT_MAX_VISIBLE_ROWS }: RollPlayerListProps) {
   const players = round?.players || []
   const count = players.length
   const max = round?.maxPlayers || 1000
@@ -20,7 +22,7 @@ export function RollPlayerList({ round }: RollPlayerListProps) {
   const [scrollTop, setScrollTop] = useState(0)
 
   const virtualized = count >= VIRTUALIZE_FROM
-  const viewportH = Math.min(count, MAX_VISIBLE_ROWS) * ROW_H
+  const viewportH = Math.min(count, maxVisibleRows) * ROW_H
 
   const { start, end, offsetY } = useMemo(() => {
     if (!virtualized) {

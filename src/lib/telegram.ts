@@ -17,6 +17,24 @@ const MOBILE_TG_PLATFORMS = new Set([
   'ipad',
 ])
 
+/** True for Telegram Desktop / desktop browser — never for iOS/Android WebView. */
+export function isDesktopRoll(): boolean {
+  if (typeof window === 'undefined') {
+    return false
+  }
+  const platform = String(getTelegramPlatform() || 'browser').toLowerCase()
+  if (MOBILE_TG_PLATFORMS.has(platform)) {
+    return false
+  }
+  if (HARD_DESKTOP_TG_PLATFORMS.has(platform)) {
+    return true
+  }
+  return (
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(hover: hover) and (pointer: fine)').matches
+  )
+}
+
 export function isTelegramWebApp(): boolean {
   return typeof window !== 'undefined' && Boolean(window.Telegram?.WebApp)
 }
@@ -77,14 +95,7 @@ export function bootstrapViewportEnvironment(webApp: TelegramWebApp | null = get
   }
 
   const root = document.documentElement
-  const platform = String(webApp?.platform || getTelegramPlatform() || 'browser').toLowerCase()
-  const finePointer =
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(hover: hover) and (pointer: fine)').matches
-
-  const isMobileTg = MOBILE_TG_PLATFORMS.has(platform)
-  const isHardDesktopTg = HARD_DESKTOP_TG_PLATFORMS.has(platform)
-  const useDesktopScroll = !isMobileTg && (isHardDesktopTg || finePointer)
+  const useDesktopScroll = isDesktopRoll()
 
   root.classList.toggle('app-desktop-embed', useDesktopScroll)
 
