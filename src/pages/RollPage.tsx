@@ -22,6 +22,7 @@ import {
   ROLL_POLL_MS_IDLE,
   ROLL_POLL_MS_SPIN,
   ROLL_QUICK_BETS,
+  ROLL_WINNER_REVEAL_AFTER_MS,
   type RollConfig,
   type RollGameCard,
   type RollRound,
@@ -137,13 +138,20 @@ export function RollPage() {
 
   const serverNowApprox = useCallback(() => Date.now() + skewRef.current, [])
 
-  /** Local spin timeline finished — safe to reveal result UI. */
-  const localSpinFinished = useCallback((roundId: string) => {
+  /** Winner/lose UI only after 7s from spin start — never before the wheel has mostly spun. */
+  const canRevealResultUi = useCallback((r: RollRound) => {
     const clock = spinClockRef.current
-    if (!clock || clock.roundId !== roundId) {
-      return true
+    let startedAtMs = NaN
+    if (clock && clock.roundId === r.id) {
+      startedAtMs = clock.startedAtMs
+    } else if (r.spinStartedAt) {
+      startedAtMs = Date.parse(r.spinStartedAt) - skewRef.current
     }
-    return Date.now() >= clock.endsAtMs - 8
+    if (!Number.isFinite(startedAtMs)) {
+      // Reconnect into a finished round with no timeline — allow once.
+      return r.status === 'completed'
+    }
+    return Date.now() >= startedAtMs + ROLL_WINNER_REVEAL_AFTER_MS
   }, [])
 
   const revealWinnerUi = useCallback(
@@ -157,7 +165,7 @@ export function RollPage() {
       if (winnerCardForRound.current === r.id) {
         return
       }
-      if (!localSpinFinished(r.id)) {
+      if (!canRevealResultUi(r)) {
         return
       }
       winnerCardForRound.current = r.id
@@ -170,7 +178,7 @@ export function RollPage() {
         setShowConfetti(true)
       }
     },
-    [account.telegramId, localSpinFinished],
+    [account.telegramId, canRevealResultUi],
   )
 
   const revealLoseToast = useCallback(
@@ -187,7 +195,7 @@ export function RollPage() {
       if (loseToastForRound.current === r.id) {
         return
       }
-      if (!localSpinFinished(r.id)) {
+      if (!canRevealResultUi(r)) {
         return
       }
       loseToastForRound.current = r.id
@@ -197,7 +205,7 @@ export function RollPage() {
         message: `Победитель: ${r.winner ? formatUser(r) : '—'}`,
       })
     },
-    [account.telegramId, localSpinFinished, showNotification],
+    [account.telegramId, canRevealResultUi, showNotification],
   )
 
   const tryRevealResult = useCallback(
@@ -394,21 +402,26 @@ export function RollPage() {
     return () => window.clearInterval(timer)
   }, [applyState, round?.status, round?.bettingEndsAt, serverNowApprox])
 
-  // Reveal result the instant the local spin timeline ends (winner already known from SPIN_STARTED).
+  // Reveal winner UI 7s after spin start; reconcile/fetch when full spin timeline ends.
   useEffect(() => {
     if (!spinClock) {
       return
     }
     const clock = spinClock
     spinClockRef.current = clock
-    const delay = Math.max(0, clock.endsAtMs - Date.now())
-    const timer = window.setTimeout(() => {
+    const revealDelay = Math.max(0, clock.startedAtMs + ROLL_WINNER_REVEAL_AFTER_MS - Date.now())
+    const endDelay = Math.max(0, clock.endsAtMs - Date.now())
+
+    const revealTimer = window.setTimeout(() => {
+      tryRevealResult(roundRef.current)
+    }, revealDelay)
+
+    const endTimer = window.setTimeout(() => {
       tryRevealResult(roundRef.current)
       if (!forcedFetchAtSpinEnd.current) {
         forcedFetchAtSpinEnd.current = true
         void fetchRollState().then(applyState)
       }
-      // Drop clock after landing so completed state can take over cleanly.
       setSpinClock((prev) => {
         if (prev && prev.roundId === clock.roundId && Date.now() >= prev.endsAtMs) {
           spinClockRef.current = null
@@ -416,8 +429,12 @@ export function RollPage() {
         }
         return prev
       })
-    }, delay)
-    return () => window.clearTimeout(timer)
+    }, endDelay)
+
+    return () => {
+      window.clearTimeout(revealTimer)
+      window.clearTimeout(endTimer)
+    }
   }, [applyState, spinClock, tryRevealResult])
 
   useEffect(() => {

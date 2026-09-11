@@ -2,6 +2,8 @@ export const ROLL_MAX_PLAYERS = 1000
 export const ROLL_MIN_BET = 100
 export const ROLL_BETTING_DURATION_MS = 20_000
 export const ROLL_SPIN_DURATION_MS = 10_000
+/** Show winner card this many ms after spin start (wheel still decelerating). */
+export const ROLL_WINNER_REVEAL_AFTER_MS = 7_000
 export const ROLL_RESULT_HOLD_MS = 8_000
 export const ROLL_POLL_MS_ACTIVE = 2_000
 export const ROLL_POLL_MS_IDLE = 5_000
