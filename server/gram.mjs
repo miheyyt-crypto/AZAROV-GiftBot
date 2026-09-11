@@ -1,7 +1,7 @@
-/** Shared Gramm helpers (server). Keep precision at 6 decimal places. */
+/** Shared Gram helpers (server). Keep precision at 6 decimal places. */
 
 export const GRAM_CURRENCY = 'GRAM'
-export const GRAM_LABEL = 'Gramm'
+export const GRAM_LABEL = 'Gram'
 export const MIN_GRAM_WITHDRAWAL = 20
 export const GRAM_DECIMALS = 6
 

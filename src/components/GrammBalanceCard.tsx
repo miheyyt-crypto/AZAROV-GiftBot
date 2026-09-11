@@ -19,7 +19,7 @@ export function GrammBalanceCard({ balance, onOpen, className = '' }: GrammBalan
       ]
         .filter(Boolean)
         .join(' ')}
-      aria-label={`Gramm: ${formatGrammLabel(balance)}. Нажмите, чтобы открыть`}
+      aria-label={`Gram: ${formatGrammLabel(balance)}. Нажмите, чтобы открыть`}
     >
       <div className="flex items-center gap-3">
         <div
@@ -29,7 +29,7 @@ export function GrammBalanceCard({ balance, onOpen, className = '' }: GrammBalan
           <img src={gramImage} alt="" className="size-9 object-contain" draggable={false} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-medium text-[#b8b4c4]">Gramm</p>
+          <p className="text-[15px] font-medium text-[#b8b4c4]">Gram</p>
           <p className="mt-1 text-[22px] font-bold leading-none tracking-tight text-white tabular-nums">
             {formatGrammLabel(balance)}
           </p>

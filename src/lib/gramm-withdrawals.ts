@@ -30,9 +30,9 @@ export type GramWithdrawalCreateResponse = {
 export function gramWithdrawalErrorMessage(code?: string, fallback?: string): string {
   switch (code) {
     case 'BELOW_MINIMUM':
-      return 'Минимальная сумма для вывода — 20 Gramm.'
+      return 'Минимальная сумма для вывода — 20 Gram.'
     case 'INSUFFICIENT_BALANCE':
-      return 'Недостаточно Gramm на балансе.'
+      return 'Недостаточно Gram на балансе.'
     case 'INVALID_AMOUNT':
       return 'Укажи корректную сумму вывода.'
     default:

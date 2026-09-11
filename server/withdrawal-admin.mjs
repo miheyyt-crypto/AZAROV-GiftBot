@@ -70,7 +70,7 @@ function formatGramWithdrawalAmount(withdrawal) {
         .replace(/(\.\d*?[1-9])0+$/, '$1')
         .replace(/\.0+$/, '')
     : '0'
-  return `${text} Gramm`
+  return `${text} Gram`
 }
 
 function isGramWithdrawal(withdrawal) {
@@ -82,14 +82,14 @@ export function buildWithdrawalAdminText(withdrawal, user) {
   if (isGramWithdrawal(withdrawal)) {
     return [
       '━━━━━━━━━━━━━━━━',
-      '💠 <b>НОВЫЙ ВЫВОД GRAMM</b>',
+      '💠 <b>НОВЫЙ ВЫВОД GRAM</b>',
       '━━━━━━━━━━━━━━━━',
       '',
       `👤 Пользователь: ${username}`,
       `🆔 ID: <code>${withdrawal.userId}</code>`,
       '',
       `💰 Сумма: <b>${escapeHtml(formatGramWithdrawalAmount(withdrawal))}</b>`,
-      '💎 Метод: Gramm',
+      '💎 Метод: Gram',
       '',
       `📋 Заявка: <code>${escapeHtml(withdrawal.id)}</code>`,
       '',
@@ -208,7 +208,7 @@ export async function notifyUserWithdrawalDecision(withdrawal, options = {}) {
   if (status === WITHDRAWAL_STATUS.PAID) {
     text = gram
       ? [
-          '✅ <b>Выплата Gramm подтверждена!</b>',
+          '✅ <b>Выплата Gram подтверждена!</b>',
           '',
           escapeHtml(amount),
           '',
@@ -225,11 +225,11 @@ export async function notifyUserWithdrawalDecision(withdrawal, options = {}) {
   } else if (status === WITHDRAWAL_STATUS.REJECTED) {
     text = gram
       ? [
-          '❌ <b>Заявка на вывод Gramm отклонена.</b>',
+          '❌ <b>Заявка на вывод Gram отклонена.</b>',
           '',
           `Заявка <code>${escapeHtml(withdrawal.id)}</code>`,
           '',
-          'Gramm возвращены на баланс.',
+          'Gram возвращены на баланс.',
         ].join('\n')
       : [
           '❌ <b>Заявка на вывод отклонена.</b>',

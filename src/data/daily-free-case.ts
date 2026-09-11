@@ -53,7 +53,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         amount: 100,
         weight: 1,
         emoji: '💠',
-        valueLabel: '100 GRAM',
+        valueLabel: '100 Gram',
         image: gramImage,
       },
       {
@@ -63,7 +63,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         amount: 50,
         weight: 1,
         emoji: '💠',
-        valueLabel: '50 GRAM',
+        valueLabel: '50 Gram',
         image: gramImage,
       },
       {
@@ -121,7 +121,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         amount: 2,
         weight: 1,
         emoji: '💎',
-        valueLabel: '2 GRAM',
+        valueLabel: '2 Gram',
         image: gramImage,
       },
       {
@@ -131,7 +131,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         amount: 1,
         weight: 1,
         emoji: '💎',
-        valueLabel: '1 GRAM',
+        valueLabel: '1 Gram',
         image: gramImage,
       },
       {
@@ -141,7 +141,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         amount: 0.5,
         weight: 1,
         emoji: '💎',
-        valueLabel: '0.5 GRAM',
+        valueLabel: '0.5 Gram',
         image: gramImage,
       },
       {
@@ -151,7 +151,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         amount: 0.2,
         weight: 1,
         emoji: '💎',
-        valueLabel: '0.2 GRAM',
+        valueLabel: '0.2 Gram',
         image: gramImage,
       },
     ],
@@ -169,7 +169,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         amount: 0.01,
         weight: 1,
         emoji: '🔹',
-        valueLabel: '0.01 GRAM',
+        valueLabel: '0.01 Gram',
         image: gramImage,
       },
       {
@@ -179,7 +179,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         amount: 0.005,
         weight: 1,
         emoji: '🔹',
-        valueLabel: '0.005 GRAM',
+        valueLabel: '0.005 Gram',
         image: gramImage,
       },
       {
@@ -189,7 +189,7 @@ export const DAILY_FREE_CASE_RARITIES: Record<DailyFreeCaseRarityId, DailyFreeCa
         amount: 0.001,
         weight: 1,
         emoji: '🔹',
-        valueLabel: '0.001 GRAM',
+        valueLabel: '0.001 Gram',
         image: gramImage,
       },
       {

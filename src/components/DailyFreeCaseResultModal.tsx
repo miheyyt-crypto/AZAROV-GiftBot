@@ -119,7 +119,7 @@ export function DailyFreeCaseResultModal({ reward, onClose }: DailyFreeCaseResul
               {reward.rewardType === 'COINS'
                 ? '⭐ Монеты зачислены на баланс!'
                 : reward.rewardType === 'GRAM'
-                  ? '💠 GRAM зачислен на баланс!'
+                  ? '💠 Gram зачислен на баланс!'
                   : '🎁 Предмет добавлен в коллекцию!'}
             </p>
           </div>

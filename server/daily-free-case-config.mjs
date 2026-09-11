@@ -70,7 +70,7 @@ export const DAILY_FREE_CASE_RARITIES = {
         amount: 100,
         weight: 1,
         emoji: '💠',
-        valueLabel: '100 GRAM',
+        valueLabel: '100 Gram',
       },
       {
         id: 'dfc-gram-50',
@@ -79,7 +79,7 @@ export const DAILY_FREE_CASE_RARITIES = {
         amount: 50,
         weight: 1,
         emoji: '💠',
-        valueLabel: '50 GRAM',
+        valueLabel: '50 Gram',
       },
       {
         id: 'dfc-durov-glass',
@@ -132,7 +132,7 @@ export const DAILY_FREE_CASE_RARITIES = {
         amount: 2,
         weight: 1,
         emoji: '💎',
-        valueLabel: '2 GRAM',
+        valueLabel: '2 Gram',
       },
       {
         id: 'dfc-gram-1',
@@ -141,7 +141,7 @@ export const DAILY_FREE_CASE_RARITIES = {
         amount: 1,
         weight: 1,
         emoji: '💎',
-        valueLabel: '1 GRAM',
+        valueLabel: '1 Gram',
       },
       {
         id: 'dfc-gram-0-5',
@@ -150,7 +150,7 @@ export const DAILY_FREE_CASE_RARITIES = {
         amount: 0.5,
         weight: 1,
         emoji: '💎',
-        valueLabel: '0.5 GRAM',
+        valueLabel: '0.5 Gram',
       },
       {
         id: 'dfc-gram-0-2',
@@ -159,7 +159,7 @@ export const DAILY_FREE_CASE_RARITIES = {
         amount: 0.2,
         weight: 1,
         emoji: '💎',
-        valueLabel: '0.2 GRAM',
+        valueLabel: '0.2 Gram',
       },
     ],
   },
@@ -176,7 +176,7 @@ export const DAILY_FREE_CASE_RARITIES = {
         amount: 0.01,
         weight: 1,
         emoji: '🔹',
-        valueLabel: '0.01 GRAM',
+        valueLabel: '0.01 Gram',
       },
       {
         id: 'dfc-gram-0-005',
@@ -185,7 +185,7 @@ export const DAILY_FREE_CASE_RARITIES = {
         amount: 0.005,
         weight: 1,
         emoji: '🔹',
-        valueLabel: '0.005 GRAM',
+        valueLabel: '0.005 Gram',
       },
       {
         id: 'dfc-gram-0-001',
@@ -194,7 +194,7 @@ export const DAILY_FREE_CASE_RARITIES = {
         amount: 0.001,
         weight: 1,
         emoji: '🔹',
-        valueLabel: '0.001 GRAM',
+        valueLabel: '0.001 Gram',
       },
       {
         id: 'dfc-coins-100',

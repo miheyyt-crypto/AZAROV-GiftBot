@@ -78,7 +78,7 @@ export function GrammSheet({ balance, onClose }: GrammSheetProps) {
       if (!result.success) {
         const message = gramWithdrawalErrorMessage(result.code, result.message)
         setError(message)
-        showNotification({ type: 'error', title: 'Вывод Gramm', message })
+        showNotification({ type: 'error', title: 'Вывод Gram', message })
         return
       }
       showNotification({
@@ -129,7 +129,7 @@ export function GrammSheet({ balance, onClose }: GrammSheetProps) {
               <img src={gramImage} alt="" className="size-8 object-contain" draggable={false} />
             </div>
             <h2 id="gramm-sheet-title" className="text-lg font-bold text-white">
-              Gramm
+              Gram
             </h2>
           </div>
           <button
@@ -175,7 +175,7 @@ export function GrammSheet({ balance, onClose }: GrammSheetProps) {
                   : 'cursor-not-allowed bg-white/10 text-white/40',
               ].join(' ')}
             >
-              Вывести Gramm
+              Вывести Gram
             </button>
 
             {!canWithdraw ? (
@@ -212,7 +212,7 @@ export function GrammSheet({ balance, onClose }: GrammSheetProps) {
                   }}
                   className="min-w-0 flex-1 bg-transparent text-[18px] font-semibold text-white outline-none tabular-nums placeholder:text-white/30"
                   placeholder="20"
-                  aria-label="Сумма вывода Gramm"
+                  aria-label="Сумма вывода Gram"
                 />
                 <span className="shrink-0 text-sm font-semibold text-white/50">{GRAM_LABEL}</span>
               </div>

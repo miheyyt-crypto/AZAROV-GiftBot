@@ -1,4 +1,4 @@
-export const GRAM_LABEL = 'Gramm'
+export const GRAM_LABEL = 'Gram'
 export const MIN_GRAM_WITHDRAWAL = 20
 export const GRAM_DECIMALS = 6
 

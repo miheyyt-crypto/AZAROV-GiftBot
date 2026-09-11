@@ -305,7 +305,7 @@ export function createWithdrawal(userId, input = {}) {
 }
 
 /**
- * Create a Gramm balance withdrawal request.
+ * Create a Gram balance withdrawal request.
  * Atomically checks min threshold + balance, then deducts from gramBalance.
  */
 export function createGramWithdrawalOnStore(store, userId, input = {}) {
@@ -386,7 +386,7 @@ export function createGramWithdrawalOnStore(store, userId, input = {}) {
     return {
       success: false,
       code: 'INSUFFICIENT_BALANCE',
-      message: 'Недостаточно Gramm на балансе.',
+      message: 'Недостаточно Gram на балансе.',
       minAmount: MIN_GRAM_WITHDRAWAL,
       gramBalance: balance,
     }
@@ -420,7 +420,7 @@ export function createGramWithdrawalOnStore(store, userId, input = {}) {
   const result = {
     success: true,
     code: 'OK',
-    message: 'Заявка на вывод Gramm отправлена',
+    message: 'Заявка на вывод Gram отправлена',
     withdrawal: publicWithdrawal(withdrawal),
     gramBalance: nextBalance,
   }
