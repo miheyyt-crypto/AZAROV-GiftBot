@@ -6,12 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#000000" />
     <title>AZAROV — GiftBot</title>
-    <!-- Early splash art only — do not preload the full asset catalog. -->
+    <!-- Early splash art only — do not preload the full asset catalog.
+         Prefer animated WebP; GIF remains as <picture> fallback. -->
     <link
       rel="preload"
       as="image"
-      href="/splash-loading.jpg?v=%ASSET_BUILD_ID%"
-      type="image/jpeg"
+      href="/splash-loading.webp?v=%ASSET_BUILD_ID%"
+      type="image/webp"
     />
     <style>
       /* Critical boot paint — before JS/CSS bundles. */
@@ -44,6 +45,9 @@
       #azarov-boot-splash.is-hiding {
         opacity: 0;
         pointer-events: none;
+      }
+      #azarov-boot-splash picture {
+        display: contents;
       }
       #azarov-boot-splash .splash-media {
         width: min(58vw, 14rem);
@@ -109,14 +113,20 @@
       aria-hidden="false"
       data-shown-at=""
     >
-      <img
-        class="splash-media"
-        src="/splash-loading.jpg?v=%ASSET_BUILD_ID%"
-        alt=""
-        width="240"
-        height="280"
-        decoding="async"
-      />
+      <picture>
+        <source
+          srcset="/splash-loading.webp?v=%ASSET_BUILD_ID%"
+          type="image/webp"
+        />
+        <img
+          class="splash-media"
+          src="/splash-loading.gif?v=%ASSET_BUILD_ID%"
+          alt=""
+          width="240"
+          height="318"
+          decoding="async"
+        />
+      </picture>
       <p class="splash-brand">Загрузка Бота...</p>
     </div>
     <script>
