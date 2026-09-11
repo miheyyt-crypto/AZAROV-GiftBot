@@ -161,6 +161,18 @@ export async function fetchKickStreak(): Promise<KickStreakInfo | null> {
       message: payload.message ?? null,
       freezeAvailable: Number(payload.freezeAvailable) || 0,
       freezeAutoConsume: Boolean(payload.freezeAutoConsume),
+      progressCurrent:
+        payload.progressCurrent != null
+          ? Number(payload.progressCurrent) || 0
+          : Number(payload.currentStreak) || 0,
+      progressRequired:
+        payload.progressRequired != null
+          ? Math.max(1, Number(payload.progressRequired) || 1)
+          : (Number(payload.currentStreak) || 0) + 1,
+      nextReward: Math.max(0, Math.floor(Number(payload.nextReward) || 0)),
+      isLive: Boolean(payload.isLive),
+      channelSlug: payload.channelSlug || payload.channel || undefined,
+      channelAvatarUrl: payload.channelAvatarUrl ?? null,
     }
   } catch {
     return null

@@ -701,7 +701,10 @@ export function getKickStreakForUser(telegramUserId) {
 
     const lastActiveDate = record?.lastActiveDate || null
     const creditedToday = Boolean(lastActiveDate && lastActiveDate === today)
-    const currentStreak = Number(record?.currentStreak) || 0
+    const currentStreak = connected ? Number(record?.currentStreak) || 0 : 0
+    const progressCurrent = currentStreak
+    const progressRequired = currentStreak + 1
+    const nextReward = getNextStreakRewardCoins(currentStreak)
 
     return {
       success: true,
@@ -710,12 +713,15 @@ export function getKickStreakForUser(telegramUserId) {
       kickConnected: connected,
       kickUsername: connection?.username || null,
       kickUserId: connection?.kickUserId || null,
-      currentStreak: connected ? currentStreak : 0,
+      currentStreak,
       lastActiveDate: connected ? lastActiveDate : null,
       creditedToday: connected ? creditedToday : false,
       todayDate: today,
       freezeAvailable: connected ? freezeAvailable : 0,
       freezeAutoConsume: true,
+      progressCurrent,
+      progressRequired,
+      nextReward,
       message: !connected
         ? 'Привяжи Kick, чтобы участвовать в стрике'
         : creditedToday
@@ -725,6 +731,83 @@ export function getKickStreakForUser(telegramUserId) {
             : 'Напиши в чат во время стрима, чтобы начать стрик',
     }
   })
+}
+
+/**
+ * Display schedule for the next streak-day bonus (coins).
+ * Presentation metadata only — does not grant coins or change credit rules.
+ */
+export function getNextStreakRewardCoins(currentStreak) {
+  const nextDay = Math.max(1, Math.floor(Number(currentStreak) || 0) + 1)
+  return nextDay * 100
+}
+
+/**
+ * Home LIVE banner payload from existing livestream state (+ API refresh when stale).
+ * Fail-closed: unconfirmed live → isLive false (hide banner).
+ */
+export async function getKickLiveBannerState(options = {}) {
+  const channelSlug = getKickRequiredChannel()
+  let channel = null
+  try {
+    channel = await resolveKickChannelBySlug(channelSlug, options)
+  } catch {
+    return {
+      isLive: false,
+      channelSlug,
+      channelAvatarUrl: null,
+    }
+  }
+
+  const channelAvatarUrl = String(channel?.profilePicture || '').trim() || null
+  const broadcasterUserId = String(channel.broadcasterUserId || '')
+
+  const fresh = withStoreRead((store) => {
+    const state = store.kickLivestreamState
+    if (
+      !state ||
+      !liveStateLooksFresh(state) ||
+      String(state.broadcasterUserId) !== broadcasterUserId
+    ) {
+      return null
+    }
+    return {
+      isLive: Boolean(state.isLive),
+      channelSlug: String(state.channelSlug || channelSlug).toLowerCase(),
+      channelAvatarUrl,
+    }
+  })
+
+  if (fresh) {
+    return fresh
+  }
+
+  try {
+    const liveApi = await fetchKickChannelLiveStatus(broadcasterUserId, options)
+    withStore((store) => {
+      updateKickLivestreamStateOnStore(store, {
+        broadcasterUserId,
+        channelSlug,
+        isLive: Boolean(liveApi.isLive),
+        startedAt: liveApi.startedAt || null,
+        endedAt: liveApi.isLive ? null : new Date().toISOString(),
+        livestreamId: null,
+        source: 'home_poll',
+      })
+      return true
+    })
+    return {
+      isLive: Boolean(liveApi.isLive),
+      channelSlug,
+      channelAvatarUrl,
+    }
+  } catch {
+    return {
+      isLive: false,
+      channelSlug,
+      channelAvatarUrl,
+    }
+  }
 }
 
 /** Test helpers */

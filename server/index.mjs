@@ -28,7 +28,7 @@ import {
   handleKickFollowWebhook,
 } from './kick-follow.mjs'
 import { checkKickNickname } from './kick-nickname.mjs'
-import { getKickStreakForUser } from './kick-streak.mjs'
+import { getKickLiveBannerState, getKickStreakForUser } from './kick-streak.mjs'
 import { resetAllKickBindingsOnStore, unlinkKickForUserOnStore } from './kick-reset.mjs'
 import { startPartnerTask, verifyPartnerTask } from './partner-tasks.mjs'
 import {
@@ -634,8 +634,12 @@ app.get(
   withUser(async (_req, res, telegramUser) => {
     bootstrapUser(telegramUser, '')
     const streak = getKickStreakForUser(telegramUser.id)
+    const live = await getKickLiveBannerState()
     res.json({
       ...streak,
+      isLive: Boolean(live.isLive),
+      channelSlug: live.channelSlug || streak.channel,
+      channelAvatarUrl: live.channelAvatarUrl || null,
       user: toPublicUser(getUser(telegramUser.id)),
     })
   }),

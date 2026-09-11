@@ -172,6 +172,8 @@ export async function resolveKickChannelBySlug(slug, options = {}) {
         const channel = {
           slug: String(row.slug || normalized).toLowerCase(),
           broadcasterUserId: String(row.broadcaster_user_id),
+          profilePicture:
+            String(row.profile_picture || row.profilePicture || '').trim() || null,
           source: 'public_api',
         }
         cachedChannelBySlug.set(normalized, channel)
@@ -227,6 +229,13 @@ export async function resolveKickChannelBySlug(slug, options = {}) {
     slug: String(websitePayload.slug || normalized).toLowerCase(),
     broadcasterUserId: String(websitePayload.user_id),
     channelId: websitePayload.id != null ? String(websitePayload.id) : null,
+    profilePicture:
+      String(
+        websitePayload?.user?.profile_pic ||
+          websitePayload?.user?.profile_picture ||
+          websitePayload?.user?.profilePicture ||
+          '',
+      ).trim() || null,
     source: 'website_v2',
   }
   cachedChannelBySlug.set(normalized, channel)

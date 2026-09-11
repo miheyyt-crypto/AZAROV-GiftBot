@@ -272,6 +272,26 @@ body {
   -webkit-backdrop-filter: blur(6px);
 }
 
+@keyframes home-live-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgb(255 45 85 / 35%);
+  }
+  50% {
+    box-shadow: 0 0 14px rgb(255 45 85 / 65%);
+  }
+}
+
+.home-live-badge {
+  animation: home-live-pulse 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-live-badge {
+    animation: none;
+  }
+}
+
 .ui-icon-btn {
   display: inline-flex;
   height: 2.5rem;
