@@ -555,7 +555,9 @@ export function ReferralBattlePage() {
               ].join(' ')}
             >
               <span>
-                {medal(prize.place)} {prize.place} место
+                {prize.place <= 3
+                  ? `${medal(prize.place)} ${prize.place} место`
+                  : `#${prize.place} место`}
               </span>
               <span className="flex items-center gap-1 text-gold">
                 {formatCoinsAmount(prize.amount)}
