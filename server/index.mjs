@@ -143,6 +143,8 @@ import {
 } from './profile.mjs'
 import {
   assertPersistentStoreOrExit,
+  flushStoreNow,
+  getEventLoopLagMs,
   getStoreDiagnostics,
   getUser,
   loadStore,
@@ -305,6 +307,32 @@ app.use((req, res, next) => {
     return corsMiddleware(req, res, next)
   }
 
+  next()
+})
+
+/** Slow-request + event-loop lag observability (no per-request spam). */
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api')) {
+    next()
+    return
+  }
+  const started = performance.now()
+  res.on('finish', () => {
+    const ms = performance.now() - started
+    if (ms < 500) {
+      return
+    }
+    let lag = 0
+    try {
+      lag = getEventLoopLagMs()
+    } catch {
+      lag = 0
+    }
+    console.info(
+      `[PERF] ${req.method} ${req.path} ${Math.round(ms)}ms` +
+        (lag >= 50 ? ` event_loop_lag=${Math.round(lag)}ms` : ''),
+    )
+  })
   next()
 })
 
@@ -2727,6 +2755,13 @@ export function startHttpServer() {
 function attachHttpShutdown(server) {
   function shutdown(signal) {
     console.info(`[API] ${signal} received, shutting down…`)
+    try {
+      flushStoreNow()
+    } catch (error) {
+      console.error('[API] deferred store flush on shutdown failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+    }
     server.close((error) => {
       if (error) {
         console.error('[API] shutdown error', error.message)

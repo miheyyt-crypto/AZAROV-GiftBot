@@ -48,10 +48,24 @@ export function StreamStreakCard() {
     }
 
     load()
-    const timer = window.setInterval(load, 60_000)
+    const timer = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return
+      }
+      load()
+    }, 60_000)
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        load()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+
     return () => {
       cancelled = true
       window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [sessionReady])
 

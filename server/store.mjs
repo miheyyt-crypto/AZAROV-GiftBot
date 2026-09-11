@@ -29,6 +29,17 @@ const STALE_LOCK_MS = 60_000
 let memoryStore = null
 let memoryMtimeMs = -1
 let memoryStorePath = ''
+/** When true, memoryStore has mutations not yet on disk — loadStore must not reload from stale file. */
+let memoryDirty = false
+
+/** Coalesce hot-path persists (Kick chat) into one disk write. */
+let deferredPersistTimer = null
+let deferredPersistPending = false
+let deferredPersistInFlight = false
+const DEFERRED_PERSIST_MS = Math.max(
+  200,
+  Math.min(5_000, Number(process.env.AZAROV_STORE_DEFER_MS) || 750),
+)
 
 /** Throttle expensive rotating .bak copies (volume I/O blocks the event loop). */
 let lastBackupAtMs = 0
@@ -37,6 +48,24 @@ const BACKUP_MIN_INTERVAL_MS = 30_000
 const BACKUP_EVERY_N_WRITES = 25
 let writesSinceFsync = 0
 const FSYNC_EVERY_N_WRITES = 10
+
+/** Lightweight request timing (slow only). */
+let lastEventLoopSample = Date.now()
+let lastEventLoopLagMs = 0
+if (typeof setInterval === 'function') {
+  const lagTimer = setInterval(() => {
+    const now = Date.now()
+    lastEventLoopLagMs = Math.max(0, now - lastEventLoopSample - 500)
+    lastEventLoopSample = now
+  }, 500)
+  if (typeof lagTimer.unref === 'function') {
+    lagTimer.unref()
+  }
+}
+
+export function getEventLoopLagMs() {
+  return lastEventLoopLagMs
+}
 
 export class StoreCorruptError extends Error {
   constructor(message, cause) {
@@ -652,10 +681,10 @@ export function loadStore() {
   if (
     memoryStore &&
     memoryStorePath === storePath &&
-    mtimeMs >= 0 &&
-    memoryMtimeMs === mtimeMs
+    (memoryDirty || (mtimeMs >= 0 && memoryMtimeMs === mtimeMs))
   ) {
-    return memoryStore
+    // Re-run migrateStore so intentional version rollbacks (tests / repair) still upgrade.
+    return migrateStore(memoryStore)
   }
 
   let raw
@@ -724,10 +753,12 @@ export function saveStore(store) {
     memoryStore = store
     memoryMtimeMs = Number(statSync(storePath).mtimeMs) || Date.now()
     memoryStorePath = storePath
+    memoryDirty = false
   } catch {
     memoryStore = store
     memoryMtimeMs = Date.now()
     memoryStorePath = storePath
+    memoryDirty = false
   }
 
   // Rotating backups: not on every write — volume copy of a large store blocks the event loop.
@@ -787,8 +818,11 @@ export function saveUser(store, user) {
  * Use readOnly for GET paths so we do not rewrite the whole ledger on every read.
  *
  * If updater returns `{ __storeDirty: false }`, skip persist (warm session no-ops).
+ * Options:
+ * - readOnly: never persist
+ * - deferPersist: mutate under lock, keep memory dirty, flush after DEFERRED_PERSIST_MS
  */
-export function withStore(updater, { readOnly = false } = {}) {
+export function withStore(updater, { readOnly = false, deferPersist = false } = {}) {
   const lock = acquireFileLock()
   try {
     const store = loadStore()
@@ -798,14 +832,100 @@ export function withStore(updater, { readOnly = false } = {}) {
       typeof result === 'object' &&
       Object.prototype.hasOwnProperty.call(result, '__storeDirty') &&
       result.__storeDirty === false
+
+    memoryStore = store
+    memoryStorePath = getStorePath()
+
+    const forceImmediate =
+      result &&
+      typeof result === 'object' &&
+      result.__storeImmediate === true
+
     if (!readOnly && !skipPersist) {
-      saveStore(store)
+      if (deferPersist && !forceImmediate) {
+        memoryDirty = true
+        scheduleDeferredPersist()
+      } else {
+        saveStore(store)
+      }
     }
-    if (result && typeof result === 'object' && Object.prototype.hasOwnProperty.call(result, '__storeDirty')) {
-      const { __storeDirty: _dirty, ...rest } = result
+
+    if (
+      result &&
+      typeof result === 'object' &&
+      !Array.isArray(result) &&
+      (Object.prototype.hasOwnProperty.call(result, '__storeDirty') ||
+        Object.prototype.hasOwnProperty.call(result, '__storeImmediate'))
+    ) {
+      const rest = { ...result }
+      delete rest.__storeDirty
+      delete rest.__storeImmediate
       return rest
     }
     return result
+  } finally {
+    releaseFileLock(lock)
+  }
+}
+
+function scheduleDeferredPersist() {
+  deferredPersistPending = true
+  if (deferredPersistInFlight || deferredPersistTimer) {
+    return
+  }
+  deferredPersistTimer = setTimeout(() => {
+    deferredPersistTimer = null
+    void flushDeferredPersist()
+  }, DEFERRED_PERSIST_MS)
+  if (typeof deferredPersistTimer.unref === 'function') {
+    deferredPersistTimer.unref()
+  }
+}
+
+function flushDeferredPersist() {
+  if (deferredPersistInFlight) {
+    deferredPersistPending = true
+    return
+  }
+  if (!deferredPersistPending && !memoryDirty) {
+    return
+  }
+  deferredPersistPending = false
+  deferredPersistInFlight = true
+  const lock = acquireFileLock()
+  try {
+    const store = loadStore()
+    if (memoryDirty) {
+      saveStore(store)
+    }
+  } catch (error) {
+    console.error('[STORE] deferred flush failed', {
+      message: error instanceof Error ? error.message : 'unknown_error',
+    })
+    deferredPersistPending = true
+  } finally {
+    releaseFileLock(lock)
+    deferredPersistInFlight = false
+    if (deferredPersistPending || memoryDirty) {
+      scheduleDeferredPersist()
+    }
+  }
+}
+
+/** Force any deferred hot writes to disk (tests / graceful shutdown). */
+export function flushStoreNow() {
+  if (deferredPersistTimer) {
+    clearTimeout(deferredPersistTimer)
+    deferredPersistTimer = null
+  }
+  deferredPersistPending = false
+  if (!memoryDirty) {
+    return
+  }
+  const lock = acquireFileLock()
+  try {
+    const store = loadStore()
+    saveStore(store)
   } finally {
     releaseFileLock(lock)
   }

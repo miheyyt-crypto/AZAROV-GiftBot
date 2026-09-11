@@ -50,4 +50,4 @@ export const REFERRAL_INVITE_TASK_REQUIRED = 3
 export const HOME_BANNER_AUTOPLAY_MS = 15_000
 
 /** Poll interval for live home leaderboard and case drops. */
-export const HOME_FEED_POLL_MS = 8_000
+export const HOME_FEED_POLL_MS = 20_000

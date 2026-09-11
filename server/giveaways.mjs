@@ -1076,29 +1076,25 @@ export function deleteGiveaway(giveawayId) {
 }
 
 export function listGiveaways({ userId = null } = {}) {
-  const result = withStore((store) => {
-    const telegramJobs = []
-    const due = finalizeDueGiveawaysOnStore(store)
-    telegramJobs.push(...(due.telegramJobs || []))
+  // GET must stay read-only — finalization runs via scheduler / participate / admin paths.
+  return withStoreRead((store) => {
     const giveaways = listPublicGiveawaysOnStore(store, { userId })
-    return { success: true, giveaways, telegramJobs }
+    return { success: true, giveaways, telegramJobs: [] }
   })
-  return result
 }
 
 export function getGiveaway(giveawayId, { userId = null } = {}) {
-  return withStore((store) => {
-    const due = finalizeDueGiveawaysOnStore(store)
+  return withStoreRead((store) => {
     const giveaway = getPublicGiveawayOnStore(store, giveawayId, { userId })
     if (!giveaway) {
       return {
         success: false,
         code: 'NOT_FOUND',
         message: 'Розыгрыш не найден.',
-        telegramJobs: due.telegramJobs || [],
+        telegramJobs: [],
       }
     }
-    return { success: true, giveaway, telegramJobs: due.telegramJobs || [] }
+    return { success: true, giveaway, telegramJobs: [] }
   })
 }
 
@@ -1119,14 +1115,11 @@ export function finalizeGiveaway(giveawayId) {
 }
 
 export function listAdminGiveaways() {
-  return withStore((store) => {
-    const due = finalizeDueGiveawaysOnStore(store)
-    return {
-      success: true,
-      giveaways: listAdminGiveawaysOnStore(store),
-      telegramJobs: due.telegramJobs || [],
-    }
-  })
+  return withStoreRead((store) => ({
+    success: true,
+    giveaways: listAdminGiveawaysOnStore(store),
+    telegramJobs: [],
+  }))
 }
 
 export async function notifyGiveawayTelegramJobs(jobs = [], options = {}) {

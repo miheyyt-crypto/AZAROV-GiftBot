@@ -2,6 +2,33 @@ import { buildUserLevelSnapshot } from './level.mjs'
 import { withStoreRead } from './store.mjs'
 import { TX_TYPE } from './wallet.mjs'
 
+const LEADERBOARD_TTL_MS = Math.max(
+  1_000,
+  Math.min(60_000, Number(process.env.AZAROV_LEADERBOARD_TTL_MS) || 10_000),
+)
+const RECENT_DROPS_TTL_MS = Math.max(
+  1_000,
+  Math.min(60_000, Number(process.env.AZAROV_RECENT_DROPS_TTL_MS) || 10_000),
+)
+
+/** @type {Map<string, { at: number, value: any }>} */
+const responseCache = new Map()
+
+function getTtlCache(key, ttlMs, factory) {
+  const hit = responseCache.get(key)
+  const now = Date.now()
+  if (hit && now - hit.at < ttlMs) {
+    return hit.value
+  }
+  const value = factory()
+  responseCache.set(key, { at: now, value })
+  return value
+}
+
+export function clearHomeCaches() {
+  responseCache.clear()
+}
+
 function displayName(user) {
   const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
   if (fullName) {
@@ -122,52 +149,54 @@ export function getLeaderboard(limit = 3, options = {}) {
       ? Number(options.viewerUserId)
       : null
 
-  return withStoreRead((store) => {
-    const inviteCounts = buildActiveReferralCountMap(store)
-    const ranked = Object.values(store.users || {})
-      .map((user) => {
-        const tid = Number(user.telegramId)
-        const balance = Math.max(0, Math.floor(Number(user.balance) || 0))
-        const invitedCount = inviteCounts.get(tid) || 0
-        const level = buildUserLevelSnapshot(user).level
-        return { user, tid, balance, invitedCount, level }
-      })
-      .sort((a, b) => {
-        if (metric === 'referrals') {
-          if (b.invitedCount !== a.invitedCount) {
-            return b.invitedCount - a.invitedCount
+  const ranked = getTtlCache(`leaderboard:ranked:${metric}`, LEADERBOARD_TTL_MS, () =>
+    withStoreRead((store) => {
+      const inviteCounts = buildActiveReferralCountMap(store)
+      return Object.values(store.users || {})
+        .map((user) => {
+          const tid = Number(user.telegramId)
+          const balance = Math.max(0, Math.floor(Number(user.balance) || 0))
+          const invitedCount = inviteCounts.get(tid) || 0
+          const level = buildUserLevelSnapshot(user).level
+          return { user, tid, balance, invitedCount, level }
+        })
+        .sort((a, b) => {
+          if (metric === 'referrals') {
+            if (b.invitedCount !== a.invitedCount) {
+              return b.invitedCount - a.invitedCount
+            }
+            return b.balance - a.balance
           }
-          return b.balance - a.balance
-        }
-        if (b.balance !== a.balance) {
-          return b.balance - a.balance
-        }
-        return b.invitedCount - a.invitedCount
-      })
+          if (b.balance !== a.balance) {
+            return b.balance - a.balance
+          }
+          return b.invitedCount - a.invitedCount
+        })
+    }),
+  )
 
-    const withScore = ranked.filter((row) =>
-      metric === 'referrals' ? row.invitedCount > 0 : row.balance > 0,
-    )
+  const withScore = ranked.filter((row) =>
+    metric === 'referrals' ? row.invitedCount > 0 : row.balance > 0,
+  )
 
-    const players = withScore
-      .slice(0, capped)
-      .map((row, index) => toPublicPlayer(row, index + 1, viewerId))
+  const players = withScore
+    .slice(0, capped)
+    .map((row, index) => toPublicPlayer(row, index + 1, viewerId))
 
-    let me = null
-    if (viewerId != null) {
-      const viewerRow = ranked.find((row) => row.tid === viewerId)
-      if (viewerRow) {
-        const fullRankIndex = ranked.findIndex((row) => row.tid === viewerId)
-        const topIndex = withScore.findIndex((row) => row.tid === viewerId)
-        me = {
-          ...toPublicPlayer(viewerRow, fullRankIndex + 1, viewerId),
-          inTop: topIndex >= 0 && topIndex < capped,
-        }
+  let me = null
+  if (viewerId != null) {
+    const viewerRow = ranked.find((row) => row.tid === viewerId)
+    if (viewerRow) {
+      const fullRankIndex = ranked.findIndex((row) => row.tid === viewerId)
+      const topIndex = withScore.findIndex((row) => row.tid === viewerId)
+      me = {
+        ...toPublicPlayer(viewerRow, fullRankIndex + 1, viewerId),
+        inTop: topIndex >= 0 && topIndex < capped,
       }
     }
+  }
 
-    return { success: true, metric, players, me }
-  })
+  return { success: true, metric, players, me }
 }
 
 function collectCaseDropEntries(store) {
@@ -322,14 +351,16 @@ function collectGameWinEntries(store) {
 }
 
 export function getRecentCaseDrops(limit = 12) {
-  return withStoreRead((store) => {
-    const capped = Math.min(40, Math.max(1, Math.floor(Number(limit) || 12)))
-    const entries = [...collectCaseDropEntries(store), ...collectGameWinEntries(store)]
-    const drops = entries
-      .sort((a, b) => new Date(b.sortAt).getTime() - new Date(a.sortAt).getTime())
-      .slice(0, capped)
-      .map((entry) => entry.drop)
+  const capped = Math.min(40, Math.max(1, Math.floor(Number(limit) || 12)))
+  return getTtlCache(`recent-drops:${capped}`, RECENT_DROPS_TTL_MS, () =>
+    withStoreRead((store) => {
+      const entries = [...collectCaseDropEntries(store), ...collectGameWinEntries(store)]
+      const drops = entries
+        .sort((a, b) => new Date(b.sortAt).getTime() - new Date(a.sortAt).getTime())
+        .slice(0, capped)
+        .map((entry) => entry.drop)
 
-    return { success: true, drops }
-  })
+      return { success: true, drops }
+    }),
+  )
 }

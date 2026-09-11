@@ -18,6 +18,7 @@ import {
   streakDayDiff,
   toStreakCalendarDate,
   updateKickLivestreamStateOnStore,
+  _resetKickWebhookMemoryForTests,
 } from './kick-streak.mjs'
 import { STREAK_FREEZE_PRODUCT_ID } from './constants.mjs'
 import { resetKickLiveNotifyBootstrapForTests } from './kick-live-notify.mjs'
@@ -40,6 +41,7 @@ function withTempStore(run) {
   process.env.KICK_REDIRECT_URI = 'https://example.com/api/kick/callback'
   process.env.KICK_REQUIRED_CHANNEL = 'azarov7777'
   delete process.env.KICK_NOTIFICATION_CHAT_ID
+  _resetKickWebhookMemoryForTests()
 
   return Promise.resolve()
     .then(() => run(dir))
@@ -56,6 +58,7 @@ function withTempStore(run) {
       else process.env.KICK_REQUIRED_CHANNEL = prevChannel
       _resetKickApiCaches()
       resetKickLiveNotifyBootstrapForTests()
+      _resetKickWebhookMemoryForTests()
       rmSync(dir, { recursive: true, force: true })
     })
 }

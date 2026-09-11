@@ -202,9 +202,21 @@ export function ReferralBattlePage() {
     }
     void load()
     const id = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return
+      }
       void load()
     }, HOME_FEED_POLL_MS)
-    return () => window.clearInterval(id)
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void load()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [contestVisible, load, sessionReady])
 
   useEffect(() => {

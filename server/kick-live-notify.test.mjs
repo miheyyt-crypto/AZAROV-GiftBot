@@ -16,7 +16,7 @@ import {
   sendKickLiveStartedTelegram,
   unclaimKickLiveNotify,
 } from './kick-live-notify.mjs'
-import { hasKickWebhookEvent, processLivestreamStatusUpdated } from './kick-streak.mjs'
+import { hasKickWebhookEvent, processLivestreamStatusUpdated, _resetKickWebhookMemoryForTests } from './kick-streak.mjs'
 import { createEmptyStore, withStore } from './store.mjs'
 import { createUser } from './users.mjs'
 
@@ -37,6 +37,7 @@ function withTempStore(run) {
   process.env.KICK_REDIRECT_URI = 'https://example.com/api/kick/callback'
   process.env.KICK_REQUIRED_CHANNEL = 'azarov7777'
   resetKickLiveNotifyBootstrapForTests()
+  _resetKickWebhookMemoryForTests()
   return Promise.resolve()
     .then(() => run())
     .finally(() => {
@@ -55,6 +56,7 @@ function withTempStore(run) {
       if (prevChannel === undefined) delete process.env.KICK_REQUIRED_CHANNEL
       else process.env.KICK_REQUIRED_CHANNEL = prevChannel
       resetKickLiveNotifyBootstrapForTests()
+      _resetKickWebhookMemoryForTests()
       rmSync(dir, { recursive: true, force: true })
     })
 }

@@ -92,12 +92,23 @@ export function RecentDropsFeed() {
 
     void load()
     const timer = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return
+      }
       void load()
     }, HOME_FEED_POLL_MS)
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void load()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
 
     return () => {
       cancelled = true
       window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [])
 

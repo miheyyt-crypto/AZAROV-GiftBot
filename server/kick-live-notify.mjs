@@ -13,6 +13,7 @@ import {
   listBroadcastRecipients,
 } from './broadcasts.mjs'
 import {
+  forgetKickWebhookMemoryKey,
   hasKickWebhookEvent,
   markKickWebhookEventProcessed,
 } from './kick-streak.mjs'
@@ -210,10 +211,13 @@ export function collectKickLiveNotifyRecipients(store) {
 
 export function unclaimKickLiveNotify(store, streamKey) {
   const key = kickLiveNotifyEventKey(streamKey)
-  if (!key || !store?.kickWebhookEvents) {
+  if (!key) {
     return
   }
-  delete store.kickWebhookEvents[key]
+  if (store?.kickWebhookEvents) {
+    delete store.kickWebhookEvents[key]
+  }
+  forgetKickWebhookMemoryKey(key)
 }
 
 /**

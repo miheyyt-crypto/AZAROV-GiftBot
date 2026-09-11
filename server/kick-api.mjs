@@ -37,6 +37,24 @@ let cachedAppToken = null
 let cachedAppTokenExpiresAt = 0
 let cachedPublicKeyPem = null
 let cachedChannelBySlug = new Map()
+/** @type {Map<string, Promise<any>>} */
+const inflightKickRequests = new Map()
+
+function coalesceKickRequest(key, factory) {
+  const existing = inflightKickRequests.get(key)
+  if (existing) {
+    return existing
+  }
+  const pending = Promise.resolve()
+    .then(factory)
+    .finally(() => {
+      if (inflightKickRequests.get(key) === pending) {
+        inflightKickRequests.delete(key)
+      }
+    })
+  inflightKickRequests.set(key, pending)
+  return pending
+}
 
 export async function fetchKickAppAccessToken(options = {}) {
   const fetchImpl = options.fetchImpl || fetch
@@ -479,47 +497,51 @@ export async function ensureKickFollowEventSubscription(channel, options = {}) {
  * Official livestream presence for a broadcaster (aggregate live flag only).
  */
 export async function fetchKickChannelLiveStatus(broadcasterUserId, options = {}) {
-  const fetchImpl = options.fetchImpl || fetch
-  const appToken = options.appAccessToken || (await fetchKickAppAccessToken(options))
-  const url = new URL(KICK_API_LIVESTREAMS_URL)
-  url.searchParams.set('broadcaster_user_id', String(broadcasterUserId))
-
-  const response = await fetchImpl(url, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${appToken}`,
-      Accept: 'application/json',
-    },
-  })
-
-  let payload = null
-  try {
-    payload = await response.json()
-  } catch {
-    payload = null
-  }
-
-  if (!response.ok) {
-    const error = new Error('kick_livestream_unavailable')
-    error.code = 'kick_livestream_unavailable'
-    error.httpStatus = response.status
-    throw error
-  }
-
-  const rows = Array.isArray(payload?.data) ? payload.data : []
-  const match = rows.find(
-    (row) => String(row?.broadcaster_user_id ?? '') === String(broadcasterUserId),
-  )
-  if (!match) {
+  const id = String(broadcasterUserId || '').trim()
+  if (!id) {
     return { isLive: false, startedAt: null, title: null }
   }
+  return coalesceKickRequest(`live:${id}`, async () => {
+    const fetchImpl = options.fetchImpl || fetch
+    const appToken = options.appAccessToken || (await fetchKickAppAccessToken(options))
+    const url = new URL(KICK_API_LIVESTREAMS_URL)
+    url.searchParams.set('broadcaster_user_id', id)
 
-  return {
-    isLive: true,
-    startedAt: match.started_at || null,
-    title: match.stream_title || match.title || null,
-    viewerCount: match.viewer_count ?? null,
-  }
+    const response = await fetchImpl(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${appToken}`,
+        Accept: 'application/json',
+      },
+    })
+
+    let payload = null
+    try {
+      payload = await response.json()
+    } catch {
+      payload = null
+    }
+
+    if (!response.ok) {
+      const error = new Error('kick_livestream_unavailable')
+      error.code = 'kick_livestream_unavailable'
+      error.httpStatus = response.status
+      throw error
+    }
+
+    const rows = Array.isArray(payload?.data) ? payload.data : []
+    const match = rows.find((row) => String(row?.broadcaster_user_id ?? '') === id)
+    if (!match) {
+      return { isLive: false, startedAt: null, title: null }
+    }
+
+    return {
+      isLive: true,
+      startedAt: match.started_at || null,
+      title: match.stream_title || match.title || null,
+      viewerCount: match.viewer_count ?? null,
+    }
+  })
 }
 
 export async function getKickWebhookPublicKey(options = {}) {

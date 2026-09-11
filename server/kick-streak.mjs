@@ -11,7 +11,7 @@ import {
   closeWatchSessionsOnStore,
   recordChatMessageOnStore,
 } from './kick-stats.mjs'
-import { withStore, withStoreRead } from './store.mjs'
+import { flushStoreNow, withStore, withStoreRead } from './store.mjs'
 import { grantPendingLevelRewardsOnStore } from './level-rewards.mjs'
 import {
   getKickNotificationChannelUrl,
@@ -21,9 +21,68 @@ import {
   unclaimKickLiveNotify,
 } from './kick-live-notify.mjs'
 
-const WEBHOOK_EVENT_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const WEBHOOK_EVENT_TTL_MS = Math.max(
+  60_000,
+  Number(process.env.AZAROV_KICK_WEBHOOK_TTL_MS) || 24 * 60 * 60 * 1000,
+)
+const WEBHOOK_EVENT_MAX = Math.max(
+  500,
+  Math.min(50_000, Number(process.env.AZAROV_KICK_WEBHOOK_MAX) || 5_000),
+)
 /** Fresh livestream.status.updated / API snapshot window (ms). */
 export const LIVE_STATE_STALE_MS = 2 * 60 * 1000
+
+/** In-memory idempotency — avoids store lock/write on duplicate Kick retries. */
+const recentWebhookKeys = new Map()
+let lastWebhookPruneAt = 0
+
+function rememberWebhookKey(eventKey, nowMs = Date.now()) {
+  if (!eventKey) {
+    return
+  }
+  recentWebhookKeys.set(String(eventKey), nowMs)
+  if (recentWebhookKeys.size > WEBHOOK_EVENT_MAX || nowMs - lastWebhookPruneAt > 30_000) {
+    lastWebhookPruneAt = nowMs
+    const cutoff = nowMs - WEBHOOK_EVENT_TTL_MS
+    for (const [key, ts] of recentWebhookKeys) {
+      if (ts < cutoff) {
+        recentWebhookKeys.delete(key)
+      }
+    }
+    while (recentWebhookKeys.size > WEBHOOK_EVENT_MAX) {
+      const oldest = recentWebhookKeys.keys().next().value
+      if (oldest == null) {
+        break
+      }
+      recentWebhookKeys.delete(oldest)
+    }
+  }
+}
+
+function hasRecentWebhookKey(eventKey) {
+  if (!eventKey) {
+    return false
+  }
+  return recentWebhookKeys.has(String(eventKey))
+}
+
+function forgetWebhookKey(eventKey) {
+  if (!eventKey) {
+    return
+  }
+  recentWebhookKeys.delete(String(eventKey))
+}
+
+/** Test helper: clear in-memory webhook idempotency between isolated store dirs. */
+export function _resetKickWebhookMemoryForTests() {
+  recentWebhookKeys.clear()
+  lastWebhookPruneAt = 0
+  lastStoreWebhookPruneAt = 0
+}
+
+export function forgetKickWebhookMemoryKey(eventKey) {
+  forgetWebhookKey(eventKey)
+}
 
 function maybeGrantLevelRewardsAfterXp(store, telegramId) {
   const user = store.users?.[String(telegramId)]
@@ -59,14 +118,31 @@ export function streakDayDiff(earlierDate, laterDate) {
   return Math.round(ms / 86_400_000)
 }
 
-function pruneWebhookEvents(store, nowMs = Date.now()) {
+let lastStoreWebhookPruneAt = 0
+
+function pruneWebhookEvents(store, nowMs = Date.now(), { force = false } = {}) {
   store.kickWebhookEvents = store.kickWebhookEvents || {}
+  if (!force && nowMs - lastStoreWebhookPruneAt < 60_000) {
+    return
+  }
+  lastStoreWebhookPruneAt = nowMs
   const cutoff = nowMs - WEBHOOK_EVENT_TTL_MS
-  for (const [id, row] of Object.entries(store.kickWebhookEvents)) {
+  const entries = Object.entries(store.kickWebhookEvents)
+  for (const [id, row] of entries) {
     const processed = Date.parse(row?.processedAt || 0)
     if (!Number.isFinite(processed) || processed < cutoff) {
       delete store.kickWebhookEvents[id]
     }
+  }
+  const remaining = Object.keys(store.kickWebhookEvents)
+  if (remaining.length > WEBHOOK_EVENT_MAX) {
+    remaining
+      .map((id) => ({ id, at: Date.parse(store.kickWebhookEvents[id]?.processedAt || 0) || 0 }))
+      .sort((a, b) => a.at - b.at)
+      .slice(0, remaining.length - WEBHOOK_EVENT_MAX)
+      .forEach(({ id }) => {
+        delete store.kickWebhookEvents[id]
+      })
   }
 }
 
@@ -75,8 +151,11 @@ export function hasKickWebhookEvent(store, eventKey) {
     return false
   }
   store.kickWebhookEvents = store.kickWebhookEvents || {}
-  pruneWebhookEvents(store)
-  return Boolean(store.kickWebhookEvents[eventKey])
+  if (store.kickWebhookEvents[eventKey]) {
+    rememberWebhookKey(eventKey)
+    return true
+  }
+  return false
 }
 
 export function markKickWebhookEventProcessed(store, eventKey, meta = {}) {
@@ -84,14 +163,16 @@ export function markKickWebhookEventProcessed(store, eventKey, meta = {}) {
     return { duplicate: false }
   }
   store.kickWebhookEvents = store.kickWebhookEvents || {}
-  pruneWebhookEvents(store)
   if (store.kickWebhookEvents[eventKey]) {
+    rememberWebhookKey(eventKey)
     return { duplicate: true, existing: store.kickWebhookEvents[eventKey] }
   }
+  pruneWebhookEvents(store)
   store.kickWebhookEvents[eventKey] = {
     processedAt: new Date().toISOString(),
     ...meta,
   }
+  rememberWebhookKey(eventKey)
   return { duplicate: false }
 }
 
@@ -467,10 +548,18 @@ export async function processLivestreamStatusUpdated(payload, options = {}) {
  * Channel gate: canonical broadcaster ID only.
  * Live gate: fail-closed.
  * Idempotency: mark only after definitive outcome (not on live API errors).
+ * Persistence: deferred batch for hot chat/stats; immediate when Freeze is consumed.
  */
 export async function processChatMessageSent(payload, { messageId, options = {} } = {}) {
   const payloadMessageId = String(payload?.message_id || '').trim()
   const keys = eventKeysForChat(messageId, payloadMessageId)
+
+  if (
+    (keys.primary && hasRecentWebhookKey(keys.primary)) ||
+    (keys.secondary && hasRecentWebhookKey(keys.secondary))
+  ) {
+    return { ok: true, ignored: true, reason: 'duplicate_event' }
+  }
 
   const senderKickUserId = String(payload?.sender?.user_id ?? '').trim()
   const broadcasterUserId = String(payload?.broadcaster?.user_id ?? '').trim()
@@ -492,20 +581,10 @@ export async function processChatMessageSent(payload, { messageId, options = {} 
   }
 
   if (String(required.broadcasterUserId) !== broadcasterUserId) {
-    return withStore((store) => {
-      if (keys.primary && hasKickWebhookEvent(store, keys.primary)) {
-        return { ok: true, ignored: true, reason: 'duplicate_event' }
-      }
-      if (keys.secondary && hasKickWebhookEvent(store, keys.secondary)) {
-        return { ok: true, ignored: true, reason: 'duplicate_message' }
-      }
-      markChatEventProcessed(store, keys, {
-        type: 'chat.message.sent',
-        outcome: 'wrong_channel',
-        senderKickUserId,
-      })
-      return { ok: true, ignored: true, reason: 'wrong_channel' }
-    })
+    // Wrong channel: memory-only idempotency — do not touch store.json.
+    if (keys.primary) rememberWebhookKey(keys.primary)
+    if (keys.secondary) rememberWebhookKey(keys.secondary)
+    return { ok: true, ignored: true, reason: 'wrong_channel' }
   }
 
   const needsLiveLookup = withStoreRead((store) => {
@@ -523,178 +602,191 @@ export async function processChatMessageSent(payload, { messageId, options = {} 
   if (needsLiveLookup) {
     try {
       liveApi = await fetchKickChannelLiveStatus(broadcasterUserId, options)
-      withStore((store) => {
-        updateKickLivestreamStateOnStore(store, {
-          broadcasterUserId,
-          channelSlug: channelSlug || required.slug,
-          isLive: Boolean(liveApi?.isLive),
-          startedAt: liveApi?.startedAt || null,
-          endedAt: liveApi?.isLive ? null : liveApi?.endedAt || null,
-          source: 'api',
-        })
-      })
+      withStore(
+        (store) => {
+          updateKickLivestreamStateOnStore(store, {
+            broadcasterUserId,
+            channelSlug: channelSlug || required.slug,
+            isLive: Boolean(liveApi?.isLive),
+            startedAt: liveApi?.startedAt || null,
+            endedAt: liveApi?.isLive ? null : liveApi?.endedAt || null,
+            source: 'api',
+          })
+        },
+        { deferPersist: true },
+      )
     } catch {
       liveApi = null
       liveApiError = true
     }
   }
 
-  return withStore((store) => {
-    if (keys.primary && hasKickWebhookEvent(store, keys.primary)) {
-      return { ok: true, ignored: true, reason: 'duplicate_event' }
-    }
-    if (keys.secondary && hasKickWebhookEvent(store, keys.secondary)) {
-      return { ok: true, ignored: true, reason: 'duplicate_message' }
-    }
-
-    const live = isMessageDuringLive(store, createdAt, liveApiError ? null : liveApi)
-
-    if (live.reason === 'unconfirmed' || liveApiError) {
-      logKickStreak('chat_live_unconfirmed', {
-        senderKickUserId,
-        broadcasterUserId,
-        liveApiError,
-      })
-      // Do NOT mark — Kick may retry; temporary API failure must not eat the event.
-      return { ok: true, ignored: true, reason: 'live_api_unavailable' }
-    }
-
-    if (!live.duringLive) {
-      const telegramIdOffline = findTelegramIdForKickUser(store, senderKickUserId)
-      if (telegramIdOffline) {
-        recordChatMessageOnStore(store, telegramIdOffline)
-        maybeGrantLevelRewardsAfterXp(store, telegramIdOffline)
+  let criticalPersist = false
+  const result = withStore(
+    (store) => {
+      if (keys.primary && hasKickWebhookEvent(store, keys.primary)) {
+        return { ok: true, ignored: true, reason: 'duplicate_event' }
       }
+      if (keys.secondary && hasKickWebhookEvent(store, keys.secondary)) {
+        return { ok: true, ignored: true, reason: 'duplicate_message' }
+      }
+
+      const live = isMessageDuringLive(store, createdAt, liveApiError ? null : liveApi)
+
+      if (live.reason === 'unconfirmed' || liveApiError) {
+        logKickStreak('chat_live_unconfirmed', {
+          senderKickUserId,
+          broadcasterUserId,
+          liveApiError,
+        })
+        return { ok: true, ignored: true, reason: 'live_api_unavailable' }
+      }
+
+      if (!live.duringLive) {
+        const telegramIdOffline = findTelegramIdForKickUser(store, senderKickUserId)
+        if (telegramIdOffline) {
+          recordChatMessageOnStore(store, telegramIdOffline)
+          maybeGrantLevelRewardsAfterXp(store, telegramIdOffline)
+        }
+        markChatEventProcessed(store, keys, {
+          type: 'chat.message.sent',
+          outcome: telegramIdOffline ? 'offline_message' : 'not_live',
+          kickMessageId: payloadMessageId || null,
+          senderKickUserId,
+          telegramId: telegramIdOffline || null,
+        })
+        logKickStreak('chat_ignored_offline', {
+          senderKickUserId,
+          broadcasterUserId,
+          countedMessage: Boolean(telegramIdOffline),
+        })
+        return {
+          ok: true,
+          ignored: true,
+          reason: 'not_live',
+          telegramId: telegramIdOffline || undefined,
+          countedMessage: Boolean(telegramIdOffline),
+        }
+      }
+
+      const telegramId = findTelegramIdForKickUser(store, senderKickUserId)
+      if (!telegramId) {
+        markChatEventProcessed(store, keys, {
+          type: 'chat.message.sent',
+          outcome: 'unlinked_kick',
+          kickMessageId: payloadMessageId || null,
+          senderKickUserId,
+        })
+        logKickStreak('chat_ignored_unlinked', { senderKickUserId })
+        return { ok: true, ignored: true, reason: 'unlinked_kick' }
+      }
+
+      recordChatMessageOnStore(store, telegramId)
+      const streamId =
+        store.kickLivestreamState?.startedAt != null
+          ? `started:${store.kickLivestreamState.startedAt}`
+          : null
+      applyWatchActivityOnStore(store, telegramId, {
+        atIso: createdAt,
+        streamId,
+        isLiveConfirmed: true,
+      })
+      maybeGrantLevelRewardsAfterXp(store, telegramId)
+
+      store.kickStreamStreaks = store.kickStreamStreaks || {}
+      const streakKey = String(telegramId)
+      const existing =
+        store.kickStreamStreaks[streakKey] ||
+        emptyStreakRecord({ telegramId, kickUserId: senderKickUserId })
+
+      existing.kickUserId = String(senderKickUserId)
+      existing.telegramId = Number(telegramId)
+
+      const activityDate = toStreakCalendarDate(createdAt)
+      const previousDate = existing.lastActiveDate || null
+      const gap =
+        previousDate && activityDate && previousDate !== activityDate
+          ? streakDayDiff(previousDate, activityDate)
+          : null
+
+      let useFreeze = false
+      let freezeConsume = null
+      if (gap === 2) {
+        freezeConsume = consumeStreakFreezeOnStore(store, telegramId, activityDate)
+        useFreeze =
+          Boolean(freezeConsume.consumed) ||
+          freezeConsume.reason === 'already_consumed_for_date'
+        if (freezeConsume.consumed) {
+          criticalPersist = true
+          logKickStreak('freeze_consumed', {
+            telegramId,
+            date: activityDate,
+            orderId: freezeConsume.orderId,
+            remaining: countAvailableStreakFreezes(store, telegramId),
+          })
+        }
+      }
+
+      const applied = applyChatActivityToStreak(existing, activityDate, { useFreeze })
+      store.kickStreamStreaks[streakKey] = applied.record
+
       markChatEventProcessed(store, keys, {
         type: 'chat.message.sent',
-        outcome: telegramIdOffline ? 'offline_message' : 'not_live',
+        outcome: applied.changed ? applied.reason : applied.reason,
         kickMessageId: payloadMessageId || null,
         senderKickUserId,
-        telegramId: telegramIdOffline || null,
+        telegramId,
+        freezeUsed: Boolean(applied.freezeUsed),
+        freezeOrderId: freezeConsume?.orderId || null,
       })
-      logKickStreak('chat_ignored_offline', {
-        senderKickUserId,
-        broadcasterUserId,
-        countedMessage: Boolean(telegramIdOffline),
-      })
-      return {
-        ok: true,
-        ignored: true,
-        reason: 'not_live',
-        telegramId: telegramIdOffline || undefined,
-        countedMessage: Boolean(telegramIdOffline),
-      }
-    }
 
-    const telegramId = findTelegramIdForKickUser(store, senderKickUserId)
-    if (!telegramId) {
-      markChatEventProcessed(store, keys, {
-        type: 'chat.message.sent',
-        outcome: 'unlinked_kick',
-        kickMessageId: payloadMessageId || null,
-        senderKickUserId,
-      })
-      logKickStreak('chat_ignored_unlinked', { senderKickUserId })
-      return { ok: true, ignored: true, reason: 'unlinked_kick' }
-    }
-
-    // Linked + live: message count, watch heartbeat, then streak.
-    recordChatMessageOnStore(store, telegramId)
-    const streamId =
-      store.kickLivestreamState?.startedAt != null
-        ? `started:${store.kickLivestreamState.startedAt}`
-        : null
-    applyWatchActivityOnStore(store, telegramId, {
-      atIso: createdAt,
-      streamId,
-      isLiveConfirmed: true,
-    })
-    maybeGrantLevelRewardsAfterXp(store, telegramId)
-
-    store.kickStreamStreaks = store.kickStreamStreaks || {}
-    const streakKey = String(telegramId)
-    const existing =
-      store.kickStreamStreaks[streakKey] ||
-      emptyStreakRecord({ telegramId, kickUserId: senderKickUserId })
-
-    existing.kickUserId = String(senderKickUserId)
-    existing.telegramId = Number(telegramId)
-
-    const activityDate = toStreakCalendarDate(createdAt)
-    const previousDate = existing.lastActiveDate || null
-    const gap =
-      previousDate && activityDate && previousDate !== activityDate
-        ? streakDayDiff(previousDate, activityDate)
-        : null
-
-    let useFreeze = false
-    let freezeConsume = null
-    if (gap === 2) {
-      freezeConsume = consumeStreakFreezeOnStore(store, telegramId, activityDate)
-      useFreeze =
-        Boolean(freezeConsume.consumed) ||
-        freezeConsume.reason === 'already_consumed_for_date'
-      if (freezeConsume.consumed) {
-        logKickStreak('freeze_consumed', {
+      if (applied.changed) {
+        logKickStreak('day_credited', {
           telegramId,
+          kickUserId: senderKickUserId,
           date: activityDate,
-          orderId: freezeConsume.orderId,
-          remaining: countAvailableStreakFreezes(store, telegramId),
+          currentStreak: applied.record.currentStreak,
+          reason: applied.reason,
+          freezeUsed: Boolean(applied.freezeUsed),
         })
       }
-    }
 
-    const applied = applyChatActivityToStreak(existing, activityDate, { useFreeze })
-    store.kickStreamStreaks[streakKey] = applied.record
-
-    markChatEventProcessed(store, keys, {
-      type: 'chat.message.sent',
-      outcome: applied.changed ? applied.reason : applied.reason,
-      kickMessageId: payloadMessageId || null,
-      senderKickUserId,
-      telegramId,
-      freezeUsed: Boolean(applied.freezeUsed),
-      freezeOrderId: freezeConsume?.orderId || null,
-    })
-
-    if (applied.changed) {
-      logKickStreak('day_credited', {
-        telegramId,
-        kickUserId: senderKickUserId,
-        date: activityDate,
-        currentStreak: applied.record.currentStreak,
+      return {
+        ok: true,
+        credited: Boolean(applied.changed),
         reason: applied.reason,
+        telegramId,
+        currentStreak: applied.record.currentStreak,
+        lastActiveDate: applied.record.lastActiveDate,
         freezeUsed: Boolean(applied.freezeUsed),
-      })
-    }
+        freezeAvailable: countAvailableStreakFreezes(store, telegramId),
+        __storeImmediate: criticalPersist,
+      }
+    },
+    { deferPersist: true },
+  )
 
-    return {
-      ok: true,
-      credited: Boolean(applied.changed),
-      reason: applied.reason,
-      telegramId,
-      currentStreak: applied.record.currentStreak,
-      lastActiveDate: applied.record.lastActiveDate,
-      freezeUsed: Boolean(applied.freezeUsed),
-      freezeAvailable: countAvailableStreakFreezes(store, telegramId),
-    }
-  })
+  if (criticalPersist) {
+    flushStoreNow()
+  }
+
+  return result
 }
 
 export function getKickStreakForUser(telegramUserId) {
   const today = toStreakCalendarDate(new Date())
-  return withStore((store) => {
+  return withStoreRead((store) => {
     const connection = getKickConnectionForUser(store, telegramUserId)
     const connected = Boolean(connection?.connected && connection.kickUserId)
-    store.kickStreamStreaks = store.kickStreamStreaks || {}
+    const streaks = store.kickStreamStreaks || {}
     const key = String(telegramUserId)
-    let record = store.kickStreamStreaks[key] || null
+    let record = streaks[key] || null
     const freezeAvailable = connected ? countAvailableStreakFreezes(store, telegramUserId) : 0
 
     if (record) {
       const reconciled = reconcileStreakForToday(record, today, { freezeAvailable })
-      if (reconciled && reconciled.currentStreak !== record.currentStreak) {
-        store.kickStreamStreaks[key] = reconciled
+      if (reconciled) {
+        // Read-only GET: apply reconcile for the response only (no store write).
         record = reconciled
       }
     }

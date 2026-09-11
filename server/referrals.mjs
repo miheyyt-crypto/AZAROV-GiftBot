@@ -15,7 +15,7 @@ import {
   referralPairKey,
   resolveReferralStartParam,
 } from './users.mjs'
-import { withStore } from './store.mjs'
+import { withStore, withStoreRead } from './store.mjs'
 import { maybeGrantInviteFriendsTask } from './tasks.mjs'
 import { grantPendingLevelRewardsOnStore } from './level-rewards.mjs'
 
@@ -472,11 +472,12 @@ export function getReferralMe(store, user) {
 }
 
 export function bootstrapUser(telegramUser, startParam, options = {}) {
-  return withStore((store) => {
-    // When true, skip rewriting store.json if nothing durable changed (warm Mini App session).
-    const trackDirty = options.skipUnchangedPersist === true
-    const beforeSnap = trackDirty ? JSON.stringify(store) : null
+  // Default true: warm GET/session must not rewrite the whole JSON ledger when unchanged.
+  // Avoid full-store JSON.stringify (blocks the event loop under lock).
+  const trackDirty = options.skipUnchangedPersist !== false
 
+  return withStore((store) => {
+    let dirty = false
     store.pendingBotStarts = store.pendingBotStarts || {}
 
     const telegramId = Number(telegramUser.id)
@@ -487,29 +488,76 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
       if (!trackDirty) {
         return payload
       }
-      const dirty = JSON.stringify(store) !== beforeSnap
       return { ...payload, __storeDirty: dirty, storePersisted: dirty }
     }
 
+    const markIfUserChanged = (before) => {
+      if (!before || !user) {
+        return
+      }
+      if (
+        before.username !== (user.username || '') ||
+        before.firstName !== (user.firstName || '') ||
+        before.lastName !== (user.lastName || '') ||
+        before.photoUrl !== (user.photoUrl || '') ||
+        before.languageCode !== (user.languageCode || null) ||
+        before.isPremium !== user.isPremium ||
+        before.blocked ||
+        before.blockReason ||
+        !before.antiAbuseBound ||
+        before.referralCode !== (user.referralCode || '') ||
+        before.pendingStartParam !== (user.pendingStartParam || null) ||
+        before.balance !== Number(user.balance) ||
+        before.activeReferrals !== user.activeReferrals ||
+        before.levelRewardsSeeded !== Boolean(user.levelRewardsSeeded) ||
+        before.claimedLevelRewards !== JSON.stringify(user.claimedLevelRewards || []) ||
+        before.completedTasksLen !== (user.completedTasks || []).length
+      ) {
+        dirty = true
+      }
+    }
+
+    let snapshot = null
+
     if (isNew) {
-      // Create durable users immediately — no ban / device / IP gate.
+      dirty = true
       user = createUser(store, telegramUser, { unbound: false })
       hydrateUserReferrals(store, user)
     } else {
+      snapshot = {
+        username: user.username || '',
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        photoUrl: user.photoUrl || '',
+        languageCode: user.languageCode || null,
+        isPremium: user.isPremium,
+        blocked: Boolean(user.blocked),
+        blockReason: user.blockReason || null,
+        antiAbuseBound: Boolean(user.antiAbuseBound),
+        referralCode: user.referralCode || '',
+        pendingStartParam: user.pendingStartParam || null,
+        balance: Number(user.balance) || 0,
+        activeReferrals: user.activeReferrals,
+        levelRewardsSeeded: Boolean(user.levelRewardsSeeded),
+        claimedLevelRewards: JSON.stringify(user.claimedLevelRewards || []),
+        completedTasksLen: (user.completedTasks || []).length,
+      }
       user = ensureUser(store, telegramUser)
-      // Clear any historical ban leftovers on every bootstrap.
       user.blocked = false
       user.blockReason = null
       user.blockedAt = null
       user.antiAbuseBound = true
+      markIfUserChanged(snapshot)
     }
 
     const pendingBot = store.pendingBotStarts[String(telegramId)]
     if (pendingBot?.payload && !user.pendingStartParam) {
       user.pendingStartParam = String(pendingBot.payload)
+      dirty = true
     }
     if (store.pendingBotStarts[String(telegramId)]) {
       delete store.pendingBotStarts[String(telegramId)]
+      dirty = true
     }
 
     const clientStartParam = String(options.clientStartParam || '').trim()
@@ -528,15 +576,30 @@ export function bootstrapUser(telegramUser, startParam, options = {}) {
     }
 
     const { referral, activation } = applyReferralAndReward(store, user, resolved.value)
+    if (referral?.applied || activation?.rewarded || activation?.activated) {
+      dirty = true
+    }
 
     if (user.pendingStartParam) {
       if (resolved.value || resolved.source === 'pending') {
         user.pendingStartParam = null
+        dirty = true
       }
     }
 
     maybeGrantInviteFriendsTask(store, user)
     const levelRewards = grantPendingLevelRewardsOnStore(store, user)
+    if (snapshot) {
+      markIfUserChanged(snapshot)
+    }
+    if (
+      (Array.isArray(levelRewards?.granted) && levelRewards.granted.length > 0) ||
+      levelRewards?.seededWithoutGrant ||
+      Number(levelRewards?.totalAmount) > 0
+    ) {
+      dirty = true
+    }
+
     return finish({
       referral,
       activation,
@@ -636,8 +699,7 @@ export function activateReferral(userId) {
 }
 
 export function readReferralMe(userId) {
-  return withStore((store) => {
-    migrateAllReferrals(store)
+  return withStoreRead((store) => {
     const user = store.users[String(userId)]
     if (!user) {
       return { success: false, message: 'Пользователь не найден.' }

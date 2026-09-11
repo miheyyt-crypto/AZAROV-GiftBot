@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -149,5 +149,80 @@ test('isPersistentStoreDir treats project server/data as ephemeral', async () =>
     } else {
       process.env.AZAROV_STORE_DIR = previous
     }
+  }
+})
+
+test('deferPersist batches disk writes and flushStoreNow persists', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'azarov-store-defer-'))
+  process.env.AZAROV_STORE_DIR = dir
+  process.env.AZAROV_STORE_DEFER_MS = '30_000'
+
+  try {
+    const { withStore, withStoreRead, flushStoreNow } = await import(
+      `./store.mjs?t=${Date.now() + 5}`
+    )
+    const storePath = path.join(dir, 'store.json')
+
+    withStore((store) => {
+      store.users['1'] = { telegramId: 1, balance: 10 }
+      return true
+    })
+    const afterImmediate = readFileSync(storePath, 'utf8')
+
+    withStore(
+      (store) => {
+        store.users['1'].balance = 99
+        return true
+      },
+      { deferPersist: true },
+    )
+
+    // Disk still has previous snapshot until flush.
+    assert.equal(readFileSync(storePath, 'utf8'), afterImmediate)
+    // In-memory readers see the hot update.
+    assert.equal(
+      withStoreRead((store) => store.users['1'].balance),
+      99,
+    )
+
+    flushStoreNow()
+    const persisted = JSON.parse(readFileSync(storePath, 'utf8'))
+    assert.equal(persisted.users['1'].balance, 99)
+  } finally {
+    delete process.env.AZAROV_STORE_DIR
+    delete process.env.AZAROV_STORE_DEFER_MS
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('withStore skipUnchangedPersist via __storeDirty false skips rewrite', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'azarov-store-skip-'))
+  process.env.AZAROV_STORE_DIR = dir
+
+  try {
+    const { withStore } = await import(`./store.mjs?t=${Date.now() + 6}`)
+    const storePath = path.join(dir, 'store.json')
+
+    withStore((store) => {
+      store.users['2'] = { telegramId: 2, balance: 5 }
+      return true
+    })
+    const before = readFileSync(storePath, 'utf8')
+    const mtimeBefore = Number(statSync(storePath).mtimeMs)
+
+    await new Promise((r) => setTimeout(r, 20))
+
+    withStore((store) => {
+      // Touch memory but ask to skip persist.
+      store.users['2'].balance = 5
+      return { __storeDirty: false, ok: true }
+    })
+
+    assert.equal(readFileSync(storePath, 'utf8'), before)
+    const mtimeAfter = Number(statSync(storePath).mtimeMs)
+    assert.equal(mtimeAfter, mtimeBefore)
+  } finally {
+    delete process.env.AZAROV_STORE_DIR
+    rmSync(dir, { recursive: true, force: true })
   }
 })

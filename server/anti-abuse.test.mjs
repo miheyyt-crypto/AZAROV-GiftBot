@@ -47,5 +47,5 @@ test('unbanAll clears historical bans', () => {
 })
 
 test('createEmptyStore is v19', () => {
-  assert.equal(createEmptyStore().version, 20)
+  assert.equal(createEmptyStore().version, 23)
 })

@@ -244,6 +244,6 @@ test('minesPotentialWin uses integer math', () => {
 
 test('createEmptyStore includes minesGames at v10', () => {
   const store = createEmptyStore()
-  assert.equal(store.version, 20)
+  assert.equal(store.version, 23)
   assert.ok(store.minesGames)
 })

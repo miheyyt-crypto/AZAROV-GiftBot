@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 
-import { withStore } from './store.mjs'
+import { withStore, withStoreRead } from './store.mjs'
 import { addCoins, spendCoins, TX_TYPE, utcNow } from './wallet.mjs'
 import { broadcastRollEvent, getRollSseClientCount } from './roll-bus.mjs'
 
@@ -668,7 +668,7 @@ export function placeRollBetOnStore(store, userId, { bet, requestId = '' } = {})
 }
 
 export function getRollState(userId) {
-  return withStore((store) => getRollStateOnStore(store, userId))
+  return withStoreRead((store) => getRollStateOnStore(store, userId))
 }
 
 /** Advance + push current round snapshot to SSE subscribers. */
