@@ -36,6 +36,8 @@ const WAITING_SEGMENTS = 8
 const WAITING_COLOR_A = 'rgba(148, 112, 198, 0.55)'
 const WAITING_COLOR_B = 'rgba(78, 52, 128, 0.50)'
 const SEGMENT_ALPHA = 0.72
+/** Decorative idle: one full turn every 20s (linear, local-only). */
+const IDLE_PERIOD_MS = 20_000
 
 type AvatarCacheEntry = { img: HTMLImageElement; status: 'loading' | 'ready' | 'error' }
 
@@ -143,6 +145,9 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const rotationRef = useRef(0)
   const rafRef = useRef<number | null>(null)
+  const idleRafRef = useRef<number | null>(null)
+  const idleLastTsRef = useRef<number | null>(null)
+  const idleActiveRef = useRef(false)
   const spinLoopKeyRef = useRef<string | null>(null)
   const segmentsRef = useRef(segments)
   const statusRef = useRef(round?.status || 'waiting')
@@ -154,7 +159,9 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
 
   const pot = round?.pot || 0
   const status = round?.status || 'waiting'
+  const playerCount = round?.players?.length || 0
   const showNick = status === 'spinning' || status === 'completed' || status === 'locked'
+  const idleWanted = status === 'waiting' && playerCount === 0 && !spinClock
 
   segmentsRef.current = segments
   statusRef.current = status
@@ -173,6 +180,15 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
     if (nick !== lastNickRef.current) {
       lastNickRef.current = nick
       setPointerUser(nick)
+    }
+  }
+
+  const stopIdle = () => {
+    idleActiveRef.current = false
+    idleLastTsRef.current = null
+    if (idleRafRef.current != null) {
+      cancelAnimationFrame(idleRafRef.current)
+      idleRafRef.current = null
     }
   }
 
@@ -355,14 +371,52 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
     ctx.fillText(label.text, cx, cy)
   }
 
-  const applyRotation = (angle: number) => {
+  const applyRotation = (angle: number, opts?: { syncNick?: boolean }) => {
     rotationRef.current = angle
     paint(angle)
-    syncNickname(angle, segmentsRef.current)
+    if (opts?.syncNick !== false && segmentsRef.current.length > 0) {
+      syncNickname(angle, segmentsRef.current)
+    }
   }
 
+  // Decorative idle spin — waiting + 0 players only. Local visual, no React state churn.
   useEffect(() => {
-    if (spinLoopKeyRef.current) {
+    if (!idleWanted || spinLoopKeyRef.current) {
+      stopIdle()
+      paint(rotationRef.current)
+      return
+    }
+
+    if (idleActiveRef.current) {
+      return
+    }
+    idleActiveRef.current = true
+    idleLastTsRef.current = null
+
+    const tick = (ts: number) => {
+      if (!idleActiveRef.current) {
+        return
+      }
+      const last = idleLastTsRef.current
+      idleLastTsRef.current = ts
+      if (last != null) {
+        const dt = Math.min(48, Math.max(0, ts - last))
+        const next = (rotationRef.current + (360 * dt) / IDLE_PERIOD_MS) % 360
+        rotationRef.current = next
+        paint(next)
+      }
+      idleRafRef.current = requestAnimationFrame(tick)
+    }
+    idleRafRef.current = requestAnimationFrame(tick)
+
+    return () => {
+      stopIdle()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idleWanted])
+
+  useEffect(() => {
+    if (spinLoopKeyRef.current || idleActiveRef.current) {
       return
     }
     paint(rotationRef.current)
@@ -372,6 +426,7 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
   useEffect(() => {
     if (!spinClock || (status !== 'spinning' && status !== 'locked')) {
       if (status === 'completed' && round?.targetAngle != null) {
+        stopIdle()
         spinLoopKeyRef.current = null
         if (rafRef.current != null) {
           cancelAnimationFrame(rafRef.current)
@@ -386,12 +441,18 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
           cancelAnimationFrame(rafRef.current)
           rafRef.current = null
         }
-        applyRotation(0)
+        // Freeze current visual angle — never snap idle → 0.
+        if (!idleWanted) {
+          stopIdle()
+          paint(rotationRef.current)
+        }
         lastNickRef.current = null
         setPointerUser(null)
       }
       return
     }
+
+    stopIdle()
 
     const key = `${spinClock.roundId}:${spinClock.targetAngle}:${spinClock.startedAtMs}:${spinClock.endsAtMs}`
     if (spinLoopKeyRef.current === key && rafRef.current != null) {
@@ -427,7 +488,7 @@ export function RollWheel({ round, countdownMs, spinClock }: RollWheelProps) {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spinClock, status, round?.targetAngle])
+  }, [spinClock, status, round?.targetAngle, idleWanted])
 
   useEffect(() => {
     const onResize = () => paint(rotationRef.current)
