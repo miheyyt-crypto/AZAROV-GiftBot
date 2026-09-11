@@ -1,11 +1,17 @@
 import type { CaseRewardRarity } from '@/types/case'
 
+export type LeaderboardMetric = 'balance' | 'referrals'
+
 export interface LeaderboardPlayer {
   rank: number
   username: string
   displayName: string
   photoUrl: string
   balance: number
+  invitedCount?: number
+  level?: number
+  isMe?: boolean
+  inTop?: boolean
 }
 
 export interface RecentCaseDrop {

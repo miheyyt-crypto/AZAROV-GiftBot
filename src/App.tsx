@@ -13,6 +13,7 @@ import {
   GiveawayDetailPage,
   GiveawaysPage,
   HomePage,
+  LeaderboardPage,
   MinesPage,
   TowerPage,
   RollRoute,
@@ -40,6 +41,7 @@ export default function App() {
       <Routes>
         <Route element={<AppLayout />}>
           <Route path={ROUTES.home} element={<HomePage />} />
+          <Route path={ROUTES.leaderboard} element={<LeaderboardPage />} />
           <Route path={ROUTES.tasks} element={<TasksPage />} />
           <Route path={ROUTES.shop} element={<ShopPage />} />
           <Route path={ROUTES.friends} element={<FriendsPage />} />

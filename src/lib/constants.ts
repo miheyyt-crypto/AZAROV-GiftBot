@@ -13,6 +13,7 @@ export const ROUTES = {
   mines: '/mines',
   tower: '/tower',
   roll: '/roll',
+  leaderboard: '/leaderboard',
 } as const
 
 export const TELEGRAM_BOT_USERNAME = 'AZAROV_GiftBot'

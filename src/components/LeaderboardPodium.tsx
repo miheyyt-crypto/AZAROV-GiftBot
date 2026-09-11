@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { CoinIcon } from '@/components/CoinIcon'
 import { HomeSectionTitle } from '@/components/HomeSectionTitle'
 import { fetchLeaderboard, getPlayerInitial } from '@/lib/home'
-import { HOME_FEED_POLL_MS } from '@/lib/constants'
+import { HOME_FEED_POLL_MS, ROUTES } from '@/lib/constants'
 import { formatBalance } from '@/lib/balance'
 import type { LeaderboardPlayer } from '@/types/home'
 
@@ -93,6 +94,7 @@ function PodiumPlayer({ player }: { player: LeaderboardPlayer }) {
 }
 
 export function LeaderboardPodium() {
+  const navigate = useNavigate()
   const [players, setPlayers] = useState<LeaderboardPlayer[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -130,7 +132,12 @@ export function LeaderboardPodium() {
     <section className="mb-6">
       <HomeSectionTitle title="Топ лудиков" />
 
-      <div className="overflow-hidden rounded-[24px] border border-white/10 bg-gradient-to-b from-white/[0.04] to-bg-surface/80 px-3 pb-0 pt-5 backdrop-blur-md">
+      <button
+        type="button"
+        onClick={() => navigate(ROUTES.leaderboard)}
+        className="w-full overflow-hidden rounded-[24px] border border-white/10 bg-gradient-to-b from-white/[0.04] to-bg-surface/80 px-3 pb-0 pt-5 text-left backdrop-blur-md active:scale-[0.99] transition-transform"
+        aria-label="Открыть лидерборд топ 100"
+      >
         {isLoading ? (
           <p className="py-10 text-center text-sm text-muted">Загружаем топ...</p>
         ) : ordered.length === 0 ? (
@@ -142,7 +149,7 @@ export function LeaderboardPodium() {
             ))}
           </div>
         )}
-      </div>
+      </button>
     </section>
   )
 }

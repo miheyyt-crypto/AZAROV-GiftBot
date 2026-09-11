@@ -1818,9 +1818,23 @@ app.post(
 )
 
 app.get('/api/home/leaderboard', (_req, res) => {
-  const result = getLeaderboard(3)
+  const result = getLeaderboard(3, { metric: 'balance' })
   res.json(result)
 })
+
+app.get(
+  '/api/leaderboard',
+  withUser(async (req, res, telegramUser) => {
+    const metric = String(req.query.metric || 'balance').toLowerCase() === 'referrals'
+      ? 'referrals'
+      : 'balance'
+    const result = getLeaderboard(100, {
+      metric,
+      viewerUserId: telegramUser.id,
+    })
+    res.json(result)
+  }),
+)
 
 app.get('/api/home/recent-drops', (_req, res) => {
   const result = getRecentCaseDrops(12)

@@ -1,9 +1,11 @@
 import { getTelegramInitData } from '@/lib/telegram'
-import type { LeaderboardPlayer, RecentCaseDrop } from '@/types/home'
+import type { LeaderboardMetric, LeaderboardPlayer, RecentCaseDrop } from '@/types/home'
 
 interface HomeApiResponse {
   success: boolean
+  metric?: LeaderboardMetric
   players?: LeaderboardPlayer[]
+  me?: LeaderboardPlayer | null
   drops?: RecentCaseDrop[]
 }
 
@@ -73,6 +75,24 @@ export async function fetchLeaderboard(): Promise<LeaderboardPlayer[] | null> {
     const result = await request('/api/home/leaderboard')
     if (result.success) {
       return result.players ?? []
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
+export async function fetchLeaderboardBoard(
+  metric: LeaderboardMetric,
+): Promise<{ players: LeaderboardPlayer[]; me: LeaderboardPlayer | null } | null> {
+  try {
+    const result = await request(`/api/leaderboard?metric=${encodeURIComponent(metric)}`)
+    if (result.success) {
+      return {
+        players: result.players ?? [],
+        me: result.me ?? null,
+      }
     }
   } catch {
     return null
