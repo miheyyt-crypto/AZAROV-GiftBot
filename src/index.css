@@ -97,20 +97,30 @@ body,
   min-height: 100%;
   min-height: 100dvh;
   height: auto;
-  overflow-x: clip;
   background-color: var(--color-bg-dark);
 }
 
-html,
-body {
-  overflow-y: auto !important;
+/*
+ * ONE vertical scroller on mobile (html). Dual overflow-y:auto on html+body
+ * breaks touch swipes in Android Telegram WebView.
+ * Keep #root overflow visible so it does not become a nested scrollport.
+ */
+html {
+  overflow-x: clip;
+  overflow-y: auto;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
+}
+
+body {
+  overflow-x: clip;
+  overflow-y: visible;
+  overscroll-behavior-y: contain;
   touch-action: pan-y;
 }
 
 #root {
-  overflow-y: visible;
+  overflow: visible;
   min-height: 100%;
   min-height: 100dvh;
 }

@@ -39,6 +39,9 @@ export interface TelegramWebApp {
   version: string
   openTelegramLink?: (url: string) => void
   openLink?: (url: string) => void
+  enableVerticalSwipes?: () => void
+  disableVerticalSwipes?: () => void
+  isVerticalSwipesEnabled?: boolean
 }
 
 export interface TelegramGlobal {

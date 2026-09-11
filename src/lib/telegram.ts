@@ -17,6 +17,25 @@ const MOBILE_TG_PLATFORMS = new Set([
   'ipad',
 ])
 
+/** Telegram web clients that still run on phones — never treat as desktop scroll. */
+const MOBILE_TG_WEB_PLATFORMS = new Set(['weba', 'webk', 'web'])
+
+function hasCoarsePointer(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(pointer: coarse)').matches
+  )
+}
+
+function hasFinePointerHover(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(hover: hover) and (pointer: fine)').matches
+  )
+}
+
 /** True for Telegram Desktop / desktop browser — never for iOS/Android WebView. */
 export function isDesktopRoll(): boolean {
   if (typeof window === 'undefined') {
@@ -26,13 +45,18 @@ export function isDesktopRoll(): boolean {
   if (MOBILE_TG_PLATFORMS.has(platform)) {
     return false
   }
+  // Phone Telegram WebView / WebA sometimes reports weba|web — keep document scroll.
+  if (MOBILE_TG_WEB_PLATFORMS.has(platform) && hasCoarsePointer()) {
+    return false
+  }
+  // Unknown platform + coarse touch → mobile (do not enable desktop embed).
+  if (hasCoarsePointer()) {
+    return false
+  }
   if (HARD_DESKTOP_TG_PLATFORMS.has(platform)) {
     return true
   }
-  return (
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(hover: hover) and (pointer: fine)').matches
-  )
+  return hasFinePointerHover()
 }
 
 export function isTelegramWebApp(): boolean {
@@ -69,6 +93,14 @@ export function initTelegramWebApp(): TelegramWebApp | null {
 
   webApp.ready()
   webApp.expand()
+  // Allow swipe-down to minimize/close Mini App (Android/iOS). Safe no-op if absent.
+  const swipeApp = webApp as TelegramWebApp & {
+    enableVerticalSwipes?: () => void
+    isVerticalSwipesEnabled?: boolean
+  }
+  if (typeof swipeApp.enableVerticalSwipes === 'function') {
+    swipeApp.enableVerticalSwipes()
+  }
   bootstrapViewportEnvironment(webApp)
 
   const anyApp = webApp as TelegramWebApp & {
