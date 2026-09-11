@@ -102,7 +102,7 @@ export function isPersistentStoreDir(dir = getDataDir()) {
 
 export function createEmptyStore() {
   return {
-    version: 21,
+    version: 22,
     users: {},
     referralIndex: {},
     referrals: {},
@@ -145,6 +145,9 @@ export function createEmptyStore() {
     antiAbuseAudit: {},
     pendingBotStarts: {},
     botLaunchStarts: {},
+    appSettings: {
+      maintenanceMode: false,
+    },
   }
 }
 
@@ -193,6 +196,10 @@ function migrateStore(store) {
   store.pendingBotStarts = store.pendingBotStarts || {}
   store.botLaunchStarts = store.botLaunchStarts || {}
   store.broadcasts = store.broadcasts || {}
+  store.appSettings = store.appSettings || {}
+  if (typeof store.appSettings.maintenanceMode !== 'boolean') {
+    store.appSettings.maintenanceMode = false
+  }
 
   // One-shot upgrade: pending streak-freeze orders → inventory (strategy B).
   if (Number(store.version) < 5) {
@@ -481,6 +488,15 @@ function migrateStore(store) {
       lastResultRoundId: null,
     }
     store.version = 21
+  }
+
+  // Additive v22: app settings (maintenance mode).
+  if (Number(store.version) < 22) {
+    store.appSettings = store.appSettings || {}
+    if (typeof store.appSettings.maintenanceMode !== 'boolean') {
+      store.appSettings.maintenanceMode = false
+    }
+    store.version = 22
   }
 
   return store

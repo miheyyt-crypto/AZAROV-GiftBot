@@ -13,6 +13,10 @@ import {
   listAdminCommunityAccess,
   rejectCommunityAccess,
 } from './community-access.mjs'
+import {
+  isMaintenanceMode,
+  toggleMaintenanceMode,
+} from './maintenance.mjs'
 import { getOnlineCount, listOnlineUsers } from './presence.mjs'
 import { resolveCommunityScreenshotPath } from './uploads.mjs'
 
@@ -106,7 +110,8 @@ export function buildCommunityAdminMenuKeyboard() {
   }
 }
 
-export function buildAdminRootKeyboard() {
+export function buildAdminRootKeyboard(options = {}) {
+  const maintenanceOn = Boolean(options.maintenanceMode)
   return {
     inline_keyboard: [
       [{ text: '🟢 Онлайн', callback_data: 'admin:online' }],
@@ -114,6 +119,12 @@ export function buildAdminRootKeyboard() {
       [{ text: '🔒 Заявки на доступ', callback_data: 'ca:menu' }],
       [{ text: '🎟 Промокоды', callback_data: 'promo:menu' }],
       [{ text: '📢 Рассылка', callback_data: 'bc:menu' }],
+      [
+        {
+          text: maintenanceOn ? '🛠 Тех. перерыв: ВКЛ' : '🛠 Тех. перерыв: ВЫКЛ',
+          callback_data: 'admin:maintenance',
+        },
+      ],
     ],
   }
 }
@@ -228,16 +239,18 @@ export async function sendAdminRootMenu(ctx) {
     return true
   }
   const online = getOnlineCount()
+  const maintenanceMode = isMaintenanceMode()
   await replyHtml(
     ctx,
     [
       '🛠 <b>Админ-меню</b>',
       '',
       `🟢 Онлайн в Mini App: <b>${online}</b>`,
+      `🛠 Тех. перерыв: <b>${maintenanceMode ? 'ВКЛ' : 'ВЫКЛ'}</b>`,
       '',
       'Выберите раздел:',
     ].join('\n'),
-    { reply_markup: buildAdminRootKeyboard() },
+    { reply_markup: buildAdminRootKeyboard({ maintenanceMode }) },
   )
   return true
 }
@@ -472,6 +485,28 @@ export async function handleCommunityAdminCallback(ctx) {
   if (data === 'admin:online') {
     await answerCommunityCallback(ctx)
     await sendAdminOnlineStats(ctx)
+    return true
+  }
+
+  if (data === 'admin:maintenance') {
+    const adminId = await requireAdminCtx(ctx)
+    if (!adminId) {
+      return true
+    }
+    const result = toggleMaintenanceMode()
+    const on = Boolean(result.maintenanceMode)
+    await answerCommunityCallback(
+      ctx,
+      on ? 'Тех. перерыв включён' : 'Тех. перерыв выключен',
+      true,
+    )
+    await replyHtml(
+      ctx,
+      on
+        ? '🛠 <b>Тех. перерыв ВКЛ</b>\n\nВ Mini App могут зайти только админы.\nОстальным показывается: «Ведутся тех. работы».'
+        : '🛠 <b>Тех. перерыв ВЫКЛ</b>\n\nMini App снова доступен всем пользователям.',
+      { reply_markup: buildAdminRootKeyboard({ maintenanceMode: on }) },
+    )
     return true
   }
 

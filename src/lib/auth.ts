@@ -138,6 +138,9 @@ export async function completeTelegramWebLogin(
   })
 
   if (!response.success || !response.user) {
+    if (response.code === 'MAINTENANCE') {
+      throw new Error(response.message || 'Ведутся тех. работы')
+    }
     throw new Error(response.message || 'Не удалось войти через Telegram.')
   }
 

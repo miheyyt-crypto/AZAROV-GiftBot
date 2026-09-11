@@ -94,6 +94,9 @@ export type BootstrapSessionResult = {
   account: UserAccount
   /** True only when the server confirmed the session (not local/cache fallback). */
   confirmed: boolean
+  /** True when server is in tech-break mode for non-admins. */
+  maintenance?: boolean
+  maintenanceMessage?: string
 }
 
 async function runBootstrapSession(): Promise<BootstrapSessionResult> {
@@ -118,6 +121,17 @@ async function runBootstrapSession(): Promise<BootstrapSessionResult> {
         hasUser: Boolean(response.user),
         code: response.code || null,
       })
+
+      if (response.code === 'MAINTENANCE') {
+        sessionBootLog('request finished', { confirmed: false, path: 'miniapp', maintenance: true })
+        return {
+          account: getCurrentAccount(),
+          confirmed: false,
+          maintenance: true,
+          maintenanceMessage: response.message || 'Ведутся тех. работы',
+        }
+      }
+
       if (response.user) {
         applyAccountSnapshot(
           mapRemoteAccount({

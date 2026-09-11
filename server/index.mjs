@@ -11,6 +11,10 @@ import { asyncHandler, HttpError, sendSafeError } from './errors.mjs'
 import { extractReferralCode, toPublicUser } from './users.mjs'
 import { bootstrapUser, activateReferral, readReferralMe } from './referrals.mjs'
 import { getOnlineCount, touchPresence } from './presence.mjs'
+import {
+  assertAppAccessForTelegramUser,
+  maintenanceDeniedPayload,
+} from './maintenance.mjs'
 import { checkTelegramSubscribe, claimInviteFriendsTask, checkLaunchBot } from './tasks.mjs'
 import {
   buildKickResultRedirect,
@@ -476,6 +480,12 @@ function withUser(handler) {
       return
     }
 
+    const access = assertAppAccessForTelegramUser(telegramUser.id)
+    if (!access.ok) {
+      res.status(503).json(maintenanceDeniedPayload())
+      return
+    }
+
     const stored = getUser(telegramUser.id)
     if (!stored) {
       res.status(401).json({
@@ -735,6 +745,12 @@ app.post(
 
     purgeExpiredWebSessions()
 
+    const access = assertAppAccessForTelegramUser(verified.user.id)
+    if (!access.ok) {
+      res.status(503).json(maintenanceDeniedPayload())
+      return
+    }
+
     const deviceId = parseDeviceId(req.body?.deviceId)
     const result = bootstrapUser(verified.user, '', {
       enforceAntiAbuse: true,
@@ -824,6 +840,20 @@ app.post(
     mark('telegram_initData_validation')
     if (!auth) {
       console.info('[SESSION TIMING]', { ...timing, total_ms: Math.round(performance.now() - t0), ok: false })
+      return
+    }
+
+    const access = assertAppAccessForTelegramUser(auth.user.id)
+    if (!access.ok) {
+      mark('maintenance_gate')
+      res.status(503).json(maintenanceDeniedPayload())
+      mark('response_sent')
+      console.info('[SESSION TIMING]', {
+        ...timing,
+        total_ms: Math.round(performance.now() - t0),
+        status: 503,
+        code: 'MAINTENANCE',
+      })
       return
     }
 

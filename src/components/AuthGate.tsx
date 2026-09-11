@@ -9,6 +9,7 @@ import {
 } from 'react'
 
 import { LoginScreen } from '@/components/LoginScreen'
+import { MaintenanceScreen } from '@/components/MaintenanceScreen'
 import {
   completeTelegramWebLogin,
   getWebAuthUser,
@@ -72,6 +73,7 @@ export function AuthGate({ children }: AuthGateProps) {
   const [sessionReady, setSessionReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loginBusy, setLoginBusy] = useState(false)
+  const [maintenanceMessage, setMaintenanceMessage] = useState<string | null>(null)
   const [, setTick] = useState(0)
 
   useEffect(() => subscribeAuth(() => setTick((value) => value + 1)), [])
@@ -81,12 +83,12 @@ export function AuthGate({ children }: AuthGateProps) {
   }, [])
 
   useEffect(() => {
-    sessionBootLog('sessionReady/status', { sessionReady, status })
-    if (sessionReady || status === 'unauthenticated') {
+    sessionBootLog('sessionReady/status', { sessionReady, status, maintenance: Boolean(maintenanceMessage) })
+    if (sessionReady || status === 'unauthenticated' || maintenanceMessage) {
       sessionBootLog('appBootReady signal')
       signalAppBootReady()
     }
-  }, [sessionReady, status])
+  }, [sessionReady, status, maintenanceMessage])
 
   useEffect(() => {
     let cancelled = false
@@ -94,6 +96,7 @@ export function AuthGate({ children }: AuthGateProps) {
 
     async function boot() {
       setError(null)
+      setMaintenanceMessage(null)
 
       if (!miniAppAtBoot) {
         setStatus('loading')
@@ -109,6 +112,13 @@ export function AuthGate({ children }: AuthGateProps) {
         const result = await bootstrapSession()
         if (cancelled) {
           sessionBootLog('AuthGate boot ignored (cancelled after StrictMode remount)')
+          return
+        }
+
+        if (result.maintenance) {
+          setSessionReady(false)
+          setMaintenanceMessage(result.maintenanceMessage || 'Ведутся тех. работы')
+          setStatus('unauthenticated')
           return
         }
 
@@ -159,6 +169,7 @@ export function AuthGate({ children }: AuthGateProps) {
   const handleTelegramAuth = useCallback(async (payload: TelegramLoginWidgetUser) => {
     setLoginBusy(true)
     setError(null)
+    setMaintenanceMessage(null)
     setSessionReady(false)
 
     try {
@@ -174,6 +185,12 @@ export function AuthGate({ children }: AuthGateProps) {
         err instanceof Error && err.message
           ? err.message
           : 'Не удалось войти через Telegram. Попробуй ещё раз.'
+      if (/тех\.?\s*работ/i.test(message) || /MAINTENANCE/i.test(message)) {
+        setMaintenanceMessage(message)
+        setStatus('unauthenticated')
+        setSessionReady(false)
+        return
+      }
       setError(message)
       setStatus('unauthenticated')
       setSessionReady(false)
@@ -185,6 +202,7 @@ export function AuthGate({ children }: AuthGateProps) {
   const logout = useCallback(async () => {
     await logoutCurrentWebSession()
     setError(null)
+    setMaintenanceMessage(null)
     setSessionReady(false)
     setStatus('unauthenticated')
   }, [])
@@ -198,6 +216,10 @@ export function AuthGate({ children }: AuthGateProps) {
     }),
     [status, sessionReady, logout],
   )
+
+  if (maintenanceMessage) {
+    return <MaintenanceScreen message={maintenanceMessage} />
+  }
 
   if (status === 'loading') {
     return null
