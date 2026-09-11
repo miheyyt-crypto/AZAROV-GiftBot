@@ -70,7 +70,7 @@ import {
 import { notifyAdminsNewWithdrawal } from './withdrawal-admin.mjs'
 import { createWithdrawal, createGramWithdrawal } from './withdrawals.mjs'
 import { getBotRuntimeDiagnostics } from './bot.mjs'
-import { telegramApi } from './telegram-notify.mjs'
+import { telegramApi, isAdminTelegramUser } from './telegram-notify.mjs'
 import { listPartnersPublic } from './partners.mjs'
 import { MAX_SCREENSHOT_BYTES, isForbiddenOriginalName } from './uploads.mjs'
 import {
@@ -129,6 +129,10 @@ import {
 import { startBroadcastScheduler } from './broadcasts.mjs'
 import { fetchTelegramFileById } from './telegram-files.mjs'
 import { getLeaderboard, getRecentCaseDrops } from './home.mjs'
+import {
+  getReferralContestSnapshot,
+  getReferralContestVisibility,
+} from './referral-contest.mjs'
 import {
   getAchievementsProgress,
   getCoinHistory,
@@ -779,6 +783,10 @@ app.post(
       referral: result.referral,
       referralStats: result.me,
       expiresAt: session.expiresAt,
+      features: {
+        referralContest: getReferralContestVisibility(user.telegramId),
+      },
+      isAdmin: isAdminTelegramUser(user.telegramId),
     })
   }),
 )
@@ -807,6 +815,10 @@ app.get(
       user: toPublicUser(getUser(telegramUser.id)),
       referral: result.referral,
       referralStats: result.me,
+      features: {
+        referralContest: getReferralContestVisibility(telegramUser.id),
+      },
+      isAdmin: isAdminTelegramUser(telegramUser.id),
     })
   }),
 )
@@ -935,6 +947,10 @@ app.post(
           }
         : null,
       onlineCount: getOnlineCount(),
+      features: {
+        referralContest: getReferralContestVisibility(auth.user.id),
+      },
+      isAdmin: isAdminTelegramUser(auth.user.id),
     }
     mark('response_prepare')
     res.json(payload)
@@ -1862,6 +1878,19 @@ app.get(
       metric,
       viewerUserId: telegramUser.id,
     })
+    res.json(result)
+  }),
+)
+
+app.get(
+  '/api/contest/referral',
+  withUser(async (_req, res, telegramUser) => {
+    const result = getReferralContestSnapshot(telegramUser.id)
+    if (!result.success) {
+      const status = result.code === 'FORBIDDEN' ? 403 : 404
+      res.status(status).json(result)
+      return
+    }
     res.json(result)
   }),
 )

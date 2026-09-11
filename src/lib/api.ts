@@ -2,6 +2,7 @@ import { getTelegramInitData } from '@/lib/telegram'
 import type { UserAccount } from '@/types/account'
 import type { CaseOpening } from '@/types/case'
 import type { PartnerSubmission } from '@/types/partner'
+import type { ReferralContestVisibility } from '@/types/referral-contest'
 import type { ShopOrder } from '@/types/shop'
 
 export interface ApiUserResponse {
@@ -60,6 +61,10 @@ export interface ApiUserResponse {
     totalAmount: number
     level: number
   } | null
+  features?: {
+    referralContest?: ReferralContestVisibility
+  }
+  isAdmin?: boolean
   openingId?: string
   available?: boolean
   availableAt?: string | null

@@ -227,6 +227,30 @@ body {
   display: none;
 }
 
+@keyframes referral-battle-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 28px rgb(244 201 93 / 14%),
+      0 12px 28px rgb(0 0 0 / 45%);
+  }
+  50% {
+    box-shadow:
+      0 0 42px rgb(244 201 93 / 26%),
+      0 12px 28px rgb(0 0 0 / 45%);
+  }
+}
+
+.referral-battle-banner {
+  animation: referral-battle-glow 3.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .referral-battle-banner {
+    animation: none;
+  }
+}
+
 /* ── Design-system utilities ─────────────────────────────────────── */
 
 .ui-page {

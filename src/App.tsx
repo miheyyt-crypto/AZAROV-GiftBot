@@ -20,6 +20,7 @@ import {
   OperationsHistoryPage,
   OrdersPage,
   ProfilePage,
+  ReferralBattlePage,
   ShopPage,
   TasksPage,
 } from '@/pages'
@@ -49,6 +50,7 @@ export default function App() {
           <Route path={ROUTES.giveaways} element={<GiveawaysPage />} />
           <Route path={`${ROUTES.giveaways}/:giveawayId`} element={<GiveawayDetailPage />} />
           <Route path={ROUTES.communityAccess} element={<CommunityAccessPage />} />
+          <Route path={ROUTES.referralBattle} element={<ReferralBattlePage />} />
           <Route path={ROUTES.mines} element={<MinesPage />} />
           <Route path={ROUTES.tower} element={<TowerPage />} />
           <Route path={ROUTES.roll} element={<RollRoute />} />

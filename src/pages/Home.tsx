@@ -7,6 +7,7 @@ import { HomeBannerSlider } from '@/components/HomeBannerSlider'
 import { HomeUserHeader } from '@/components/HomeUserHeader'
 import { LeaderboardPodium } from '@/components/LeaderboardPodium'
 import { RecentDropsFeed } from '@/components/RecentDropsFeed'
+import { ReferralBattleBanner } from '@/components/ReferralBattleBanner'
 import { StreamStreakCard } from '@/components/StreamStreakCard'
 import { useAuth } from '@/components/AuthGate'
 import { getHomeBanners } from '@/data/banners'
@@ -29,6 +30,10 @@ export function Home() {
 
       <div className="mt-4">
         <HomeBannerSlider banners={banners} />
+      </div>
+
+      <div className="mt-4">
+        <ReferralBattleBanner />
       </div>
 
       <div className="mt-5">

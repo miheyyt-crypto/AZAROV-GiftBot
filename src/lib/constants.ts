@@ -14,6 +14,7 @@ export const ROUTES = {
   tower: '/tower',
   roll: '/roll',
   leaderboard: '/leaderboard',
+  referralBattle: '/contest/referral',
 } as const
 
 export const TELEGRAM_BOT_USERNAME = 'AZAROV_GiftBot'

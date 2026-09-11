@@ -8,6 +8,7 @@ import {
   loginWithTelegramWeb,
   logoutWebSession,
 } from '@/lib/api'
+import { setReferralContestVisibility } from '@/lib/contest-access'
 import { hydrateBalanceFromAccount } from '@/lib/balance'
 import type { TelegramLoginWidgetUser } from '@/types/auth'
 import type { UserAccount } from '@/types/account'
@@ -74,6 +75,7 @@ export function setWebAuthUser(user: TelegramUser | null): void {
 
 export function clearWebAuthState(): void {
   webUser = null
+  setReferralContestVisibility(null)
   notify()
 }
 
@@ -114,6 +116,7 @@ export async function restoreWebSession(): Promise<TelegramUser | null> {
       return null
     }
 
+    setReferralContestVisibility(response.features?.referralContest || null)
     return applyAuthenticatedAccount(response.user)
   } catch {
     clearWebAuthState()
@@ -145,6 +148,7 @@ export async function completeTelegramWebLogin(
   }
 
   const user = applyAuthenticatedAccount(response.user)
+  setReferralContestVisibility(response.features?.referralContest || null)
   return { user, message: response.message }
 }
 

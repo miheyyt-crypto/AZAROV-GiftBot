@@ -11,6 +11,7 @@ import {
 import { hydrateBalanceFromAccount } from '@/lib/balance'
 import { emitLevelUpCelebration } from '@/lib/level-up-events'
 import { parseLevelRewardGrants } from '@/lib/level-rewards'
+import { setReferralContestVisibility } from '@/lib/contest-access'
 import { clearStoredStartParam, getStartParam } from '@/lib/referral'
 import { sessionBootLog } from '@/lib/session-boot-log'
 import { captureStartParam } from '@/lib/startParam'
@@ -140,6 +141,8 @@ async function runBootstrapSession(): Promise<BootstrapSessionResult> {
           }),
         )
       }
+
+      setReferralContestVisibility(response.features?.referralContest || null)
 
       const granted = parseLevelRewardGrants(response.levelRewards?.granted)
       const totalAmount = Math.max(
