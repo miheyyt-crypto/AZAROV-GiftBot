@@ -1,4 +1,4 @@
-/** Soft GPU-friendly lava-lamp background for Roll (CSS blobs only). */
+/** Soft GPU-friendly lava-lamp background for Roll (CSS blobs only). Always animated. */
 export function RollLavaBackground({ phase }: { phase: string }) {
   const intensity =
     phase === 'spinning' || phase === 'locked'
@@ -8,12 +8,16 @@ export function RollLavaBackground({ phase }: { phase: string }) {
         : 'roll-lava--idle'
 
   return (
-    <div className={`roll-lava pointer-events-none absolute inset-0 z-0 overflow-hidden ${intensity}`} aria-hidden>
+    <div
+      className={`roll-lava pointer-events-none absolute inset-0 z-0 min-h-full overflow-hidden ${intensity}`}
+      aria-hidden
+    >
       <div className="roll-lava__base" />
       <div className="roll-lava__blob roll-lava__blob--a" />
       <div className="roll-lava__blob roll-lava__blob--b" />
       <div className="roll-lava__blob roll-lava__blob--c" />
       <div className="roll-lava__blob roll-lava__blob--d" />
+      <div className="roll-lava__glow" />
       <div className="roll-lava__sparks" />
       <div className="roll-lava__vignette" />
     </div>
