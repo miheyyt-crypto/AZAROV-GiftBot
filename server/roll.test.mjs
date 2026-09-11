@@ -118,7 +118,7 @@ test('target angle lands inside winner segment under pointer', () => {
   assert.equal(normalizeDeg(370), 10)
 })
 
-test('second bet starts countdown; more players can join; double bet rejected', async () => {
+test('second bet starts countdown; add-to-bet increases stake without restarting timer', async () => {
   await withTempStore(async () => {
     const joined = withStore((store) => {
       seedUser(store, 101, 10_000, 'alice')
@@ -136,18 +136,72 @@ test('second bet starts countdown; more players can join; double bet rejected', 
       assert.ok(b.round.bettingEndsAt)
       assert.equal(b.round.players[0].chance, 90)
       assert.equal(b.round.players[1].chance, 10)
+      const endsAt = b.round.bettingEndsAt
 
       const c = placeRollBetOnStore(store, 103, { bet: 100, requestId: 'r3' })
       assert.equal(c.success, true)
       assert.equal(c.round.players.length, 3)
 
-      const again = placeRollBetOnStore(store, 101, { bet: 100, requestId: 'r4' })
-      assert.equal(again.success, false)
-      assert.equal(again.code, 'ALREADY_JOINED')
+      const add = placeRollBetOnStore(store, 101, { bet: 100, requestId: 'r4' })
+      assert.equal(add.success, true)
+      assert.equal(add.added, true)
+      const alice = add.round.players.find((p) => p.userId === 101)
+      assert.equal(alice.bet, 1000)
+      assert.equal(store.users['101'].balance, 9000)
+      assert.equal(add.round.bettingEndsAt, endsAt)
+      assert.equal(add.round.players.length, 3)
 
       return peekRollRoundOnStore(store)
     })
     assert.equal(joined.players.length, 3)
+  })
+})
+
+test('add-to-bet rejects insufficient funds and deadline; multi-add totals correctly', async () => {
+  await withTempStore(async () => {
+    withStore((store) => {
+      seedUser(store, 801, 5_000, 'rich')
+      seedUser(store, 802, 5_000, 'peer')
+      placeRollBetOnStore(store, 801, { bet: 500, requestId: 'a1' })
+      placeRollBetOnStore(store, 802, { bet: 500, requestId: 'a2' })
+      const round = peekRollRoundOnStore(store)
+      assert.equal(round.status, 'betting')
+      const endsAt = round.bettingEndsAt
+
+      // 500 → +100 → +500 → +1000 = 2100
+      assert.equal(placeRollBetOnStore(store, 801, { bet: 100, requestId: 'a3' }).success, true)
+      assert.equal(placeRollBetOnStore(store, 801, { bet: 500, requestId: 'a4' }).success, true)
+      const mid = placeRollBetOnStore(store, 801, { bet: 1000, requestId: 'a5' })
+      assert.equal(mid.success, true)
+      assert.equal(mid.round.players.find((p) => p.userId === 801).bet, 2100)
+      assert.equal(store.users['801'].balance, 5_000 - 2100)
+      assert.equal(mid.round.bettingEndsAt, endsAt)
+
+      // Chances: A 2100 / (2100+500) = 80.77%
+      assert.equal(mid.round.players.find((p) => p.userId === 801).chance, 80.77)
+      assert.equal(mid.round.players.find((p) => p.userId === 802).chance, 19.23)
+
+      // Insufficient
+      seedUser(store, 801, 50) // force low balance for next check — actually mutate
+      store.users['801'].balance = 50
+      const broke = placeRollBetOnStore(store, 801, { bet: 100, requestId: 'a6' })
+      assert.equal(broke.success, false)
+      assert.equal(broke.code, 'INSUFFICIENT_FUNDS')
+      assert.equal(peekRollRoundOnStore(store).players.find((p) => p.userId === 801).bet, 2100)
+
+      // After deadline
+      store.users['801'].balance = 5_000
+      advanceRollRoundOnStore(store, Date.parse(endsAt))
+      const late = placeRollBetOnStore(store, 801, { bet: 100, requestId: 'a7' })
+      assert.equal(late.success, false)
+      assert.equal(late.code, 'ROUND_CLOSED')
+      const spinning = peekRollRoundOnStore(store)
+      assert.ok(spinning.finalBetsSnapshot)
+      assert.equal(
+        spinning.finalBetsSnapshot.find((p) => p.userId === 801).bet,
+        2100,
+      )
+    })
   })
 })
 

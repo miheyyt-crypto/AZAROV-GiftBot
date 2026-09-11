@@ -6,6 +6,8 @@ import { broadcastRollEvent, getRollSseClientCount } from './roll-bus.mjs'
 
 export const ROLL_MAX_PLAYERS = 1000
 export const ROLL_MIN_BET = 100
+/** Minimum amount when adding to an existing bet (first join still uses ROLL_MIN_BET). */
+export const ROLL_MIN_ADD = 1
 export const ROLL_BETTING_DURATION_MS = 20_000
 export const ROLL_SPIN_DURATION_MS = 10_000
 export const ROLL_RESULT_HOLD_MS = 8_000
@@ -320,6 +322,12 @@ export function advanceRollRoundOnStore(store, atMs = nowMs()) {
       createEmptyRound(store)
       return { round: getOrCreateCurrentRound(store), changed: true }
     }
+    // Freeze final bets used for winner selection (no further adds accepted after lock).
+    round.finalizedAt = new Date(atMs).toISOString()
+    round.finalBetsSnapshot = (round.players || []).map((p) => ({
+      userId: Number(p.userId),
+      bet: Number(p.bet) || 0,
+    }))
     const segments = buildSegments(round.players)
     const { winnerUserId } = pickWeightedWinner(round.players)
     const winner = (round.players || []).find((p) => Number(p.userId) === Number(winnerUserId))
@@ -462,11 +470,11 @@ export function placeRollBetOnStore(store, userId, { bet, requestId = '' } = {})
   }
 
   const stake = Math.floor(Number(bet))
-  if (!Number.isInteger(stake) || stake < ROLL_MIN_BET) {
+  if (!Number.isInteger(stake) || stake <= 0) {
     return {
       success: false,
       code: 'INVALID_BET',
-      message: `Минимальная ставка — ${ROLL_MIN_BET} монет.`,
+      message: 'Сумма ставки должна быть положительным целым числом.',
     }
   }
 
@@ -483,7 +491,7 @@ export function placeRollBetOnStore(store, userId, { bet, requestId = '' } = {})
   advanceRollRoundOnStore(store)
   let round = getOrCreateCurrentRound(store)
 
-  // Accept bets only while WAITING (empty) or BETTING (open window after first stake).
+  // Accept bets / adds only while WAITING or BETTING.
   if (round.status !== 'waiting' && round.status !== 'betting') {
     return {
       code: 'ROUND_CLOSED',
@@ -506,12 +514,78 @@ export function placeRollBetOnStore(store, userId, { bet, requestId = '' } = {})
     }
   }
 
-  if ((round.players || []).some((p) => Number(p.userId) === Number(userId))) {
+  const existing = (round.players || []).find((p) => Number(p.userId) === Number(userId))
+
+  // —— ADD TO EXISTING BET ——
+  if (existing) {
+    if (stake < ROLL_MIN_ADD) {
+      return {
+        success: false,
+        code: 'INVALID_BET',
+        message: `Минимальное пополнение — ${ROLL_MIN_ADD} монет.`,
+        ...statePayload(store, userId),
+      }
+    }
+
+    const addToken = requestId || crypto.randomBytes(8).toString('hex')
+    const spendEventId = `roll:bet:${round.id}:${userId}:add:${addToken}`
+    const spend = spendCoins(store, user, stake, TX_TYPE.ROLL_BET, spendEventId, {
+      referenceId: `${round.id}:${userId}:add:${addToken}`,
+      description: `Доп. ставка Roll #${round.displayId} (+${stake})`,
+    })
+
+    if (!spend.spent && spend.reason === 'already_granted') {
+      if (reqKey) {
+        store.events[reqKey] = { eventId: reqKey, done: true, createdAt: utcNow() }
+      }
+      return {
+        alreadyProcessed: true,
+        message: 'Пополнение уже принято.',
+        ...statePayload(store, userId),
+        success: true,
+      }
+    }
+
+    if (!spend.spent) {
+      return {
+        code: spend.reason === 'insufficient' ? 'INSUFFICIENT_FUNDS' : 'FORBIDDEN',
+        message:
+          spend.reason === 'insufficient'
+            ? 'Недостаточно монет.'
+            : 'Не удалось списать ставку.',
+        ...statePayload(store, userId),
+        success: false,
+      }
+    }
+
+    existing.bet = (Number(existing.bet) || 0) + stake
+    round.pot = potOf(round)
+    bumpRoundVersion(round)
+
+    if (reqKey) {
+      store.events[reqKey] = { eventId: reqKey, done: true, createdAt: utcNow() }
+    }
+
+    // Advance may start betting if 2nd player already present — never restarts timer.
+    advanceRollRoundOnStore(store)
+    round = getOrCreateCurrentRound(store)
+
     return {
-      code: 'ALREADY_JOINED',
-      message: 'Вы уже сделали ставку в этом раунде.',
+      message: 'Ставка увеличена.',
+      alreadyProcessed: false,
+      added: true,
       ...statePayload(store, userId),
+      success: true,
+    }
+  }
+
+  // —— FIRST JOIN ——
+  if (stake < ROLL_MIN_BET) {
+    return {
       success: false,
+      code: 'INVALID_BET',
+      message: `Минимальная ставка — ${ROLL_MIN_BET} монет.`,
+      ...statePayload(store, userId),
     }
   }
 
@@ -586,6 +660,7 @@ export function placeRollBetOnStore(store, userId, { bet, requestId = '' } = {})
   return {
     message: 'Ставка принята.',
     alreadyProcessed: false,
+    added: false,
     ...statePayload(store, userId),
     success: true,
   }
@@ -651,6 +726,7 @@ function publishFromStore(store) {
   if (eventName !== 'ROUND_UPDATED') {
     broadcastRollEvent('ROUND_UPDATED', payload)
   }
+  return payload
 }
 
 /** Advance + push current round snapshot to SSE subscribers. */
@@ -660,7 +736,11 @@ export function publishRollSnapshots() {
     if (!getRollSseClientCount()) {
       return
     }
-    publishFromStore(store)
+    const payload = publishFromStore(store)
+    // Signal bet/add updates explicitly (same snapshot — clients already listen to all events).
+    if (payload.round?.status === 'waiting' || payload.round?.status === 'betting') {
+      broadcastRollEvent('BET_UPDATED', payload)
+    }
   })
 }
 

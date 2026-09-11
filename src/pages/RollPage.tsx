@@ -34,6 +34,15 @@ function clampBet(value: number, balance: number, minBet: number): number {
   return Math.min(Math.max(minBet, Math.floor(value)), maxAffordable)
 }
 
+function parseBetInput(raw: string): number | null {
+  const digits = String(raw || '').replace(/[^\d]/g, '')
+  if (!digits) {
+    return null
+  }
+  const n = Number(digits)
+  return Number.isFinite(n) ? n : null
+}
+
 /** Estimate server − client clock offset using RTT midpoint. */
 function estimateSkew(
   serverNowMs: number | undefined,
@@ -66,6 +75,7 @@ export function RollPage() {
   const { showNotification } = useNotifications()
 
   const [bet, setBet] = useState(ROLL_MIN_BET)
+  const [betInput, setBetInput] = useState(String(ROLL_MIN_BET))
   const [busy, setBusy] = useState(false)
   const [bootstrapped, setBootstrapped] = useState(false)
   const [round, setRound] = useState<RollRound | null>(null)
@@ -94,14 +104,32 @@ export function RollPage() {
 
   const bettingOpen =
     round?.status === 'waiting' || round?.status === 'betting'
-  const canBet =
+  const myStake =
+    viewerInRound && account.telegramId > 0
+      ? Number(
+          (round?.players || []).find((p) => Number(p.userId) === Number(account.telegramId))
+            ?.bet || 0,
+        )
+      : 0
+  const addMode = Boolean(viewerInRound && bettingOpen && myStake > 0)
+  const amountFloor = addMode ? 1 : minBet
+
+  const canSubmit =
     !busy &&
-    !viewerInRound &&
     bettingOpen &&
-    (round.players?.length || 0) < (round.maxPlayers || ROLL_MAX_PLAYERS) &&
-    amount >= minBet &&
-    bet >= minBet &&
-    bet <= amount
+    bet >= amountFloor &&
+    bet <= amount &&
+    amount >= amountFloor &&
+    (addMode || (round?.players?.length || 0) < (round?.maxPlayers || ROLL_MAX_PLAYERS))
+
+  const syncBetValue = useCallback(
+    (next: number) => {
+      const clamped = clampBet(next, amount, amountFloor)
+      setBet(clamped)
+      setBetInput(String(clamped))
+    },
+    [amount, amountFloor],
+  )
 
   const serverNowApprox = useCallback(() => Date.now() + skewRef.current, [])
 
@@ -291,26 +319,39 @@ export function RollPage() {
     if (!bettingOpen) {
       return
     }
-    setBet((current) => clampBet(current, amount, minBet))
-  }, [amount, minBet, bettingOpen])
+    syncBetValue(bet)
+  }, [amount, amountFloor, bettingOpen, syncBetValue])
 
   const updateBet = useCallback(
     (next: number) => {
-      if (!bettingOpen || viewerInRound) {
+      if (!bettingOpen) {
         return
       }
-      setBet(clampBet(next, amount, minBet))
+      syncBetValue(next)
     },
-    [amount, minBet, bettingOpen, viewerInRound],
+    [bettingOpen, syncBetValue],
   )
 
+  function onBetInputChange(raw: string) {
+    const cleaned = raw.replace(/[^\d]/g, '')
+    setBetInput(cleaned)
+    const parsed = parseBetInput(cleaned)
+    if (parsed == null) {
+      setBet(amountFloor)
+      return
+    }
+    setBet(Math.min(parsed, Math.max(0, Math.floor(amount))))
+  }
+
   async function handleBet() {
-    if (!canBet) {
-      if (amount < minBet) {
+    if (!canSubmit) {
+      if (amount < amountFloor) {
         showNotification({
           type: 'warning',
           title: 'Недостаточно монет',
-          message: `Минимальная ставка — ${minBet} монет.`,
+          message: addMode
+            ? 'Недостаточно монет для пополнения.'
+            : `Минимальная ставка — ${minBet} монет.`,
         })
       }
       return
@@ -322,9 +363,11 @@ export function RollPage() {
       if (!result.success) {
         showNotification({
           type: 'warning',
-          title: 'Ставка не принята',
+          title: addMode ? 'Пополнение не принято' : 'Ставка не принята',
           message: result.message || 'Попробуйте ещё раз.',
         })
+      } else {
+        syncBetValue(Math.min(Math.max(amountFloor, minBet), Math.max(amountFloor, amount)))
       }
     } finally {
       setBusy(false)
@@ -402,15 +445,29 @@ export function RollPage() {
 
       {(round?.status === 'waiting' || round?.status === 'betting') && potLabel(round)}
 
-      {bettingOpen && !viewerInRound ? (
+      {bettingOpen ? (
         <section className="mb-3 rounded-[20px] border border-white/[0.08] bg-[#120e1a] p-4">
-          <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[#9b96ab]">
-            Сумма ставки
-          </p>
+          {addMode ? (
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#9b96ab]">
+                Добавить к ставке
+              </p>
+              <p className="inline-flex items-center gap-1 text-[13px] font-bold text-white">
+                Твоя ставка:
+                <span className="tabular-nums text-[#7dd3fc]">{formatBalance(myStake)}</span>
+                <CoinIcon className="size-3.5" />
+              </p>
+            </div>
+          ) : (
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[#9b96ab]">
+              Сумма ставки
+            </p>
+          )}
+
           <div className="mb-3 flex items-center gap-2">
             <button
               type="button"
-              onClick={() => updateBet(Math.floor(bet / 2))}
+              onClick={() => updateBet(Math.max(amountFloor, Math.floor(bet / 2)))}
               className="flex size-11 items-center justify-center rounded-[12px] border border-white/10 bg-[#1a1524] text-sm font-bold text-white active:scale-95"
             >
               ½
@@ -422,12 +479,21 @@ export function RollPage() {
             >
               2×
             </button>
-            <div className="flex min-h-11 flex-1 items-center justify-between rounded-full border border-[rgb(139_61_255/35%)] bg-[#0c0914] px-4">
-              <span className="text-lg font-bold tabular-nums text-white">
-                {bet.toLocaleString('ru-RU')}
-              </span>
-              <CoinIcon className="size-5" />
-            </div>
+            <label className="flex min-h-11 min-w-0 flex-1 items-center justify-between rounded-full border border-[rgb(139_61_255/35%)] bg-[#0c0914] px-4">
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                enterKeyHint="done"
+                value={betInput}
+                onChange={(e) => onBetInputChange(e.target.value)}
+                onBlur={() => syncBetValue(bet)}
+                placeholder="Введите сумму"
+                aria-label={addMode ? 'Сумма пополнения' : 'Сумма ставки'}
+                className="min-w-0 flex-1 bg-transparent text-lg font-bold tabular-nums text-white outline-none placeholder:text-white/30"
+              />
+              <CoinIcon className="size-5 shrink-0" />
+            </label>
             <button
               type="button"
               onClick={() => updateBet(amount)}
@@ -436,6 +502,7 @@ export function RollPage() {
               МАКС
             </button>
           </div>
+
           <div className="mb-3 flex flex-wrap gap-2">
             {quickBets.map((value) => {
               const disabled = value > amount
@@ -454,34 +521,51 @@ export function RollPage() {
                     disabled ? 'opacity-40' : 'active:scale-95',
                   ].join(' ')}
                 >
-                  {value.toLocaleString('ru-RU')}
+                  {addMode ? `+${value.toLocaleString('ru-RU')}` : value.toLocaleString('ru-RU')}
                 </button>
               )
             })}
           </div>
+
           <button
             type="button"
-            disabled={!canBet}
+            disabled={!canSubmit}
             onClick={() => void handleBet()}
             className="flex w-full items-center justify-center gap-2 rounded-[16px] bg-[linear-gradient(180deg,#ffb020,#f59e0b)] px-4 py-3.5 text-[15px] font-bold text-[#1a1000] shadow-[0_8px_24px_rgb(245_158_11/35%)] transition active:scale-[0.98] disabled:opacity-45"
           >
-            {busy ? 'Отправка…' : 'Поставить'}
+            {busy
+              ? addMode
+                ? 'Добавляем…'
+                : 'Отправка…'
+              : addMode
+                ? 'Добавить'
+                : 'Поставить'}
           </button>
-          {account.telegramId > 0 && amount < minBet ? (
-            <p className="mt-2 text-xs text-amber-300/90">Нужно минимум {minBet} монет.</p>
+          {account.telegramId > 0 && amount < amountFloor ? (
+            <p className="mt-2 text-xs text-amber-300/90">
+              {addMode
+                ? 'Недостаточно монет для пополнения.'
+                : `Нужно минимум ${minBet} монет.`}
+            </p>
           ) : null}
         </section>
       ) : null}
 
       {viewerInRound && round?.status === 'waiting' ? (
         <p className="mb-3 rounded-[14px] border border-white/10 bg-[#120e1a] px-3 py-2.5 text-center text-[13px] text-white/65">
-          Ставка принята. Ожидаем второго игрока…
+          Можно увеличить ставку, пока ждём второго игрока.
         </p>
       ) : null}
 
       {viewerInRound && round?.status === 'betting' ? (
         <p className="mb-3 rounded-[14px] border border-white/10 bg-[#120e1a] px-3 py-2.5 text-center text-[13px] text-white/65">
-          Ставка принята. Можно присоединяться другим игрокам…
+          Можно увеличить ставку до конца отсчёта.
+        </p>
+      ) : null}
+
+      {viewerInRound && !bettingOpen ? (
+        <p className="mb-3 rounded-[14px] border border-white/10 bg-[#120e1a] px-3 py-2.5 text-center text-[13px] text-white/65">
+          Ставки закрыты
         </p>
       ) : null}
 
