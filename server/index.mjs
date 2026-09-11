@@ -1837,7 +1837,7 @@ app.get(
 )
 
 app.get('/api/home/recent-drops', (_req, res) => {
-  const result = getRecentCaseDrops(12)
+  const result = getRecentCaseDrops(20)
   res.json(result)
 })
 

@@ -270,7 +270,7 @@ function settleRound(store, round) {
   if (winnerUser && payout > 0) {
     addCoins(store, winnerUser, payout, TX_TYPE.ROLL_WIN, `roll:settle:${round.id}`, {
       referenceId: round.id,
-      description: `Выигрыш Roll #${round.displayId}`,
+      description: `Выигрыш Roll #${round.displayId} · шанс ${chancePercent(Number(winner.bet) || 0, total)}%`,
     })
   }
 
