@@ -29,7 +29,7 @@ export function ReferralBattleBanner() {
   }
 
   const ended = visibility.status === 'ended'
-  const cta = ended ? 'СМОТРЕТЬ РЕЙТИНГ' : 'УЧАСТВОВАТЬ'
+  const cta = ended ? 'ПОСМОТРЕТЬ РЕЗУЛЬТАТЫ' : 'УЧАСТВОВАТЬ'
   const prizePool = formatCoinsAmount(visibility.prizePool)
 
   return (
@@ -61,7 +61,7 @@ export function ReferralBattleBanner() {
           Event
         </p>
         <h3 className="mt-1 text-[1.35rem] font-black leading-tight tracking-tight text-white sm:text-2xl">
-          🏆 РЕФЕРАЛЬНЫЙ БАТТЛ
+          {ended ? '🏁 РЕФЕРАЛЬНЫЙ БАТТЛ ЗАВЕРШЁН' : '🏆 РЕФЕРАЛЬНЫЙ БАТТЛ'}
         </h3>
         <p className="mt-2 flex flex-wrap items-center gap-1.5 text-sm font-semibold text-white/90">
           <span className="inline-flex items-center gap-1 text-gold-bright">

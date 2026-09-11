@@ -102,7 +102,7 @@ export function isPersistentStoreDir(dir = getDataDir()) {
 
 export function createEmptyStore() {
   return {
-    version: 22,
+    version: 23,
     users: {},
     referralIndex: {},
     referrals: {},
@@ -139,6 +139,7 @@ export function createEmptyStore() {
     notifications: {},
     giveaways: {},
     giveawayParticipants: {},
+    referralContests: {},
     communityAccessRequests: {},
     deviceIndex: {},
     ipHashIndex: {},
@@ -497,6 +498,12 @@ function migrateStore(store) {
       store.appSettings.maintenanceMode = false
     }
     store.version = 22
+  }
+
+  // Additive v23: referral contest finalization records.
+  if (Number(store.version) < 23) {
+    store.referralContests = store.referralContests || {}
+    store.version = 23
   }
 
   return store

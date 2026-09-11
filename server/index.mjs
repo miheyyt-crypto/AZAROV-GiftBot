@@ -132,6 +132,7 @@ import { getLeaderboard, getRecentCaseDrops } from './home.mjs'
 import {
   getReferralContestSnapshot,
   getReferralContestVisibility,
+  startReferralContestScheduler,
 } from './referral-contest.mjs'
 import {
   getAchievementsProgress,
@@ -2704,6 +2705,7 @@ export function startHttpServer() {
       console.log(`[boot] Serving frontend from ${distDir}`)
     }
     startGiveawayScheduler()
+    startReferralContestScheduler()
     startBroadcastScheduler()
     startRollTicker()
     void bootstrapKickFollowInfrastructure().then((result) => {

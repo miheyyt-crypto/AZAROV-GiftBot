@@ -61,6 +61,8 @@ export interface ReferralContestMe {
   kickLinkedCount: number
   withoutKickCount: number
   potentialPrize: number
+  prizeAwarded?: number
+  prizeStatus?: string | null
   inTop10: boolean
   isLeader: boolean
   participating: boolean
@@ -80,9 +82,11 @@ export interface ReferralContestPayload {
     prizePool: number
     prizes: ReferralContestPrize[]
     status: ReferralContestStatus
+    finalizedAt?: string | null
   }
   top3?: ReferralContestPlayer[]
   top10?: ReferralContestPlayer[]
+  winners?: ReferralContestPlayer[]
   players?: ReferralContestPlayer[]
   me?: ReferralContestMe
   motivation?: ReferralContestMotivation

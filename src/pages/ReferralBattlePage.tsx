@@ -314,7 +314,9 @@ export function ReferralBattlePage() {
           aria-hidden
         />
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gold/80">Event</p>
-        <h2 className="mt-1 text-2xl font-black tracking-tight text-white">🏆 {contest.title}</h2>
+        <h2 className="mt-1 text-2xl font-black tracking-tight text-white">
+          {ended ? '🏁 РЕФЕРАЛЬНЫЙ БАТТЛ ЗАВЕРШЁН' : `🏆 ${contest.title}`}
+        </h2>
         <p className="mt-3 text-xs uppercase tracking-wider text-white/50">Призовой фонд</p>
         <p className="mt-1 flex items-center gap-2 text-3xl font-black text-gold-bright">
           <CoinIcon className="size-7" />
@@ -336,7 +338,7 @@ export function ReferralBattlePage() {
           {ended ? '🏆 Победители' : '🏆 Лидеры'}
         </h3>
         <div className="grid gap-2">
-          {(ended ? payload.top10 || top3 : top3).map((player) => (
+          {(ended ? payload.winners || payload.top10 || top3 : top3).map((player) => (
             <div
               key={`${player.rank}-${player.username || player.displayName}`}
               className={[
@@ -386,7 +388,8 @@ export function ReferralBattlePage() {
             <p className="text-sm text-white/70">Рефералов с Kick: {me.score}</p>
             {me.inTop10 ? (
               <p className="flex items-center gap-1.5 text-xl font-black text-gold-bright">
-                🎁 Твой выигрыш: {formatCoinsAmount(me.potentialPrize)}
+                🎁 Полученный приз:{' '}
+                {formatCoinsAmount(me.prizeAwarded || me.potentialPrize)}
                 <CoinIcon className="size-5" />
               </p>
             ) : (
