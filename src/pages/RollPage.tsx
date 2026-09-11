@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { CoinIcon } from '@/components/CoinIcon'
@@ -15,6 +15,11 @@ import { useUserAccount } from '@/hooks/useUserAccount'
 import { ROUTES } from '@/lib/constants'
 import { formatBalance } from '@/lib/balance'
 import { fetchRollState, placeRollBet, subscribeRollStream } from '@/lib/roll'
+import {
+  dumpRollScrollState,
+  dumpScrollParents,
+  installRollScrollDebugHooks,
+} from '@/lib/roll-scroll-debug'
 import { resetAppScrollPosition } from '@/lib/telegram'
 import {
   ROLL_MAX_PLAYERS,
@@ -105,11 +110,25 @@ export function RollPage() {
   const spinClockRef = useRef<RollSpinClock | null>(null)
   const roundRef = useRef<RollRound | null>(null)
 
-  // Desktop embed: open at top so Header/Stats are not stuck above the fold
-  // (wheel scrollIntoView / focus can leave #root mid-page).
-  useEffect(() => {
+  // #root keeps scroll across routes; skeleton→content also grows layout.
+  // Reset BEFORE paint (layout) and again when real Roll UI mounts — not setTimeout.
+  useLayoutEffect(() => {
+    installRollScrollDebugHooks()
     resetAppScrollPosition()
+    dumpRollScrollState('roll-layout-mount')
+    dumpScrollParents('roll-layout-mount')
   }, [])
+
+  useLayoutEffect(() => {
+    if (!bootstrapped) {
+      return
+    }
+    resetAppScrollPosition()
+    dumpRollScrollState('roll-bootstrapped')
+    // Critical test: force 0 again and re-measure Header vs Wheel.
+    resetAppScrollPosition()
+    dumpRollScrollState('roll-after-forced-zero')
+  }, [bootstrapped])
 
   const minBet = config?.minBet ?? ROLL_MIN_BET
   const quickBets = config?.quickBets?.length ? config.quickBets : [...ROLL_QUICK_BETS]

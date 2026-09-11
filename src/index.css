@@ -138,8 +138,9 @@ html.app-desktop-embed #root {
   overflow-y: scroll;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  /* Make wheel/trackpad target unambiguous inside Telegram Desktop iframe */
   touch-action: pan-y;
+  /* Prevent browser scroll anchoring from shifting #root when Roll content mounts */
+  overflow-anchor: none;
 }
 
 html.app-desktop-embed {

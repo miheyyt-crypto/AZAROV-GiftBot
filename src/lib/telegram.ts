@@ -120,18 +120,23 @@ export function getAppScrollRoot(): HTMLElement | null {
   return document.getElementById('root')
 }
 
-/** Reset desktop scroll so Header/Stats are not stuck above the fold. */
+/** Reset scroll so route changes / late layout do not leave Header above the fold. */
 export function resetAppScrollPosition(): void {
-  const scroller = getAppScrollRoot()
-  if (scroller) {
-    scroller.scrollTop = 0
+  // Always clear #root — it is the desktop scrollport and persists across React routes.
+  const root = document.getElementById('root')
+  if (root) {
+    root.scrollTop = 0
   }
   if (typeof window !== 'undefined') {
     window.scrollTo(0, 0)
-    if (document.scrollingElement) {
-      document.scrollingElement.scrollTop = 0
-    }
   }
+  if (document.scrollingElement) {
+    document.scrollingElement.scrollTop = 0
+  }
+  if (document.body) {
+    document.body.scrollTop = 0
+  }
+  document.documentElement.scrollTop = 0
 }
 
 function syncDesktopViewportHeight(webApp: TelegramWebApp | null): void {
