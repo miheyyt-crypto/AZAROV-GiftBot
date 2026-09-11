@@ -14,6 +14,7 @@ import { ROUTES } from '@/lib/constants'
 import { formatBalance } from '@/lib/balance'
 import { fetchRollState, placeRollBet, subscribeRollStream } from '@/lib/roll'
 import {
+  ROLL_MAX_PLAYERS,
   ROLL_MIN_BET,
   ROLL_POLL_MS_ACTIVE,
   ROLL_POLL_MS_IDLE,
@@ -90,11 +91,13 @@ export function RollPage() {
   const minBet = config?.minBet ?? ROLL_MIN_BET
   const quickBets = config?.quickBets?.length ? config.quickBets : [...ROLL_QUICK_BETS]
 
+  const bettingOpen =
+    round?.status === 'waiting' || round?.status === 'betting'
   const canBet =
     !busy &&
     !viewerInRound &&
-    round?.status === 'waiting' &&
-    (round.players?.length || 0) < (round.maxPlayers || 2) &&
+    bettingOpen &&
+    (round.players?.length || 0) < (round.maxPlayers || ROLL_MAX_PLAYERS) &&
     amount >= minBet &&
     bet >= minBet &&
     bet <= amount
@@ -298,20 +301,20 @@ export function RollPage() {
   }, [applyState, round?.status, round?.bettingEndsAt, serverNowApprox])
 
   useEffect(() => {
-    if (round?.status !== 'waiting') {
+    if (!bettingOpen) {
       return
     }
     setBet((current) => clampBet(current, amount, minBet))
-  }, [amount, minBet, round?.status])
+  }, [amount, minBet, bettingOpen])
 
   const updateBet = useCallback(
     (next: number) => {
-      if (round?.status !== 'waiting' || viewerInRound) {
+      if (!bettingOpen || viewerInRound) {
         return
       }
       setBet(clampBet(next, amount, minBet))
     },
-    [amount, minBet, round?.status, viewerInRound],
+    [amount, minBet, bettingOpen, viewerInRound],
   )
 
   async function handleBet() {
@@ -399,9 +402,9 @@ export function RollPage() {
         confettiKey={confettiKey}
       />
 
-      {round?.status === 'waiting' && potLabel(round)}
+      {(round?.status === 'waiting' || round?.status === 'betting') && potLabel(round)}
 
-      {round?.status === 'waiting' && !viewerInRound ? (
+      {bettingOpen && !viewerInRound ? (
         <section className="mb-3 rounded-[20px] border border-white/[0.08] bg-[#120e1a] p-4">
           <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[#9b96ab]">
             Сумма ставки
@@ -472,9 +475,9 @@ export function RollPage() {
         </section>
       ) : null}
 
-      {viewerInRound && round?.status === 'waiting' ? (
+      {viewerInRound && (round?.status === 'waiting' || round?.status === 'betting') ? (
         <p className="mb-3 rounded-[14px] border border-white/10 bg-[#120e1a] px-3 py-2.5 text-center text-[13px] text-white/65">
-          Ставка принята. Ожидаем второго игрока…
+          Ставка принята. Можно присоединяться другим игрокам…
         </p>
       ) : null}
 

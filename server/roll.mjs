@@ -4,19 +4,38 @@ import { withStore } from './store.mjs'
 import { addCoins, spendCoins, TX_TYPE, utcNow } from './wallet.mjs'
 import { broadcastRollEvent, getRollSseClientCount } from './roll-bus.mjs'
 
-export const ROLL_MAX_PLAYERS = 2
+export const ROLL_MAX_PLAYERS = 1000
 export const ROLL_MIN_BET = 100
 export const ROLL_BETTING_DURATION_MS = 20_000
-export const ROLL_SPIN_DURATION_MS = 5_000
+export const ROLL_SPIN_DURATION_MS = 10_000
 export const ROLL_RESULT_HOLD_MS = 8_000
 /** 10000 = 100% of pot to winner (no house edge). */
 export const ROLL_PAYOUT_BPS = 10_000
-export const ROLL_SPIN_EXTRA_TURNS = 6
+export const ROLL_SPIN_EXTRA_TURNS = 11
 /** Keep pointer off segment edges (fraction of segment size). */
 export const ROLL_LANDING_EDGE_MARGIN = 0.12
 export const ROLL_TICK_MS = 200
+/** Omit heavy segments array from API when larger — clients rebuild from players. */
+export const ROLL_SEGMENTS_INLINE_MAX = 64
 
-const SEGMENT_COLORS = ['#ff6a2b', '#b39ddb', '#4fc3f7', '#66bb6a', '#ffca28', '#ef5350']
+const SEGMENT_PALETTE = [
+  '#ff6a2b',
+  '#b39ddb',
+  '#4fc3f7',
+  '#66bb6a',
+  '#ffca28',
+  '#ef5350',
+  '#26c6da',
+  '#ab47bc',
+  '#ffa726',
+  '#42a5f5',
+  '#ec407a',
+  '#8d6e63',
+]
+
+function segmentColor(index) {
+  return SEGMENT_PALETTE[index % SEGMENT_PALETTE.length]
+}
 
 function ensureMaps(store) {
   store.rollRounds = store.rollRounds || {}
@@ -75,7 +94,7 @@ export function buildSegments(players) {
       endDeg: end,
       sizeDeg: size,
       chance: chancePercent(bet, total),
-      color: SEGMENT_COLORS[index % SEGMENT_COLORS.length],
+      color: segmentColor(index),
     }
   })
 }
@@ -280,7 +299,7 @@ export function advanceRollRoundOnStore(store, atMs = nowMs()) {
 
   const before = roundFingerprint(round)
 
-  if (round.status === 'waiting' && (round.players || []).length >= ROLL_MAX_PLAYERS) {
+  if (round.status === 'waiting' && (round.players || []).length >= 1) {
     round.status = 'betting'
     round.bettingStartedAt = new Date(atMs).toISOString()
     round.bettingEndsAt = new Date(atMs + ROLL_BETTING_DURATION_MS).toISOString()
@@ -296,6 +315,11 @@ export function advanceRollRoundOnStore(store, atMs = nowMs()) {
   }
 
   if (round.status === 'locked') {
+    // Need at least one player with a bet to spin.
+    if (!(round.players || []).length) {
+      createEmptyRound(store)
+      return { round: getOrCreateCurrentRound(store), changed: true }
+    }
     const segments = buildSegments(round.players)
     const { winnerUserId } = pickWeightedWinner(round.players)
     const winner = (round.players || []).find((p) => Number(p.userId) === Number(winnerUserId))
@@ -350,7 +374,8 @@ function publicRound(round) {
   }
   const total = potOf(round)
   const players = (round.players || []).map((p) => publicPlayer(p, total))
-  const segments = buildSegments(round.players)
+  const includeSegments = players.length > 0 && players.length <= ROLL_SEGMENTS_INLINE_MAX
+  const segments = includeSegments ? buildSegments(round.players) : []
   const winner = players.find((p) => Number(p.userId) === Number(round.winnerUserId)) || null
   return {
     id: round.id,
@@ -360,6 +385,7 @@ function publicRound(round) {
     updatedAt: round.updatedAt || round.createdAt,
     players,
     segments,
+    playerCount: players.length,
     pot: total,
     payout: Number(round.payout) || 0,
     bettingStartedAt: round.bettingStartedAt,
@@ -457,12 +483,26 @@ export function placeRollBetOnStore(store, userId, { bet, requestId = '' } = {})
   advanceRollRoundOnStore(store)
   let round = getOrCreateCurrentRound(store)
 
-  if (round.status !== 'waiting') {
+  // Accept bets only while WAITING (empty) or BETTING (open window after first stake).
+  if (round.status !== 'waiting' && round.status !== 'betting') {
     return {
       code: 'ROUND_CLOSED',
       message: 'Ставки на этот раунд больше не принимаются.',
       ...statePayload(store, userId),
       success: false,
+    }
+  }
+
+  if (round.status === 'betting') {
+    const ends = Date.parse(round.bettingEndsAt || '')
+    if (Number.isFinite(ends) && nowMs() >= ends) {
+      advanceRollRoundOnStore(store)
+      return {
+        code: 'ROUND_CLOSED',
+        message: 'Ставки на этот раунд больше не принимаются.',
+        ...statePayload(store, userId),
+        success: false,
+      }
     }
   }
 
@@ -555,16 +595,43 @@ export function getRollState(userId) {
   return withStore((store) => getRollStateOnStore(store, userId))
 }
 
-export function placeRollBet(userId, input) {
-  const result = withStore((store) => placeRollBetOnStore(store, userId, input))
-  // Push to all SSE clients immediately (second player visible without polling).
-  queueMicrotask(() => {
+/** Advance + push current round snapshot to SSE subscribers. */
+let publishTrailingTimer = null
+let lastPublishAt = 0
+const PUBLISH_COALESCE_MS = 70
+
+function schedulePublishRollSnapshots() {
+  const now = Date.now()
+  const since = now - lastPublishAt
+  if (since >= PUBLISH_COALESCE_MS) {
+    lastPublishAt = now
+    queueMicrotask(() => {
+      try {
+        publishRollSnapshots()
+      } catch (error) {
+        console.warn('[roll] publish after bet failed', error)
+      }
+    })
+    return
+  }
+  if (publishTrailingTimer) {
+    return
+  }
+  publishTrailingTimer = setTimeout(() => {
+    publishTrailingTimer = null
+    lastPublishAt = Date.now()
     try {
       publishRollSnapshots()
     } catch (error) {
       console.warn('[roll] publish after bet failed', error)
     }
-  })
+  }, PUBLISH_COALESCE_MS - since)
+}
+
+export function placeRollBet(userId, input) {
+  const result = withStore((store) => placeRollBetOnStore(store, userId, input))
+  // Leading + trailing coalesce: single bets stay snappy; bursts merge.
+  schedulePublishRollSnapshots()
   return result
 }
 

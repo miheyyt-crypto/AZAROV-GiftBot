@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { RollConfetti } from '@/components/roll/RollConfetti'
 import {
-  easeOutQuart,
+  easeOutQuint,
   findSegmentAtLocalDeg,
   formatRollUser,
   pointerLocalDeg,
+  resolveRollSegments,
   type RollRound,
+  type RollSegment,
 } from '@/types/roll'
 
 export type RollSpinClock = {
@@ -24,43 +26,36 @@ type RollWheelProps = {
   confettiKey?: string | null
 }
 
-const CX = 50
-const CY = 50
-const OUTER_R = 48
-const HUB_R = 16.5
-/** Mid-ring radius for avatars (between hub and outer). */
-const AVATAR_R = 31
-const AVATAR_SIZE = 9
+const MIN_AVATAR_DEG = 8
+const MAX_AVATARS = 48
+const OUTER_RATIO = 0.48
+const HUB_RATIO = 0.165
+const AVATAR_RATIO = 0.31
 
-/** 0° at top, clockwise — matches server segment math & CSS rotate. */
-function polar(r: number, angleDeg: number): { x: number; y: number } {
-  const rad = ((angleDeg - 90) * Math.PI) / 180
-  return {
-    x: CX + r * Math.cos(rad),
-    y: CY + r * Math.sin(rad),
-  }
-}
+const avatarCache = new Map<string, HTMLImageElement | 'error'>()
 
-function segmentPath(startDeg: number, endDeg: number): string {
-  const size = endDeg - startDeg
-  if (size <= 0.001) {
-    return ''
+function loadAvatar(url: string, onReady: () => void): HTMLImageElement | null {
+  if (!url) {
+    return null
   }
-  // Full circle special-case
-  if (size >= 359.999) {
-    return [
-      `M ${CX} ${CY}`,
-      `m 0 ${-OUTER_R}`,
-      `a ${OUTER_R} ${OUTER_R} 0 1 1 0 ${OUTER_R * 2}`,
-      `a ${OUTER_R} ${OUTER_R} 0 1 1 0 ${-OUTER_R * 2}`,
-      'Z',
-    ].join(' ')
+  const cached = avatarCache.get(url)
+  if (cached === 'error') {
+    return null
   }
-  const a = polar(OUTER_R, startDeg)
-  const b = polar(OUTER_R, endDeg)
-  const large = size > 180 ? 1 : 0
-  // sweep=1 → clockwise in this polar convention
-  return `M ${CX} ${CY} L ${a.x} ${a.y} A ${OUTER_R} ${OUTER_R} 0 ${large} 1 ${b.x} ${b.y} Z`
+  if (cached instanceof HTMLImageElement) {
+    return cached.complete ? cached : null
+  }
+  const img = new Image()
+  img.decoding = 'async'
+  img.crossOrigin = 'anonymous'
+  avatarCache.set(url, img)
+  img.onload = () => onReady()
+  img.onerror = () => {
+    avatarCache.set(url, 'error')
+    onReady()
+  }
+  img.src = url
+  return null
 }
 
 function avatarScaleForSegment(sizeDeg: number): number {
@@ -79,27 +74,171 @@ function avatarScaleForSegment(sizeDeg: number): number {
 function rotationAt(spinClock: RollSpinClock, nowMs: number): number {
   const duration = Math.max(1, spinClock.endsAtMs - spinClock.startedAtMs)
   const t = Math.min(1, Math.max(0, (nowMs - spinClock.startedAtMs) / duration))
-  return spinClock.targetAngle * easeOutQuart(t)
+  return spinClock.targetAngle * easeOutQuint(t)
+}
+
+function pickAvatarSegments(segments: RollSegment[]): RollSegment[] {
+  const eligible = segments.filter((s) => s.sizeDeg >= MIN_AVATAR_DEG)
+  if (eligible.length <= MAX_AVATARS) {
+    return eligible
+  }
+  return [...eligible].sort((a, b) => b.sizeDeg - a.sizeDeg).slice(0, MAX_AVATARS)
 }
 
 export function RollWheel({ round, countdownMs, spinClock, showConfetti, confettiKey }: RollWheelProps) {
   const segments = useMemo(
-    () => round?.segments || [],
-    [round?.id, round?.status, round?.pot, round?.version, round?.players],
+    () => resolveRollSegments(round),
+    [round?.id, round?.status, round?.pot, round?.version, round?.players, round?.segments],
   )
-  const wheelRef = useRef<SVGGElement | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const rotationRef = useRef(0)
   const rafRef = useRef<number | null>(null)
   const lastNickRef = useRef<string | null>(null)
   const [pointerUser, setPointerUser] = useState<string | null>(null)
+  const [avatarTick, setAvatarTick] = useState(0)
 
   const pot = round?.pot || 0
   const status = round?.status || 'waiting'
   const showNick = status === 'spinning' || status === 'completed' || status === 'locked'
 
-  const applyRotation = (angle: number) => {
-    if (wheelRef.current) {
-      wheelRef.current.setAttribute('transform', `rotate(${angle} ${CX} ${CY})`)
+  const bumpAvatars = () => setAvatarTick((n) => n + 1)
+
+  const paint = (rotationDeg: number) => {
+    const canvas = canvasRef.current
+    if (!canvas) {
+      return
     }
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      return
+    }
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const cssSize = canvas.clientWidth || 300
+    const px = Math.max(1, Math.floor(cssSize * dpr))
+    if (canvas.width !== px || canvas.height !== px) {
+      canvas.width = px
+      canvas.height = px
+    }
+
+    const size = canvas.width
+    const cx = size / 2
+    const cy = size / 2
+    const outerR = size * OUTER_RATIO
+    const hubR = size * HUB_RATIO
+    const avatarR = size * AVATAR_RATIO
+    const baseAvatar = size * 0.09
+
+    ctx.clearRect(0, 0, size, size)
+    ctx.save()
+    ctx.translate(cx, cy)
+    ctx.rotate((rotationDeg * Math.PI) / 180)
+
+    if (segments.length === 0) {
+      ctx.beginPath()
+      ctx.arc(0, 0, outerR, 0, Math.PI * 2)
+      ctx.fillStyle = '#1a1524'
+      ctx.fill()
+    } else {
+      ctx.save()
+      ctx.beginPath()
+      ctx.arc(0, 0, outerR, 0, Math.PI * 2)
+      ctx.clip()
+
+      for (const seg of segments) {
+        const start = ((seg.startDeg - 90) * Math.PI) / 180
+        const end = ((seg.endDeg - 90) * Math.PI) / 180
+        ctx.beginPath()
+        ctx.moveTo(0, 0)
+        ctx.arc(0, 0, outerR, start, end, false)
+        ctx.closePath()
+        ctx.fillStyle = seg.color
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(0,0,0,0.25)'
+        ctx.lineWidth = Math.max(0.5, size * 0.0015)
+        ctx.stroke()
+      }
+      ctx.restore()
+    }
+
+    const avatars = pickAvatarSegments(segments)
+    for (const seg of avatars) {
+      const mid = seg.startDeg + seg.sizeDeg / 2
+      const rad = ((mid - 90) * Math.PI) / 180
+      const x = Math.cos(rad) * avatarR
+      const y = Math.sin(rad) * avatarR
+      const scale = avatarScaleForSegment(seg.sizeDeg)
+      const r = (baseAvatar * scale) / 2
+
+      ctx.beginPath()
+      ctx.arc(x, y, r + size * 0.0035, 0, Math.PI * 2)
+      ctx.fillStyle = '#0d0a14'
+      ctx.fill()
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)'
+      ctx.lineWidth = Math.max(1, size * 0.0045)
+      ctx.stroke()
+
+      const img = seg.photoUrl ? loadAvatar(seg.photoUrl, bumpAvatars) : null
+      if (img) {
+        ctx.save()
+        ctx.beginPath()
+        ctx.arc(x, y, r, 0, Math.PI * 2)
+        ctx.clip()
+        ctx.drawImage(img, x - r, y - r, r * 2, r * 2)
+        ctx.restore()
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.8)'
+        ctx.font = `bold ${Math.max(10, r * 0.9)}px system-ui, sans-serif`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText((seg.username || '?').slice(0, 1).toUpperCase(), x, y + 0.5)
+      }
+    }
+
+    ctx.restore()
+
+    // Outer ring (screen space — does not rotate with wheel content borders already clipped)
+    ctx.beginPath()
+    ctx.arc(cx, cy, outerR, 0, Math.PI * 2)
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)'
+    ctx.lineWidth = Math.max(2, size * 0.012)
+    ctx.stroke()
+
+    // Hub
+    const grad = ctx.createRadialGradient(cx, cy - hubR * 0.2, 0, cx, cy, hubR)
+    grad.addColorStop(0, '#1c1728')
+    grad.addColorStop(1, '#0a0810')
+    ctx.beginPath()
+    ctx.arc(cx, cy, hubR, 0, Math.PI * 2)
+    ctx.fillStyle = '#0a0810'
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)'
+    ctx.lineWidth = Math.max(1, size * 0.006)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.arc(cx, cy, hubR - size * 0.004, 0, Math.PI * 2)
+    ctx.fillStyle = grad
+    ctx.fill()
+
+    // Center label
+    const label = centerLabelText(status, countdownMs, pot)
+    ctx.fillStyle = label.fill
+    ctx.font = label.font(size)
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    if (status === 'waiting' && pot > 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.4)'
+      ctx.font = `600 ${Math.max(9, size * 0.026)}px system-ui, sans-serif`
+      ctx.fillText('Всего', cx, cy - size * 0.04)
+      ctx.fillStyle = label.fill
+      ctx.font = label.font(size)
+      ctx.fillText(label.text, cx, cy + size * 0.018)
+    } else {
+      ctx.fillText(label.text, cx, cy)
+    }
+  }
+
+  const syncNickname = (angle: number) => {
     const local = pointerLocalDeg(angle)
     const seg = findSegmentAtLocalDeg(segments, local)
     const nick = seg ? formatRollUser(seg) : null
@@ -108,6 +247,17 @@ export function RollWheel({ round, countdownMs, spinClock, showConfetti, confett
       setPointerUser(nick)
     }
   }
+
+  const applyRotation = (angle: number) => {
+    rotationRef.current = angle
+    paint(angle)
+    syncNickname(angle)
+  }
+
+  useEffect(() => {
+    paint(rotationRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segments, status, pot, countdownMs, avatarTick])
 
   useEffect(() => {
     if (rafRef.current != null) {
@@ -151,24 +301,12 @@ export function RollWheel({ round, countdownMs, spinClock, showConfetti, confett
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spinClock, status, round?.targetAngle, segments])
 
-  const centerLabel = (() => {
-    if (status === 'betting' && countdownMs != null) {
-      const sec = Math.max(0, Math.ceil(countdownMs / 1000))
-      const mm = String(Math.floor(sec / 60)).padStart(2, '0')
-      const ss = String(sec % 60).padStart(2, '0')
-      return { text: `${mm}:${ss}`, className: 'fill-white text-[7px] font-bold' }
-    }
-    if (status === 'spinning' || status === 'locked' || status === 'completed') {
-      return { text: 'ИГРА', className: 'fill-[#8cff4a] text-[6px] font-extrabold' }
-    }
-    if (status === 'waiting') {
-      return {
-        text: pot > 0 ? pot.toLocaleString('ru-RU') : '…',
-        className: 'fill-white/85 text-[5.5px] font-bold',
-      }
-    }
-    return { text: '…', className: 'fill-white/50 text-[5.5px] font-bold' }
-  })()
+  useEffect(() => {
+    const onResize = () => paint(rotationRef.current)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segments, status, pot, countdownMs])
 
   return (
     <div className="relative mx-auto mb-3 w-full max-w-[340px]">
@@ -193,119 +331,12 @@ export function RollWheel({ round, countdownMs, spinClock, showConfetti, confett
       </div>
 
       <div className="relative mx-auto aspect-square w-[min(100%,300px)]">
-        <svg
-          viewBox="0 0 100 100"
-          className="size-full overflow-visible drop-shadow-[0_0_28px_rgb(139_61_255/18%)]"
+        <canvas
+          ref={canvasRef}
+          className="size-full drop-shadow-[0_0_28px_rgb(139_61_255/18%)]"
           role="img"
           aria-label="Roll wheel"
-        >
-          <defs>
-            <clipPath id="roll-wheel-clip">
-              <circle cx={CX} cy={CY} r={OUTER_R} />
-            </clipPath>
-          </defs>
-
-          <g clipPath="url(#roll-wheel-clip)">
-            <g ref={wheelRef} transform={`rotate(0 ${CX} ${CY})`}>
-              {segments.length === 0 ? (
-                <circle cx={CX} cy={CY} r={OUTER_R} fill="#1a1524" />
-              ) : (
-                segments.map((seg) => (
-                  <path
-                    key={seg.userId}
-                    d={segmentPath(seg.startDeg, seg.endDeg)}
-                    fill={seg.color}
-                    stroke="rgba(0,0,0,0.25)"
-                    strokeWidth={0.15}
-                  />
-                ))
-              )}
-
-              {segments.map((seg) => {
-                if (seg.sizeDeg < 8) {
-                  return null
-                }
-                const mid = seg.startDeg + seg.sizeDeg / 2
-                const scale = avatarScaleForSegment(seg.sizeDeg)
-                const size = AVATAR_SIZE * scale
-                const clipId = `roll-av-${seg.userId}`
-                return (
-                  <g key={`av-${seg.userId}`} transform={`rotate(${mid} ${CX} ${CY})`}>
-                    <g transform={`translate(${CX}, ${CY - AVATAR_R}) rotate(${-mid})`}>
-                      <defs>
-                        <clipPath id={clipId}>
-                          <circle cx={0} cy={0} r={size / 2} />
-                        </clipPath>
-                      </defs>
-                      <circle
-                        cx={0}
-                        cy={0}
-                        r={size / 2 + 0.35}
-                        fill="#0d0a14"
-                        stroke="rgba(255,255,255,0.55)"
-                        strokeWidth={0.45}
-                      />
-                      {seg.photoUrl ? (
-                        <image
-                          href={seg.photoUrl}
-                          x={-size / 2}
-                          y={-size / 2}
-                          width={size}
-                          height={size}
-                          clipPath={`url(#${clipId})`}
-                          preserveAspectRatio="xMidYMid slice"
-                        />
-                      ) : (
-                        <text
-                          x={0}
-                          y={0.8}
-                          textAnchor="middle"
-                          className="fill-white/80 text-[3.2px] font-bold"
-                        >
-                          {(seg.username || '?').slice(0, 1).toUpperCase()}
-                        </text>
-                      )}
-                    </g>
-                  </g>
-                )
-              })}
-            </g>
-          </g>
-
-          {/* Perfect outer ring on top of segments */}
-          <circle
-            cx={CX}
-            cy={CY}
-            r={OUTER_R}
-            fill="none"
-            stroke="rgba(255,255,255,0.22)"
-            strokeWidth={1.2}
-          />
-
-          {/* Compact hub */}
-          <defs>
-            <radialGradient id="roll-hub-grad" cx="50%" cy="40%" r="70%">
-              <stop offset="0%" stopColor="#1c1728" />
-              <stop offset="100%" stopColor="#0a0810" />
-            </radialGradient>
-          </defs>
-          <circle cx={CX} cy={CY} r={HUB_R} fill="#0a0810" stroke="rgba(255,255,255,0.12)" strokeWidth={0.6} />
-          <circle cx={CX} cy={CY} r={HUB_R - 0.4} fill="url(#roll-hub-grad)" />
-          {status === 'waiting' && pot > 0 ? (
-            <text
-              x={CX}
-              y={CY - 4}
-              textAnchor="middle"
-              className="fill-white/40 text-[2.6px] font-semibold uppercase"
-            >
-              Всего
-            </text>
-          ) : null}
-          <text x={CX} y={CY + 1.8} textAnchor="middle" className={centerLabel.className}>
-            {centerLabel.text}
-          </text>
-        </svg>
-
+        />
         <RollConfetti active={showConfetti} burstKey={confettiKey} />
       </div>
 
@@ -316,15 +347,49 @@ export function RollWheel({ round, countdownMs, spinClock, showConfetti, confett
   )
 }
 
+function centerLabelText(
+  status: string,
+  countdownMs: number | null,
+  pot: number,
+): { text: string; fill: string; font: (size: number) => string } {
+  if (status === 'betting' && countdownMs != null) {
+    const sec = Math.max(0, Math.ceil(countdownMs / 1000))
+    const mm = String(Math.floor(sec / 60)).padStart(2, '0')
+    const ss = String(sec % 60).padStart(2, '0')
+    return {
+      text: `${mm}:${ss}`,
+      fill: '#ffffff',
+      font: (size) => `700 ${Math.max(18, size * 0.07)}px system-ui, sans-serif`,
+    }
+  }
+  if (status === 'spinning' || status === 'locked' || status === 'completed') {
+    return {
+      text: 'ИГРА',
+      fill: '#8cff4a',
+      font: (size) => `800 ${Math.max(14, size * 0.06)}px system-ui, sans-serif`,
+    }
+  }
+  if (status === 'waiting') {
+    return {
+      text: pot > 0 ? pot.toLocaleString('ru-RU') : '…',
+      fill: 'rgba(255,255,255,0.85)',
+      font: (size) => `700 ${Math.max(14, size * 0.055)}px system-ui, sans-serif`,
+    }
+  }
+  return {
+    text: '…',
+    fill: 'rgba(255,255,255,0.5)',
+    font: (size) => `700 ${Math.max(14, size * 0.055)}px system-ui, sans-serif`,
+  }
+}
+
 function statusLabel(round: RollRound | null): string {
   const status = round?.status
   if (status === 'waiting') {
-    return (round?.players?.length || 0) < (round?.maxPlayers || 2)
-      ? 'Ожидаем второго игрока...'
-      : 'Готово к старту'
+    return 'Ожидаем первую ставку...'
   }
   if (status === 'betting') {
-    return 'Ставки приняты — отсчёт'
+    return 'Приём ставок'
   }
   if (status === 'locked' || status === 'spinning') {
     return '⚔️ PvP начался'

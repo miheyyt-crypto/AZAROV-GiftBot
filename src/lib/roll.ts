@@ -44,10 +44,10 @@ async function rollRequest(path: string, init: RequestInit = {}): Promise<RollAp
       serverNowMs: Date.now(),
       viewerInRound: false,
       config: {
-        maxPlayers: 2,
+        maxPlayers: 1000,
         minBet: 100,
         bettingDurationMs: 20_000,
-        spinDurationMs: 5_000,
+        spinDurationMs: 10_000,
         resultHoldMs: 8_000,
         payoutBps: 10_000,
         quickBets: [100, 250, 500, 1000, 2500],

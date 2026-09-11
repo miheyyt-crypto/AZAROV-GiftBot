@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
-import { createEmptyStore, withStore } from './store.mjs'
+import { withStore } from './store.mjs'
 import {
   ROLL_BETTING_DURATION_MS,
   ROLL_MAX_PLAYERS,
@@ -64,6 +64,29 @@ test('chancePercent and segments match stake weights 900/100', () => {
   assert.equal(segments[1].chance, 10)
 })
 
+test('1000 players: large stake is exactly half total weight', () => {
+  const players = [{ userId: 1, bet: 5000, username: 'whale' }]
+  for (let i = 0; i < 999; i += 1) {
+    // 999 * ~5.005 ≈ 5000 — use floor distribution: 5000 coins among 999
+    players.push({ userId: i + 2, bet: 0, username: `p${i}` })
+  }
+  // Distribute 5000 coins: first 5 get 1 extra among equal shares
+  const base = Math.floor(5000 / 999)
+  let rem = 5000 - base * 999
+  for (let i = 1; i < players.length; i += 1) {
+    players[i].bet = base + (rem > 0 ? 1 : 0)
+    if (rem > 0) rem -= 1
+  }
+  const total = players.reduce((s, p) => s + p.bet, 0)
+  assert.equal(total, 10_000)
+  assert.equal(chancePercent(5000, total), 50)
+  const segments = buildSegments(players)
+  assert.equal(segments.length, 1000)
+  assert.ok(Math.abs(segments[0].sizeDeg - 180) < 0.001)
+  const sumDeg = segments.reduce((s, seg) => s + seg.sizeDeg, 0)
+  assert.ok(Math.abs(sumDeg - 360) < 1e-6)
+})
+
 test('pickWeightedWinner respects weights', () => {
   const players = [
     { userId: 1, bet: 900 },
@@ -95,7 +118,7 @@ test('target angle lands inside winner segment under pointer', () => {
   assert.equal(normalizeDeg(370), 10)
 })
 
-test('second bet starts countdown; third player rejected; double bet rejected', async () => {
+test('first bet starts countdown; more players can join; double bet rejected', async () => {
   await withTempStore(async () => {
     const joined = withStore((store) => {
       seedUser(store, 101, 10_000, 'alice')
@@ -103,28 +126,64 @@ test('second bet starts countdown; third player rejected; double bet rejected', 
       seedUser(store, 103, 10_000, 'carol')
       const a = placeRollBetOnStore(store, 101, { bet: 900, requestId: 'r1' })
       assert.equal(a.success, true)
-      assert.equal(a.round.status, 'waiting')
+      assert.equal(a.round.status, 'betting')
+      assert.ok(a.round.bettingEndsAt)
       assert.equal(store.users['101'].balance, 9100)
 
       const b = placeRollBetOnStore(store, 102, { bet: 100, requestId: 'r2' })
       assert.equal(b.success, true)
       assert.equal(b.round.status, 'betting')
-      assert.ok(b.round.bettingEndsAt)
       assert.equal(b.round.players[0].chance, 90)
       assert.equal(b.round.players[1].chance, 10)
-      assert.equal(ROLL_MAX_PLAYERS, 2)
 
       const c = placeRollBetOnStore(store, 103, { bet: 100, requestId: 'r3' })
-      assert.equal(c.success, false)
-      assert.equal(c.code, 'ROUND_CLOSED')
+      assert.equal(c.success, true)
+      assert.equal(c.round.players.length, 3)
 
       const again = placeRollBetOnStore(store, 101, { bet: 100, requestId: 'r4' })
       assert.equal(again.success, false)
-      assert.ok(['ALREADY_JOINED', 'ROUND_CLOSED'].includes(again.code))
+      assert.equal(again.code, 'ALREADY_JOINED')
 
       return peekRollRoundOnStore(store)
     })
-    assert.equal(joined.players.length, 2)
+    assert.equal(joined.players.length, 3)
+  })
+})
+
+test('ROUND_FULL rejects beyond MAX_PLAYERS atomically', async () => {
+  await withTempStore(async () => {
+    withStore((store) => {
+      for (let i = 1; i <= 5; i += 1) {
+        seedUser(store, 6000 + i, 50_000, `m${i}`)
+      }
+      advanceRollRoundOnStore(store)
+      const round = peekRollRoundOnStore(store)
+      assert.ok(round)
+      round.players = []
+      for (let i = 1; i <= 999; i += 1) {
+        round.players.push({
+          userId: 700_000 + i,
+          username: `bot${i}`,
+          firstName: `Bot${i}`,
+          photoUrl: '',
+          bet: ROLL_MIN_BET,
+          joinedAt: new Date().toISOString(),
+        })
+      }
+      round.status = 'betting'
+      round.bettingStartedAt = new Date().toISOString()
+      round.bettingEndsAt = new Date(Date.now() + 60_000).toISOString()
+      round.pot = 999 * ROLL_MIN_BET
+
+      const ok = placeRollBetOnStore(store, 6001, { bet: ROLL_MIN_BET, requestId: 'fill-ok' })
+      assert.equal(ok.success, true)
+      assert.equal(peekRollRoundOnStore(store).players.length, 1000)
+
+      const full = placeRollBetOnStore(store, 6002, { bet: ROLL_MIN_BET, requestId: 'fill-full' })
+      assert.equal(full.success, false)
+      assert.equal(full.code, 'ROUND_FULL')
+      assert.equal(peekRollRoundOnStore(store).players.length, 1000)
+    })
   })
 })
 
@@ -144,6 +203,10 @@ test('bet after deadline rejected; settle pays once; reload settle noop', async 
       assert.ok(['locked', 'spinning'].includes(lockedOrSpin.status))
       assert.ok(lockedOrSpin.winnerUserId === 201 || lockedOrSpin.winnerUserId === 202)
       assert.ok(Number.isFinite(lockedOrSpin.targetAngle))
+      assert.equal(
+        Date.parse(lockedOrSpin.spinEndsAt) - Date.parse(lockedOrSpin.spinStartedAt),
+        ROLL_SPIN_DURATION_MS,
+      )
 
       const late = placeRollBetOnStore(store, 201, { bet: 100, requestId: 'late' })
       assert.equal(late.success, false)
@@ -151,8 +214,6 @@ test('bet after deadline rejected; settle pays once; reload settle noop', async 
       const spinning = peekRollRoundOnStore(store)
       const spinEnd = Date.parse(spinning.spinEndsAt)
       advanceRollRoundOnStore(store, spinEnd + 10)
-      const done = peekRollRoundOnStore(store)
-      // May still be completed current or already next waiting after hold — force settle path
       const finishedId = store.rollMeta.lastResultRoundId
       const finished = store.rollRounds[finishedId]
       assert.ok(finished)
@@ -162,19 +223,15 @@ test('bet after deadline rejected; settle pays once; reload settle noop', async 
 
       const winnerId = String(finished.winnerUserId)
       const winnerBalance = store.users[winnerId].balance
-      // Each started 20000; each bet 500; winner +1000 ⇒ 20000 - 500 + 1000 = 20500
-      // Loser: 20000 - 500 = 19500
       assert.equal(winnerBalance, 20_500)
 
       const wins = listUserTransactions(store, Number(winnerId)).filter((t) => t.type === TX_TYPE.ROLL_WIN)
       assert.equal(wins.length, 1)
 
-      // Second settle noop
       advanceRollRoundOnStore(store, spinEnd + 10)
       const wins2 = listUserTransactions(store, Number(winnerId)).filter((t) => t.type === TX_TYPE.ROLL_WIN)
       assert.equal(wins2.length, 1)
 
-      // After hold, new waiting round
       advanceRollRoundOnStore(store, spinEnd + ROLL_RESULT_HOLD_MS + 50)
       const next = peekRollRoundOnStore(store)
       assert.equal(next.status, 'waiting')
@@ -184,6 +241,30 @@ test('bet after deadline rejected; settle pays once; reload settle noop', async 
       assert.ok(state.previousGame)
       assert.ok(state.topGame)
       assert.equal(state.previousGame.winnings, 1000)
+    })
+  })
+})
+
+test('solo player: first bet starts timer and can win alone', async () => {
+  await withTempStore(async () => {
+    withStore((store) => {
+      seedUser(store, 901, 5_000, 'solo')
+      const bet = placeRollBetOnStore(store, 901, { bet: 500, requestId: 'solo1' })
+      assert.equal(bet.success, true)
+      assert.equal(bet.round.status, 'betting')
+      assert.equal(bet.round.players.length, 1)
+
+      const ends = Date.parse(bet.round.bettingEndsAt)
+      advanceRollRoundOnStore(store, ends)
+      const spinning = peekRollRoundOnStore(store)
+      assert.equal(spinning.status, 'spinning')
+      assert.equal(spinning.winnerUserId, 901)
+      assert.equal(spinning.payout, 500)
+
+      advanceRollRoundOnStore(store, Date.parse(spinning.spinEndsAt) + 10)
+      const finished = store.rollRounds[store.rollMeta.lastResultRoundId]
+      assert.equal(finished.status, 'completed')
+      assert.equal(store.users['901'].balance, 5_000)
     })
   })
 })
@@ -217,8 +298,8 @@ test('insufficient funds and invalid bet', async () => {
 })
 
 test('config constants match plan', () => {
-  assert.equal(ROLL_MAX_PLAYERS, 2)
+  assert.equal(ROLL_MAX_PLAYERS, 1000)
   assert.equal(ROLL_MIN_BET, 100)
   assert.equal(ROLL_BETTING_DURATION_MS, 20_000)
-  assert.equal(ROLL_SPIN_DURATION_MS, 5_000)
+  assert.equal(ROLL_SPIN_DURATION_MS, 10_000)
 })
