@@ -12,7 +12,7 @@ import { useBalance } from '@/hooks/useBalance'
 import { useUserAccount } from '@/hooks/useUserAccount'
 import { ROUTES } from '@/lib/constants'
 import { formatBalance } from '@/lib/balance'
-import { fetchRollState, placeRollBet } from '@/lib/roll'
+import { fetchRollState, placeRollBet, subscribeRollStream } from '@/lib/roll'
 import {
   ROLL_MIN_BET,
   ROLL_POLL_MS_ACTIVE,
@@ -82,6 +82,10 @@ export function RollPage() {
   const confettiForRound = useRef<string | null>(null)
   const winnerCardForRound = useRef<string | null>(null)
   const loseToastForRound = useRef<string | null>(null)
+  const lastVersionRef = useRef(0)
+  const lastRoundIdRef = useRef<string | null>(null)
+  const streamOpenRef = useRef(false)
+  const forcedFetchAtZero = useRef(false)
 
   const minBet = config?.minBet ?? ROLL_MIN_BET
   const quickBets = config?.quickBets?.length ? config.quickBets : [...ROLL_QUICK_BETS]
@@ -103,6 +107,24 @@ export function RollPage() {
         return
       }
 
+      const incomingVersion = Number(payload.round?.version) || 0
+      const incomingRoundId = payload.round?.id || null
+      if (
+        incomingRoundId &&
+        lastRoundIdRef.current === incomingRoundId &&
+        incomingVersion > 0 &&
+        lastVersionRef.current > 0 &&
+        incomingVersion < lastVersionRef.current
+      ) {
+        return
+      }
+      if (incomingRoundId) {
+        lastRoundIdRef.current = incomingRoundId
+      }
+      if (incomingVersion > 0) {
+        lastVersionRef.current = incomingVersion
+      }
+
       skewRef.current = estimateSkew(
         payload.serverNowMs,
         payload.serverNow,
@@ -110,20 +132,32 @@ export function RollPage() {
         payload.clientReceivedAt,
       )
 
-      setRound(payload.round)
+      const r = payload.round
+      const viewerId = account.telegramId
+      const inRound = Boolean(
+        payload.viewerInRound ||
+          (viewerId > 0 &&
+            (r?.players || []).some((p) => Number(p.userId) === Number(viewerId))),
+      )
+
+      setRound(r)
       setPreviousGame(payload.previousGame)
       setTopGame(payload.topGame)
-      setViewerInRound(Boolean(payload.viewerInRound))
+      setViewerInRound(inRound)
       if (payload.config) {
         setConfig(payload.config)
       }
 
-      const r = payload.round
       if (r?.status === 'betting' && r.bettingEndsAt) {
         const ends = Date.parse(r.bettingEndsAt)
-        setCountdownMs(Math.max(0, ends - serverNowApprox()))
+        const remaining = Math.max(0, ends - serverNowApprox())
+        setCountdownMs(remaining)
+        if (remaining > 200) {
+          forcedFetchAtZero.current = false
+        }
       } else {
         setCountdownMs(null)
+        forcedFetchAtZero.current = false
       }
 
       if (r?.status === 'spinning' && r.spinStartedAt && r.spinEndsAt && r.targetAngle != null) {
@@ -148,7 +182,6 @@ export function RollPage() {
           return next
         })
       } else if (r?.status === 'completed') {
-        // Keep final angle via round.targetAngle in the wheel; drop live clock.
         setSpinClock(null)
       } else if (r?.status === 'waiting' || r?.status === 'betting') {
         setSpinClock(null)
@@ -189,6 +222,7 @@ export function RollPage() {
 
       if (r?.status === 'waiting' && (r.players?.length || 0) === 0 && !payload.lastResult) {
         setWinnerCardOpen(false)
+        lastVersionRef.current = Number(r.version) || 0
       }
     },
     [account.telegramId, serverNowApprox, showNotification],
@@ -208,6 +242,26 @@ export function RollPage() {
     }
   }, [applyState])
 
+  // Primary realtime: SSE push (fetch stream).
+  useEffect(() => {
+    if (!bootstrapped) {
+      return
+    }
+    const stop = subscribeRollStream(
+      (payload) => {
+        applyState(payload)
+      },
+      (status) => {
+        streamOpenRef.current = status === 'open'
+      },
+    )
+    return () => {
+      streamOpenRef.current = false
+      stop()
+    }
+  }, [applyState, bootstrapped])
+
+  // Slow reconciliation poll (fallback if SSE drops).
   useEffect(() => {
     if (!bootstrapped) {
       return
@@ -231,10 +285,17 @@ export function RollPage() {
     }
     const endsAt = round.bettingEndsAt
     const timer = window.setInterval(() => {
-      setCountdownMs(Math.max(0, Date.parse(endsAt) - serverNowApprox()))
+      const remaining = Math.max(0, Date.parse(endsAt) - serverNowApprox())
+      setCountdownMs(remaining)
+      // When local countdown hits 0, immediately reconcile — server ticker + SSE should
+      // already be spinning; this covers missed events without waiting for slow poll.
+      if (remaining <= 0 && !forcedFetchAtZero.current) {
+        forcedFetchAtZero.current = true
+        void fetchRollState().then(applyState)
+      }
     }, 100)
     return () => window.clearInterval(timer)
-  }, [round?.status, round?.bettingEndsAt, serverNowApprox])
+  }, [applyState, round?.status, round?.bettingEndsAt, serverNowApprox])
 
   useEffect(() => {
     if (round?.status !== 'waiting') {

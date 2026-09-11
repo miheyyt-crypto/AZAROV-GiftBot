@@ -114,3 +114,97 @@ export async function placeRollBet(input: {
     }
   })
 }
+
+/**
+ * SSE stream via fetch (supports Authorization header — EventSource cannot).
+ * Returns an abort function.
+ */
+export function subscribeRollStream(
+  onSnapshot: (payload: RollApiResponse) => void,
+  onStatus?: (status: 'open' | 'error' | 'closed') => void,
+): () => void {
+  const controller = new AbortController()
+  let closed = false
+
+  const run = async () => {
+    while (!closed && !controller.signal.aborted) {
+      try {
+        const initData = getTelegramInitData()
+        const headers = new Headers()
+        if (initData) {
+          headers.set('Authorization', `tma ${initData}`)
+        }
+        const response = await fetch(apiUrl('/api/roll/stream'), {
+          method: 'GET',
+          headers,
+          credentials: 'include',
+          signal: controller.signal,
+        })
+        if (!response.ok || !response.body) {
+          onStatus?.('error')
+          await sleep(1_200)
+          continue
+        }
+        onStatus?.('open')
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        while (!closed) {
+          const { done, value } = await reader.read()
+          if (done) {
+            break
+          }
+          buffer += decoder.decode(value, { stream: true })
+          const parts = buffer.split('\n\n')
+          buffer = parts.pop() || ''
+          for (const chunk of parts) {
+            const lines = chunk.split('\n')
+            let data = ''
+            for (const line of lines) {
+              if (line.startsWith('data:')) {
+                data += line.slice(5).trim()
+              }
+            }
+            if (!data) {
+              continue
+            }
+            try {
+              const payload = JSON.parse(data) as RollApiResponse
+              if (payload && typeof payload === 'object') {
+                applyRemoteUser(payload.user)
+                onSnapshot({
+                  ...payload,
+                  clientSentAt: Date.now(),
+                  clientReceivedAt: Date.now(),
+                })
+              }
+            } catch {
+              // ignore malformed
+            }
+          }
+        }
+        onStatus?.('closed')
+      } catch (error) {
+        if (controller.signal.aborted || closed) {
+          break
+        }
+        onStatus?.('error')
+        await sleep(1_500)
+      }
+    }
+  }
+
+  void run()
+
+  return () => {
+    closed = true
+    controller.abort()
+    onStatus?.('closed')
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}

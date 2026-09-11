@@ -7,7 +7,6 @@ import {
   formatRollUser,
   pointerLocalDeg,
   type RollRound,
-  type RollSegment,
 } from '@/types/roll'
 
 export type RollSpinClock = {
@@ -25,53 +24,56 @@ type RollWheelProps = {
   confettiKey?: string | null
 }
 
-/** Distance from wheel center to avatar center, as % of wheel radius (0–50). */
-const AVATAR_RADIUS_PCT = 34
-const AVATAR_MIN_SEGMENT_DEG = 12
+const CX = 50
+const CY = 50
+const OUTER_R = 48
+const HUB_R = 16.5
+/** Mid-ring radius for avatars (between hub and outer). */
+const AVATAR_R = 31
+const AVATAR_SIZE = 9
 
-function buildConic(segments: RollSegment[]): string {
-  if (!segments.length) {
-    return 'conic-gradient(from -90deg, #2a2438 0deg, #1a1524 360deg)'
+/** 0° at top, clockwise — matches server segment math & CSS rotate. */
+function polar(r: number, angleDeg: number): { x: number; y: number } {
+  const rad = ((angleDeg - 90) * Math.PI) / 180
+  return {
+    x: CX + r * Math.cos(rad),
+    y: CY + r * Math.sin(rad),
   }
-  const parts: string[] = []
-  for (const seg of segments) {
-    parts.push(`${seg.color} ${seg.startDeg}deg ${seg.endDeg}deg`)
-  }
-  return `conic-gradient(from -90deg, ${parts.join(', ')})`
 }
 
-/**
- * Place avatar on segment mid-angle.
- * conic-gradient(from -90deg) ⇒ 0° at top, clockwise — same as CSS rotate().
- * Structure: rotate(mid) → push toward top → counter-rotate for upright face.
- */
-function AvatarOnWheel({ segment }: { segment: RollSegment }) {
-  if (segment.sizeDeg < AVATAR_MIN_SEGMENT_DEG) {
-    return null
+function segmentPath(startDeg: number, endDeg: number): string {
+  const size = endDeg - startDeg
+  if (size <= 0.001) {
+    return ''
   }
-  const mid = segment.startDeg + segment.sizeDeg / 2
-  return (
-    <div
-      className="pointer-events-none absolute inset-0"
-      style={{ transform: `rotate(${mid}deg)` }}
-    >
-      <div
-        className="absolute left-1/2 size-8 -translate-x-1/2 overflow-hidden rounded-full border-2 border-[#0d0a14] bg-[#1a1524] shadow-[0_2px_8px_rgb(0_0_0/45%)] sm:size-9"
-        style={{
-          top: `calc(50% - ${AVATAR_RADIUS_PCT}%)`,
-          transform: `translate(-50%, -50%) rotate(${-mid}deg)`,
-        }}
-      >
-        {segment.photoUrl ? (
-          <img src={segment.photoUrl} alt="" className="size-full object-cover" draggable={false} />
-        ) : (
-          <div className="flex size-full items-center justify-center text-[11px] font-bold text-white/80">
-            {(segment.username || '?').slice(0, 1).toUpperCase()}
-          </div>
-        )}
-      </div>
-    </div>
-  )
+  // Full circle special-case
+  if (size >= 359.999) {
+    return [
+      `M ${CX} ${CY}`,
+      `m 0 ${-OUTER_R}`,
+      `a ${OUTER_R} ${OUTER_R} 0 1 1 0 ${OUTER_R * 2}`,
+      `a ${OUTER_R} ${OUTER_R} 0 1 1 0 ${-OUTER_R * 2}`,
+      'Z',
+    ].join(' ')
+  }
+  const a = polar(OUTER_R, startDeg)
+  const b = polar(OUTER_R, endDeg)
+  const large = size > 180 ? 1 : 0
+  // sweep=1 → clockwise in this polar convention
+  return `M ${CX} ${CY} L ${a.x} ${a.y} A ${OUTER_R} ${OUTER_R} 0 ${large} 1 ${b.x} ${b.y} Z`
+}
+
+function avatarScaleForSegment(sizeDeg: number): number {
+  if (sizeDeg >= 40) {
+    return 1
+  }
+  if (sizeDeg >= 20) {
+    return 0.85
+  }
+  if (sizeDeg >= 12) {
+    return 0.7
+  }
+  return 0.55
 }
 
 function rotationAt(spinClock: RollSpinClock, nowMs: number): number {
@@ -83,21 +85,20 @@ function rotationAt(spinClock: RollSpinClock, nowMs: number): number {
 export function RollWheel({ round, countdownMs, spinClock, showConfetti, confettiKey }: RollWheelProps) {
   const segments = useMemo(
     () => round?.segments || [],
-    [round?.id, round?.status, round?.pot, round?.players],
+    [round?.id, round?.status, round?.pot, round?.version, round?.players],
   )
-  const wheelRef = useRef<HTMLDivElement | null>(null)
+  const wheelRef = useRef<SVGGElement | null>(null)
   const rafRef = useRef<number | null>(null)
   const lastNickRef = useRef<string | null>(null)
   const [pointerUser, setPointerUser] = useState<string | null>(null)
 
-  const conic = useMemo(() => buildConic(segments), [segments])
   const pot = round?.pot || 0
   const status = round?.status || 'waiting'
   const showNick = status === 'spinning' || status === 'completed' || status === 'locked'
 
   const applyRotation = (angle: number) => {
     if (wheelRef.current) {
-      wheelRef.current.style.transform = `rotate(${angle}deg)`
+      wheelRef.current.setAttribute('transform', `rotate(${angle} ${CX} ${CY})`)
     }
     const local = pointerLocalDeg(angle)
     const seg = findSegmentAtLocalDeg(segments, local)
@@ -125,7 +126,6 @@ export function RollWheel({ round, countdownMs, spinClock, showConfetti, confett
           rafRef.current = null
         }
       }
-      // Late join / reconnect: jump to current server timeline position immediately.
       applyRotation(rotationAt(spinClock, Date.now()))
       rafRef.current = requestAnimationFrame(tick)
       return () => {
@@ -148,7 +148,7 @@ export function RollWheel({ round, countdownMs, spinClock, showConfetti, confett
     }
 
     return undefined
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyRotation closes over segments
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spinClock, status, round?.targetAngle, segments])
 
   const centerLabel = (() => {
@@ -156,27 +156,26 @@ export function RollWheel({ round, countdownMs, spinClock, showConfetti, confett
       const sec = Math.max(0, Math.ceil(countdownMs / 1000))
       const mm = String(Math.floor(sec / 60)).padStart(2, '0')
       const ss = String(sec % 60).padStart(2, '0')
-      return { text: `${mm}:${ss}`, className: 'text-[18px] font-bold tabular-nums leading-none text-white' }
+      return { text: `${mm}:${ss}`, className: 'fill-white text-[7px] font-bold' }
     }
     if (status === 'spinning' || status === 'locked' || status === 'completed') {
-      return { text: 'ИГРА', className: 'text-[15px] font-extrabold tracking-wide text-[#8cff4a]' }
+      return { text: 'ИГРА', className: 'fill-[#8cff4a] text-[6px] font-extrabold' }
     }
     if (status === 'waiting') {
       return {
         text: pot > 0 ? pot.toLocaleString('ru-RU') : '…',
-        className: 'text-[14px] font-bold tabular-nums text-white/85',
+        className: 'fill-white/85 text-[5.5px] font-bold',
       }
     }
-    return { text: '…', className: 'text-[14px] font-bold text-white/50' }
+    return { text: '…', className: 'fill-white/50 text-[5.5px] font-bold' }
   })()
 
   return (
     <div className="relative mx-auto mb-3 w-full max-w-[340px]">
-      {/* Fixed header: nickname ABOVE pointer — never overlaps */}
-      <div className="relative z-30 flex h-[52px] flex-col items-center justify-end pb-0.5">
+      <div className="relative z-30 flex h-[56px] flex-col items-center justify-end pb-0.5">
         <div
           className={[
-            'mb-1 flex h-7 max-w-[min(220px,70%)] items-center justify-center rounded-full border border-white/15 bg-[#1a1528]/95 px-3 shadow-lg backdrop-blur-sm transition-opacity',
+            'mb-1.5 flex h-7 max-w-[min(220px,70%)] items-center justify-center rounded-full border border-white/15 bg-[#1a1528]/95 px-3 shadow-lg backdrop-blur-sm transition-opacity',
             showNick && pointerUser ? 'opacity-100' : 'opacity-0',
           ].join(' ')}
         >
@@ -186,39 +185,126 @@ export function RollWheel({ round, countdownMs, spinClock, showConfetti, confett
         </div>
         <div className="relative z-30" aria-hidden>
           <div
-            className="h-0 w-0 border-l-[13px] border-r-[13px] border-t-[20px] border-l-transparent border-r-transparent border-t-white"
+            className="h-0 w-0 border-l-[14px] border-r-[14px] border-t-[22px] border-l-transparent border-r-transparent border-t-white"
             style={{ filter: 'drop-shadow(0 3px 3px rgb(0 0 0 / 55%))' }}
           />
-          <div className="absolute left-1/2 top-[4px] h-0 w-0 -translate-x-1/2 border-l-[8px] border-r-[8px] border-t-[12px] border-l-transparent border-r-transparent border-t-[#121018]" />
+          <div className="absolute left-1/2 top-[4px] h-0 w-0 -translate-x-1/2 border-l-[9px] border-r-[9px] border-t-[14px] border-l-transparent border-r-transparent border-t-[#121018]" />
         </div>
       </div>
 
       <div className="relative mx-auto aspect-square w-[min(100%,300px)]">
-        <div className="relative size-full">
-          <div
-            ref={wheelRef}
-            className="absolute inset-0 rounded-full border-[3px] border-white/15 shadow-[0_0_40px_rgb(139_61_255/20%)] will-change-transform"
-            style={{
-              background: conic,
-              transform: 'rotate(0deg)',
-            }}
-          >
-            {segments.map((seg) => (
-              <AvatarOnWheel key={seg.userId} segment={seg} />
-            ))}
-          </div>
+        <svg
+          viewBox="0 0 100 100"
+          className="size-full overflow-visible drop-shadow-[0_0_28px_rgb(139_61_255/18%)]"
+          role="img"
+          aria-label="Roll wheel"
+        >
+          <defs>
+            <clipPath id="roll-wheel-clip">
+              <circle cx={CX} cy={CY} r={OUTER_R} />
+            </clipPath>
+          </defs>
 
-          {/* Compact center hub (~36% diameter vs previous ~56%) */}
-          <div className="absolute inset-[32%] z-10 flex flex-col items-center justify-center rounded-full border border-white/10 bg-[radial-gradient(circle_at_50%_40%,#1c1728,#0a0810)] shadow-[inset_0_0_18px_rgb(0_0_0/55%)]">
-            {status === 'waiting' && pot > 0 ? (
-              <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-wide text-white/40">
-                Всего
-              </p>
-            ) : null}
-            <p className={centerLabel.className}>{centerLabel.text}</p>
-            {status === 'waiting' && playersWaitingLabel(round)}
-          </div>
-        </div>
+          <g clipPath="url(#roll-wheel-clip)">
+            <g ref={wheelRef} transform={`rotate(0 ${CX} ${CY})`}>
+              {segments.length === 0 ? (
+                <circle cx={CX} cy={CY} r={OUTER_R} fill="#1a1524" />
+              ) : (
+                segments.map((seg) => (
+                  <path
+                    key={seg.userId}
+                    d={segmentPath(seg.startDeg, seg.endDeg)}
+                    fill={seg.color}
+                    stroke="rgba(0,0,0,0.25)"
+                    strokeWidth={0.15}
+                  />
+                ))
+              )}
+
+              {segments.map((seg) => {
+                if (seg.sizeDeg < 8) {
+                  return null
+                }
+                const mid = seg.startDeg + seg.sizeDeg / 2
+                const scale = avatarScaleForSegment(seg.sizeDeg)
+                const size = AVATAR_SIZE * scale
+                const clipId = `roll-av-${seg.userId}`
+                return (
+                  <g key={`av-${seg.userId}`} transform={`rotate(${mid} ${CX} ${CY})`}>
+                    <g transform={`translate(${CX}, ${CY - AVATAR_R}) rotate(${-mid})`}>
+                      <defs>
+                        <clipPath id={clipId}>
+                          <circle cx={0} cy={0} r={size / 2} />
+                        </clipPath>
+                      </defs>
+                      <circle
+                        cx={0}
+                        cy={0}
+                        r={size / 2 + 0.35}
+                        fill="#0d0a14"
+                        stroke="rgba(255,255,255,0.55)"
+                        strokeWidth={0.45}
+                      />
+                      {seg.photoUrl ? (
+                        <image
+                          href={seg.photoUrl}
+                          x={-size / 2}
+                          y={-size / 2}
+                          width={size}
+                          height={size}
+                          clipPath={`url(#${clipId})`}
+                          preserveAspectRatio="xMidYMid slice"
+                        />
+                      ) : (
+                        <text
+                          x={0}
+                          y={0.8}
+                          textAnchor="middle"
+                          className="fill-white/80 text-[3.2px] font-bold"
+                        >
+                          {(seg.username || '?').slice(0, 1).toUpperCase()}
+                        </text>
+                      )}
+                    </g>
+                  </g>
+                )
+              })}
+            </g>
+          </g>
+
+          {/* Perfect outer ring on top of segments */}
+          <circle
+            cx={CX}
+            cy={CY}
+            r={OUTER_R}
+            fill="none"
+            stroke="rgba(255,255,255,0.22)"
+            strokeWidth={1.2}
+          />
+
+          {/* Compact hub */}
+          <defs>
+            <radialGradient id="roll-hub-grad" cx="50%" cy="40%" r="70%">
+              <stop offset="0%" stopColor="#1c1728" />
+              <stop offset="100%" stopColor="#0a0810" />
+            </radialGradient>
+          </defs>
+          <circle cx={CX} cy={CY} r={HUB_R} fill="#0a0810" stroke="rgba(255,255,255,0.12)" strokeWidth={0.6} />
+          <circle cx={CX} cy={CY} r={HUB_R - 0.4} fill="url(#roll-hub-grad)" />
+          {status === 'waiting' && pot > 0 ? (
+            <text
+              x={CX}
+              y={CY - 4}
+              textAnchor="middle"
+              className="fill-white/40 text-[2.6px] font-semibold uppercase"
+            >
+              Всего
+            </text>
+          ) : null}
+          <text x={CX} y={CY + 1.8} textAnchor="middle" className={centerLabel.className}>
+            {centerLabel.text}
+          </text>
+        </svg>
 
         <RollConfetti active={showConfetti} burstKey={confettiKey} />
       </div>
@@ -227,21 +313,6 @@ export function RollWheel({ round, countdownMs, spinClock, showConfetti, confett
         {statusLabel(round)}
       </p>
     </div>
-  )
-}
-
-function playersWaitingLabel(round: RollRound | null) {
-  if (!round || round.status !== 'waiting') {
-    return null
-  }
-  const need = Math.max(0, (round.maxPlayers || 2) - (round.players?.length || 0))
-  if (need <= 0) {
-    return null
-  }
-  return (
-    <p className="mt-0.5 px-1 text-center text-[8px] leading-tight text-white/40">
-      Ждём ещё {need}
-    </p>
   )
 }
 

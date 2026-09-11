@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 
 import { withStore } from './store.mjs'
 import { addCoins, spendCoins, TX_TYPE, utcNow } from './wallet.mjs'
+import { broadcastRollEvent, getRollSseClientCount } from './roll-bus.mjs'
 
 export const ROLL_MAX_PLAYERS = 2
 export const ROLL_MIN_BET = 100
@@ -13,6 +14,7 @@ export const ROLL_PAYOUT_BPS = 10_000
 export const ROLL_SPIN_EXTRA_TURNS = 6
 /** Keep pointer off segment edges (fraction of segment size). */
 export const ROLL_LANDING_EDGE_MARGIN = 0.12
+export const ROLL_TICK_MS = 200
 
 const SEGMENT_COLORS = ['#ff6a2b', '#b39ddb', '#4fc3f7', '#66bb6a', '#ffca28', '#ef5350']
 
@@ -150,6 +152,28 @@ export function computeTargetAngle(segments, winnerUserId, extraTurns = ROLL_SPI
   return base + Math.max(1, Math.floor(extraTurns)) * 360
 }
 
+function bumpRoundVersion(round) {
+  round.version = (Number(round.version) || 0) + 1
+  round.updatedAt = utcNow()
+  return round.version
+}
+
+function roundFingerprint(round) {
+  if (!round) {
+    return ''
+  }
+  return [
+    round.id,
+    round.status,
+    round.version,
+    (round.players || []).length,
+    round.bettingEndsAt || '',
+    round.spinStartedAt || '',
+    round.settledAt || '',
+    round.winnerUserId ?? '',
+  ].join('|')
+}
+
 function createEmptyRound(store) {
   const displayId = Number(store.rollMeta.nextDisplayId) || 100001
   store.rollMeta.nextDisplayId = displayId + 1
@@ -157,6 +181,7 @@ function createEmptyRound(store) {
     id: createRoundId(),
     displayId,
     status: 'waiting',
+    version: 1,
     players: [],
     bettingStartedAt: null,
     bettingEndsAt: null,
@@ -169,6 +194,7 @@ function createEmptyRound(store) {
     payout: 0,
     settledAt: null,
     createdAt: utcNow(),
+    updatedAt: utcNow(),
     completedAt: null,
   }
   store.rollRounds[round.id] = round
@@ -243,24 +269,29 @@ function settleRound(store, round) {
 
 /**
  * Advance round timers: betting → spin → settle → next waiting.
+ * Returns whether the round fingerprint changed.
  */
 export function advanceRollRoundOnStore(store, atMs = nowMs()) {
   ensureMaps(store)
   const round = getOrCreateCurrentRound(store)
   if (!round) {
-    return round
+    return { round: null, changed: false }
   }
+
+  const before = roundFingerprint(round)
 
   if (round.status === 'waiting' && (round.players || []).length >= ROLL_MAX_PLAYERS) {
     round.status = 'betting'
     round.bettingStartedAt = new Date(atMs).toISOString()
     round.bettingEndsAt = new Date(atMs + ROLL_BETTING_DURATION_MS).toISOString()
+    bumpRoundVersion(round)
   }
 
   if (round.status === 'betting') {
     const ends = Date.parse(round.bettingEndsAt || '')
     if (Number.isFinite(ends) && atMs >= ends) {
       round.status = 'locked'
+      bumpRoundVersion(round)
     }
   }
 
@@ -277,12 +308,14 @@ export function advanceRollRoundOnStore(store, atMs = nowMs()) {
     round.spinStartedAt = new Date(atMs).toISOString()
     round.spinEndsAt = new Date(atMs + ROLL_SPIN_DURATION_MS).toISOString()
     round.status = 'spinning'
+    bumpRoundVersion(round)
   }
 
   if (round.status === 'spinning') {
     const ends = Date.parse(round.spinEndsAt || '')
     if (Number.isFinite(ends) && atMs >= ends) {
       settleRound(store, round)
+      bumpRoundVersion(round)
     }
   }
 
@@ -293,7 +326,9 @@ export function advanceRollRoundOnStore(store, atMs = nowMs()) {
     }
   }
 
-  return getOrCreateCurrentRound(store)
+  const current = getOrCreateCurrentRound(store)
+  const changed = roundFingerprint(current) !== before || current.id !== round.id
+  return { round: current, changed }
 }
 
 function publicPlayer(player, total) {
@@ -321,6 +356,8 @@ function publicRound(round) {
     id: round.id,
     displayId: round.displayId,
     status: round.status,
+    version: Number(round.version) || 1,
+    updatedAt: round.updatedAt || round.createdAt,
     players,
     segments,
     pot: total,
@@ -345,7 +382,8 @@ function publicRound(round) {
 }
 
 function statePayload(store, viewerId = null) {
-  const round = advanceRollRoundOnStore(store)
+  advanceRollRoundOnStore(store)
+  const round = getOrCreateCurrentRound(store)
   const meta = store.rollMeta
   let lastResult = null
   if (meta.lastResultRoundId && store.rollRounds[meta.lastResultRoundId]) {
@@ -496,6 +534,7 @@ export function placeRollBetOnStore(store, userId, { bet, requestId = '' } = {})
     joinedAt: utcNow(),
   })
   round.pot = potOf(round)
+  bumpRoundVersion(round)
 
   if (reqKey) {
     store.events[reqKey] = { eventId: reqKey, done: true, createdAt: utcNow() }
@@ -517,7 +556,70 @@ export function getRollState(userId) {
 }
 
 export function placeRollBet(userId, input) {
-  return withStore((store) => placeRollBetOnStore(store, userId, input))
+  const result = withStore((store) => placeRollBetOnStore(store, userId, input))
+  // Push to all SSE clients immediately (second player visible without polling).
+  queueMicrotask(() => {
+    try {
+      publishRollSnapshots()
+    } catch (error) {
+      console.warn('[roll] publish after bet failed', error)
+    }
+  })
+  return result
+}
+
+function publishFromStore(store) {
+  // Shared snapshot; clients derive viewerInRound from players + own telegramId.
+  const payload = statePayload(store, null)
+  const status = payload.round?.status
+  let eventName = 'ROUND_UPDATED'
+  if (status === 'betting') {
+    eventName = 'BETTING_STARTED'
+  } else if (status === 'spinning') {
+    eventName = 'SPIN_STARTED'
+  } else if (status === 'completed') {
+    eventName = 'ROUND_FINISHED'
+  }
+  broadcastRollEvent(eventName, payload)
+  if (eventName !== 'ROUND_UPDATED') {
+    broadcastRollEvent('ROUND_UPDATED', payload)
+  }
+}
+
+/** Advance + push current round snapshot to SSE subscribers. */
+export function publishRollSnapshots() {
+  withStore((store) => {
+    advanceRollRoundOnStore(store)
+    if (!getRollSseClientCount()) {
+      return
+    }
+    publishFromStore(store)
+  })
+}
+
+let tickerStarted = false
+
+/**
+ * Server-side clock: advances BETTING→SPINNING→RESULT without waiting for client polls.
+ * This fixes hang at 00:00 when clients are rate-limited or idle.
+ */
+export function startRollTicker() {
+  if (tickerStarted) {
+    return
+  }
+  tickerStarted = true
+  setInterval(() => {
+    try {
+      withStore((store) => {
+        const result = advanceRollRoundOnStore(store)
+        if (result?.changed && getRollSseClientCount()) {
+          publishFromStore(store)
+        }
+      })
+    } catch (error) {
+      console.warn('[roll] ticker failed', error)
+    }
+  }, ROLL_TICK_MS).unref?.()
 }
 
 /** Read-only peek without advancing (tests). Prefer getRollStateOnStore in production. */

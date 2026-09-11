@@ -95,7 +95,12 @@ import {
   pickTowerCell,
   startTowerGame,
 } from './tower.mjs'
-import { getRollState, placeRollBet } from './roll.mjs'
+import {
+  getRollState,
+  placeRollBet,
+  startRollTicker,
+} from './roll.mjs'
+import { addRollSseClient } from './roll-bus.mjs'
 import { redeemPromoCode } from './promo.mjs'
 import {
   getUnreadNotificationsCount,
@@ -2357,12 +2362,68 @@ app.post(
 
 app.get(
   '/api/roll/state',
-  withEconomicUser(async (_req, res, telegramUser) => {
+  withUser(async (_req, res, telegramUser) => {
     bootstrapUser(telegramUser, '')
     const result = getRollState(telegramUser.id)
     res.json({
       ...result,
       user: toPublicUser(getUser(telegramUser.id)),
+    })
+  }),
+)
+
+app.get(
+  '/api/roll/stream',
+  withUser(async (req, res, telegramUser) => {
+    bootstrapUser(telegramUser, '')
+    res.status(200)
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+    res.setHeader('Cache-Control', 'no-cache, no-transform')
+    res.setHeader('Connection', 'keep-alive')
+    res.setHeader('X-Accel-Buffering', 'no')
+    if (typeof res.flushHeaders === 'function') {
+      res.flushHeaders()
+    }
+
+    const write = (chunk) => {
+      res.write(chunk)
+    }
+    const close = () => {
+      try {
+        res.end()
+      } catch {
+        // ignore
+      }
+    }
+
+    const remove = addRollSseClient({
+      userId: Number(telegramUser.id),
+      write,
+      close,
+    })
+
+    // Initial snapshot
+    try {
+      const snapshot = getRollState(telegramUser.id)
+      write(`event: ROUND_UPDATED\ndata: ${JSON.stringify(snapshot)}\n\n`)
+    } catch (error) {
+      console.warn('[roll] sse initial snapshot failed', error)
+    }
+
+    // Keepalive comments so proxies don't close idle streams.
+    const ping = setInterval(() => {
+      try {
+        write(`: ping ${Date.now()}\n\n`)
+      } catch {
+        clearInterval(ping)
+        remove()
+      }
+    }, 15_000)
+    ping.unref?.()
+
+    req.on('close', () => {
+      clearInterval(ping)
+      remove()
     })
   }),
 )
@@ -2567,6 +2628,7 @@ export function startHttpServer() {
     }
     startGiveawayScheduler()
     startBroadcastScheduler()
+    startRollTicker()
     void bootstrapKickFollowInfrastructure().then((result) => {
       if (result?.ok) {
         console.info('[kick-follow] webhook subscription ready', {
