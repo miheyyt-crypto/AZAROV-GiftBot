@@ -1,6 +1,6 @@
 export const PRODUCTS = [
   { id: 'welvura-balance-200', name: '200 рублей на Welvura', price: 5555, available: true, requireWelvuraId: true },
-  { id: 'welvura-balance-500', name: '500 рублей на Welvura', price: 5555, available: true, requireWelvuraId: true },
+  { id: 'welvura-balance-500', name: '500 рублей на Welvura', price: 11111, available: true, requireWelvuraId: true },
   { id: 'cash-5000', name: '5 000 ₽', price: 199999, available: true, requireWelvuraId: true },
   { id: 'stream-donate', name: 'Донат на стрим', price: 1000, available: true },
   { id: 'stream-music', name: 'Заказ музыки', price: 4000, available: true },

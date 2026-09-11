@@ -51,7 +51,7 @@ export const products: ShopProduct[] = [
   {
     id: 'welvura-balance-500',
     name: '500 рублей на Welvura',
-    price: 5555,
+    price: 11111,
     currency: 'coins',
     category: 'money',
     image: welvura200Image,
