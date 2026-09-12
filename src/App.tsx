@@ -12,6 +12,9 @@ import {
   LeaderboardPage,
   ProfilePage,
   TasksPage,
+  loadMinesPage,
+  loadRollRoute,
+  loadTowerPage,
   withTabPerfPage,
 } from '@/lib/lazy-routes'
 import { wrapLazyImport } from '@/lib/tab-perf'
@@ -57,17 +60,17 @@ const ReferralBattlePage = lazy(
 )
 const MinesPage = lazy(
   wrapLazyImport('MinesPage', () =>
-    import('@/pages/MinesPage').then((m) => ({ default: m.MinesPage })),
+    loadMinesPage().then((m) => ({ default: m.MinesPage })),
   ),
 )
 const TowerPage = lazy(
   wrapLazyImport('TowerPage', () =>
-    import('@/pages/TowerPage').then((m) => ({ default: m.TowerPage })),
+    loadTowerPage().then((m) => ({ default: m.TowerPage })),
   ),
 )
 const RollRoute = lazy(
   wrapLazyImport('RollRoute', () =>
-    import('@/pages/RollRoute').then((m) => ({ default: m.RollRoute })),
+    loadRollRoute().then((m) => ({ default: m.RollRoute })),
   ),
 )
 const NotFoundPage = lazy(

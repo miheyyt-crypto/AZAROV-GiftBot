@@ -10,6 +10,7 @@ import {
 
 import { LoginScreen } from '@/components/LoginScreen'
 import { MaintenanceScreen } from '@/components/MaintenanceScreen'
+import { BootLoadingScreen } from '@/components/BootLoadingScreen'
 import {
   completeTelegramWebLogin,
   getWebAuthUser,
@@ -18,6 +19,14 @@ import {
   subscribeAuth,
 } from '@/lib/auth'
 import { armBootSplashWatchdog, signalAppBootReady } from '@/lib/boot-splash'
+import {
+  getBootPreloadSnapshot,
+  markBootSessionSettled,
+  startColdStartPreload,
+  subscribeBootPreload,
+  BOOT_CHUNK_TIMEOUT_MS,
+  type BootPreloadSnapshot,
+} from '@/lib/boot-preload'
 import { captureStartParam } from '@/lib/startParam'
 import { bootstrapSession, sessionBootLog } from '@/lib/session'
 import { initTelegramWebApp } from '@/lib/telegram'
@@ -74,9 +83,24 @@ export function AuthGate({ children }: AuthGateProps) {
   const [error, setError] = useState<string | null>(null)
   const [loginBusy, setLoginBusy] = useState(false)
   const [maintenanceMessage, setMaintenanceMessage] = useState<string | null>(null)
+  const [preload, setPreload] = useState<BootPreloadSnapshot>(() => getBootPreloadSnapshot())
+  /** Safety valve: never block the app shell forever if chunk preload stalls. */
+  const [preloadGateOpen, setPreloadGateOpen] = useState(false)
   const [, setTick] = useState(0)
 
   useEffect(() => subscribeAuth(() => setTick((value) => value + 1)), [])
+
+  useEffect(() => {
+    startColdStartPreload()
+    return subscribeBootPreload(setPreload)
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPreloadGateOpen(true)
+    }, BOOT_CHUNK_TIMEOUT_MS)
+    return () => window.clearTimeout(timer)
+  }, [])
 
   useEffect(() => {
     armBootSplashWatchdog()
@@ -155,6 +179,9 @@ export function AuthGate({ children }: AuthGateProps) {
         setError('Не удалось проверить сессию. Попробуй войти снова.')
       } finally {
         window.clearTimeout(timeout)
+        if (!cancelled) {
+          markBootSessionSettled()
+        }
       }
     }
 
@@ -180,6 +207,7 @@ export function AuthGate({ children }: AuthGateProps) {
       await completeTelegramWebLogin(payload)
       setStatus('authenticated')
       setSessionReady(true)
+      markBootSessionSettled()
     } catch (err) {
       const message =
         err instanceof Error && err.message
@@ -189,11 +217,13 @@ export function AuthGate({ children }: AuthGateProps) {
         setMaintenanceMessage(message)
         setStatus('unauthenticated')
         setSessionReady(false)
+        markBootSessionSettled()
         return
       }
       setError(message)
       setStatus('unauthenticated')
       setSessionReady(false)
+      markBootSessionSettled()
     } finally {
       setLoginBusy(false)
     }
@@ -222,7 +252,7 @@ export function AuthGate({ children }: AuthGateProps) {
   }
 
   if (status === 'loading') {
-    return null
+    return <BootLoadingScreen snapshot={preload} />
   }
 
   if (status === 'unauthenticated') {
@@ -235,6 +265,16 @@ export function AuthGate({ children }: AuthGateProps) {
             void handleTelegramAuth(user)
           }}
         />
+      </AuthContext.Provider>
+    )
+  }
+
+  // Authenticated: keep HTML splash / signalAppBootReady semantics unchanged.
+  // Wait for immediate tab preload (or 10s safety valve) — not deferred Roll/Mines/Tower.
+  if (!preload.chunksDone && !preloadGateOpen) {
+    return (
+      <AuthContext.Provider value={value}>
+        <BootLoadingScreen snapshot={preload} />
       </AuthContext.Provider>
     )
   }

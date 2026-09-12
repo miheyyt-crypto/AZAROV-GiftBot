@@ -6,6 +6,7 @@ import App from '@/App'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { NotificationProvider } from '@/components/NotificationProvider'
 import { armBootSplashWatchdog } from '@/lib/boot-splash'
+import { startColdStartPreload, startDeferredGamePreload } from '@/lib/boot-preload'
 import { captureStartParam } from '@/lib/startParam'
 import { bootstrapViewportEnvironment, getTelegramWebApp, installDesktopRootWheelBridge } from '@/lib/telegram'
 import '@/index.css'
@@ -13,6 +14,7 @@ import '@/index.css'
 // Persist Telegram start_param before React mounts / WebApp.ready().
 captureStartParam()
 armBootSplashWatchdog()
+startColdStartPreload()
 bootstrapViewportEnvironment(getTelegramWebApp())
 installDesktopRootWheelBridge()
 if (typeof window !== 'undefined') {
@@ -33,3 +35,12 @@ createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </StrictMode>,
 )
+
+// After first visual commit: double-rAF, then warm Roll / Mines / Tower (module singleton).
+if (typeof window !== 'undefined') {
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      startDeferredGamePreload()
+    })
+  })
+}

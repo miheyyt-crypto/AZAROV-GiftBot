@@ -18,7 +18,7 @@ export function withTabPerfPage<P extends object>(
   return TabPerfWrapped
 }
 
-/** Shared dynamic import — used by React.lazy and idle prefetch. */
+/** Shared dynamic import — used by React.lazy and cold-start preload. */
 export function loadLeaderboardPage() {
   return import('@/pages/LeaderboardPage')
 }
@@ -33,6 +33,18 @@ export function loadFriendsPage() {
 
 export function loadProfilePage() {
   return import('@/pages/Profile')
+}
+
+export function loadRollRoute() {
+  return import('@/pages/RollRoute')
+}
+
+export function loadMinesPage() {
+  return import('@/pages/MinesPage')
+}
+
+export function loadTowerPage() {
+  return import('@/pages/TowerPage')
 }
 
 export const LeaderboardPage = lazy(
