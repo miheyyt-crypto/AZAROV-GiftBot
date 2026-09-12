@@ -20,7 +20,8 @@ function scheduleIdle(fn: () => void, timeoutMs: number): IdleHandle {
 /**
  * After Home is interactive: prefetch main-tab JS chunks one-by-one in idle time.
  * Uses the same loaders as React.lazy (no duplicate import() sources).
- * Never prefetches images / Roll / Mines / Tower / Shop.
+ * Order: Tasks → Friends → Profile → Leaderboard → RollRoute (low priority).
+ * Never prefetches images / Mines / Tower / Shop.
  * Runs at most once per page session.
  *
  * Cleanup is intentionally a no-op: Home unmount / StrictMode remount must not
@@ -37,6 +38,8 @@ export function startMainTabChunkPrefetch(): () => void {
     { name: 'Friends', load: loadFriendsPage },
     { name: 'Profile', load: loadProfilePage },
     { name: 'Leaderboard', load: loadLeaderboardPage },
+    /** Same module URL as App.tsx lazy(RollRoute) — warms ESM/HTTP cache only. */
+    { name: 'RollRoute', load: () => import('@/pages/RollRoute') },
   ]
 
   let index = 0
