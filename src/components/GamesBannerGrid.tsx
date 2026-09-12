@@ -3,14 +3,17 @@ import { useNavigate } from 'react-router-dom'
 import minesBanner from '@/assets/banners/mines-banner.webp'
 import rollBanner from '@/assets/banners/roll-banner.jpg'
 import towerBanner from '@/assets/banners/tower-banner.webp'
+import { DeferredImage } from '@/components/DeferredImage'
 import { GameBanner } from '@/components/GameBanner'
 import { ROUTES } from '@/lib/constants'
 
 type GamesBannerGridProps = {
   className?: string
+  /** Home above-fold can eager-load; Shop should defer. */
+  eager?: boolean
 }
 
-export function GamesBannerGrid({ className = '' }: GamesBannerGridProps) {
+export function GamesBannerGrid({ className = '', eager = false }: GamesBannerGridProps) {
   const navigate = useNavigate()
 
   return (
@@ -27,24 +30,24 @@ export function GamesBannerGrid({ className = '' }: GamesBannerGridProps) {
           'transition-transform duration-150 ease-out active:scale-[0.97]',
         ].join(' ')}
       >
-        <img
+        <DeferredImage
           src={rollBanner}
           alt=""
           aria-hidden="true"
+          eager={eager}
           className="size-full object-cover"
-          draggable={false}
-          decoding="async"
-          fetchPriority="high"
         />
       </button>
       <GameBanner
         ariaLabel="Открыть Mines"
         image={minesBanner}
+        imageEager={eager}
         onClick={() => navigate(ROUTES.mines)}
       />
       <GameBanner
         ariaLabel="Открыть Tower"
         image={towerBanner}
+        imageEager={eager}
         onClick={() => navigate(ROUTES.tower)}
       />
     </div>

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { CoinIcon } from '@/components/CoinIcon'
+import { DeferredImage } from '@/components/DeferredImage'
 import type { ShopCardTheme } from '@/lib/shop-card-theme'
 
 interface ShopOfferCardProps {
@@ -11,6 +12,8 @@ interface ShopOfferCardProps {
   badge?: ReactNode
   footer: ReactNode
   onClick: () => void
+  /** First row of products can load immediately. */
+  imageEager?: boolean
 }
 
 export function ShopOfferCard({
@@ -21,6 +24,7 @@ export function ShopOfferCard({
   badge,
   footer,
   onClick,
+  imageEager = false,
 }: ShopOfferCardProps) {
   return (
     <button
@@ -32,19 +36,18 @@ export function ShopOfferCard({
         theme.glow,
       ].join(' ')}
     >
-      <div className="relative aspect-[1.05] overflow-hidden">
+      <div className="relative aspect-[1.05] overflow-hidden bg-black/20">
         <div className={['absolute inset-0', theme.radial].join(' ')} aria-hidden />
-        <img
+        <DeferredImage
           src={image}
           alt=""
+          eager={imageEager}
           className={[
             'relative z-[1] size-full object-contain p-3 drop-shadow-[0_8px_18px_rgb(0_0_0/35%)]',
             imageClassName,
           ]
             .filter(Boolean)
             .join(' ')}
-          loading="lazy"
-          decoding="async"
         />
         {badge}
       </div>

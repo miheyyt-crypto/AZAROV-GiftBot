@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect, type ComponentType } from 'react'
 import { Route, Routes } from 'react-router-dom'
 
 import { AuthGate } from '@/components/AuthGate'
@@ -7,44 +7,107 @@ import { ServerNotificationToasts } from '@/components/ServerNotificationToasts'
 import { useAppSession } from '@/hooks/useAppSession'
 import { AppLayout } from '@/layouts/AppLayout'
 import { ROUTES } from '@/lib/constants'
+import { tabPerfFirstRender, tabPerfMounted, wrapLazyImport } from '@/lib/tab-perf'
 import { Home } from '@/pages/Home'
+import { Shop } from '@/pages/Shop'
 
-const LeaderboardPage = lazy(() =>
-  import('@/pages/LeaderboardPage').then((m) => ({ default: m.LeaderboardPage })),
+/** DEBUG: TAB_PERF mount markers — no behavior change when TAB_PERF off. */
+function withTabPerfPage<P extends object>(
+  page: string,
+  Component: ComponentType<P>,
+): ComponentType<P> {
+  function TabPerfWrapped(props: P) {
+    tabPerfFirstRender(page)
+    useEffect(() => {
+      tabPerfMounted(page)
+    }, [])
+    return <Component {...props} />
+  }
+  TabPerfWrapped.displayName = `TabPerf(${page})`
+  return TabPerfWrapped
+}
+
+const LeaderboardPage = lazy(
+  wrapLazyImport('LeaderboardPage', () =>
+    import('@/pages/LeaderboardPage').then((m) => ({ default: m.LeaderboardPage })),
+  ),
 )
-const TasksPage = lazy(() => import('@/pages/Tasks').then((m) => ({ default: m.Tasks })))
-const ShopPage = lazy(() => import('@/pages/Shop').then((m) => ({ default: m.Shop })))
-const FriendsPage = lazy(() => import('@/pages/Friends').then((m) => ({ default: m.Friends })))
-const ProfilePage = lazy(() => import('@/pages/Profile').then((m) => ({ default: m.Profile })))
-const OperationsHistoryPage = lazy(() =>
-  import('@/pages/OperationsHistoryPage').then((m) => ({ default: m.OperationsHistoryPage })),
+const TasksPage = lazy(
+  wrapLazyImport('Tasks', () =>
+    import('@/pages/Tasks').then((m) => ({
+      default: withTabPerfPage('tasks', m.Tasks),
+    })),
+  ),
 )
-const OrdersPage = lazy(() =>
-  import('@/pages/OrdersPage').then((m) => ({ default: m.OrdersPage })),
+/** Eager Shop: avoid cold Suspense on first Magazin tap. Cases stay lazy inside Shop. */
+const ShopPage = withTabPerfPage('shop', Shop)
+const FriendsPage = lazy(
+  wrapLazyImport('Friends', () =>
+    import('@/pages/Friends').then((m) => ({
+      default: withTabPerfPage('friends', m.Friends),
+    })),
+  ),
 )
-const GiveawaysPage = lazy(() =>
-  import('@/pages/Giveaways').then((m) => ({ default: m.Giveaways })),
+const ProfilePage = lazy(
+  wrapLazyImport('Profile', () =>
+    import('@/pages/Profile').then((m) => ({
+      default: withTabPerfPage('profile', m.Profile),
+    })),
+  ),
 )
-const GiveawayDetailPage = lazy(() =>
-  import('@/pages/GiveawayDetail').then((m) => ({ default: m.GiveawayDetail })),
+const OperationsHistoryPage = lazy(
+  wrapLazyImport('OperationsHistoryPage', () =>
+    import('@/pages/OperationsHistoryPage').then((m) => ({
+      default: m.OperationsHistoryPage,
+    })),
+  ),
 )
-const CommunityAccessPage = lazy(() =>
-  import('@/pages/CommunityAccess').then((m) => ({ default: m.CommunityAccess })),
+const OrdersPage = lazy(
+  wrapLazyImport('OrdersPage', () =>
+    import('@/pages/OrdersPage').then((m) => ({ default: m.OrdersPage })),
+  ),
 )
-const ReferralBattlePage = lazy(() =>
-  import('@/pages/ReferralBattlePage').then((m) => ({ default: m.ReferralBattlePage })),
+const GiveawaysPage = lazy(
+  wrapLazyImport('Giveaways', () =>
+    import('@/pages/Giveaways').then((m) => ({ default: m.Giveaways })),
+  ),
 )
-const MinesPage = lazy(() =>
-  import('@/pages/MinesPage').then((m) => ({ default: m.MinesPage })),
+const GiveawayDetailPage = lazy(
+  wrapLazyImport('GiveawayDetail', () =>
+    import('@/pages/GiveawayDetail').then((m) => ({ default: m.GiveawayDetail })),
+  ),
 )
-const TowerPage = lazy(() =>
-  import('@/pages/TowerPage').then((m) => ({ default: m.TowerPage })),
+const CommunityAccessPage = lazy(
+  wrapLazyImport('CommunityAccess', () =>
+    import('@/pages/CommunityAccess').then((m) => ({ default: m.CommunityAccess })),
+  ),
 )
-const RollRoute = lazy(() =>
-  import('@/pages/RollRoute').then((m) => ({ default: m.RollRoute })),
+const ReferralBattlePage = lazy(
+  wrapLazyImport('ReferralBattlePage', () =>
+    import('@/pages/ReferralBattlePage').then((m) => ({
+      default: m.ReferralBattlePage,
+    })),
+  ),
 )
-const NotFoundPage = lazy(() =>
-  import('@/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })),
+const MinesPage = lazy(
+  wrapLazyImport('MinesPage', () =>
+    import('@/pages/MinesPage').then((m) => ({ default: m.MinesPage })),
+  ),
+)
+const TowerPage = lazy(
+  wrapLazyImport('TowerPage', () =>
+    import('@/pages/TowerPage').then((m) => ({ default: m.TowerPage })),
+  ),
+)
+const RollRoute = lazy(
+  wrapLazyImport('RollRoute', () =>
+    import('@/pages/RollRoute').then((m) => ({ default: m.RollRoute })),
+  ),
+)
+const NotFoundPage = lazy(
+  wrapLazyImport('NotFoundPage', () =>
+    import('@/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })),
+  ),
 )
 
 function RouteFallback() {

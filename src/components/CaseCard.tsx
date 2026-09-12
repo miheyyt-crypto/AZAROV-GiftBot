@@ -1,6 +1,7 @@
 import { Lock } from 'lucide-react'
 
 import { CoinIcon } from '@/components/CoinIcon'
+import { DeferredImage } from '@/components/DeferredImage'
 import { formatBalance } from '@/lib/balance'
 import { getReferralCaseRemainingLabel } from '@/lib/referral'
 import { getCaseCardTheme } from '@/lib/shop-card-theme'
@@ -38,22 +39,19 @@ export function CaseCard({
       <button
         type="button"
         onClick={() => onOpen(giftCase)}
-        className="relative aspect-[1.05] w-full overflow-hidden text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-neon-purple"
+        className="relative aspect-[1.05] w-full overflow-hidden bg-black/20 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-neon-purple"
         aria-label={giftCase.name}
       >
         <div className={['absolute inset-0', theme.radial].join(' ')} aria-hidden />
-        <img
+        <DeferredImage
           src={giftCase.image}
           alt=""
-          loading="lazy"
-          decoding="async"
           className={[
             'relative z-[1] size-full drop-shadow-[0_8px_18px_rgb(0_0_0/35%)]',
             isCinematicArt
               ? 'object-cover object-center scale-[1.12]'
               : 'object-contain scale-[1.08] p-1.5',
           ].join(' ')}
-          draggable={false}
         />
         {/* Soft haze so art fades into the card body instead of a hard cut */}
         <div

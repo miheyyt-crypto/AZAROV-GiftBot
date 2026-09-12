@@ -1,5 +1,5 @@
 import { ChevronRight } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { CoinBalance } from '@/components/BalanceCard'
@@ -15,14 +15,46 @@ import { useBalance } from '@/hooks/useBalance'
 import { useUserAccount } from '@/hooks/useUserAccount'
 import { ROUTES } from '@/lib/constants'
 import {
+  tabPerfMark,
+  tabPerfResetImageStats,
+  tabPerfShopImageSummary,
+} from '@/lib/tab-perf'
+import {
   hasCompletedWelvuraTask1,
   productRequiresWelvuraReferral,
 } from '@/lib/welvura-referral'
-import { CasesPage } from '@/pages/CasesPage'
 import type { ProductCategory, ShopOrder, ShopProduct, ShopSection } from '@/types/shop'
+
+/** Cases chunk + case images load only when user opens Cases tab. */
+const CasesPage = lazy(() =>
+  import('@/pages/CasesPage').then((m) => ({ default: m.CasesPage })),
+)
 
 function resolveShopSection(value: string | null): ShopSection {
   return value === 'cases' ? 'cases' : 'shop'
+}
+
+function CasesFallback() {
+  return (
+    <div className="grid grid-cols-2 gap-3.5">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div
+          key={i}
+          className="aspect-[1.05] animate-pulse rounded-[20px] border border-white/8 bg-white/[0.04]"
+        />
+      ))}
+    </div>
+  )
+}
+
+function GamesBannerSkeleton() {
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-3" aria-hidden>
+      <div className="col-span-2 aspect-[2.08/1] animate-pulse rounded-[20px] bg-white/[0.04]" />
+      <div className="aspect-square animate-pulse rounded-[20px] bg-white/[0.04]" />
+      <div className="aspect-square animate-pulse rounded-[20px] bg-white/[0.04]" />
+    </div>
+  )
 }
 
 export function Shop() {
@@ -37,6 +69,8 @@ export function Shop() {
   const [selectedProduct, setSelectedProduct] = useState<ShopProduct | null>(null)
   const [successOrder, setSuccessOrder] = useState<ShopOrder | null>(null)
   const [showReferralGate, setShowReferralGate] = useState(false)
+  /** Defer game banners so Shop chrome paints first; never blocks first paint. */
+  const [showGameBanners, setShowGameBanners] = useState(false)
 
   const products = useMemo(() => getProducts(), [])
   const visibleProducts = useMemo(
@@ -67,6 +101,39 @@ export function Shop() {
     setSection(resolveShopSection(searchParams.get('section')))
   }, [searchParams])
 
+  useEffect(() => {
+    tabPerfResetImageStats()
+    tabPerfMark('shop first paint chrome')
+    let cancelled = false
+    let idleId: number | null = null
+    const useRic = typeof window.requestIdleCallback === 'function'
+    const revealBanners = () => {
+      if (!cancelled) {
+        setShowGameBanners(true)
+        tabPerfMark('shop game banners reveal')
+      }
+    }
+    if (useRic) {
+      idleId = window.requestIdleCallback(revealBanners, { timeout: 900 })
+    } else {
+      idleId = window.setTimeout(revealBanners, 120) as unknown as number
+    }
+    const summaryTimer = window.setTimeout(() => {
+      tabPerfShopImageSummary({ section })
+    }, 2500)
+    return () => {
+      cancelled = true
+      if (idleId != null) {
+        if (useRic) {
+          window.cancelIdleCallback?.(idleId)
+        } else {
+          window.clearTimeout(idleId)
+        }
+      }
+      window.clearTimeout(summaryTimer)
+    }
+  }, [section])
+
   return (
     <div className="ui-page">
       <header className="mb-5 flex items-center justify-between gap-3">
@@ -81,10 +148,16 @@ export function Shop() {
       </div>
 
       {section === 'cases' ? (
-        <CasesPage />
+        <Suspense fallback={<CasesFallback />}>
+          <CasesPage />
+        </Suspense>
       ) : (
         <>
-          <GamesBannerGrid className="mb-4" />
+          {showGameBanners ? (
+            <GamesBannerGrid className="mb-4" eager={false} />
+          ) : (
+            <GamesBannerSkeleton />
+          )}
 
           <button
             type="button"
@@ -102,11 +175,12 @@ export function Shop() {
           </div>
 
           <div className="grid grid-cols-2 items-stretch gap-3.5">
-            {visibleProducts.map((product) => (
+            {visibleProducts.map((product, index) => (
               <ProductCard
                 key={product.id}
                 product={product}
                 onBuy={handleBuy}
+                imageEager={index < 2}
               />
             ))}
           </div>

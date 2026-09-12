@@ -44,7 +44,7 @@ export function Home() {
         <StreamStreakCard />
       </div>
 
-      <GamesBannerGrid className="mt-4" />
+      <GamesBannerGrid className="mt-4" eager />
 
       <div className="mt-6">
         <GiveawaysSection />

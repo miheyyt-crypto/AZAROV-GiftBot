@@ -1,12 +1,21 @@
+import { DeferredImage } from '@/components/DeferredImage'
+
 type GameBannerProps = {
   ariaLabel: string
   onClick: () => void
   /** Optional cover image — leave unset for an empty placeholder square. */
   image?: string
   className?: string
+  imageEager?: boolean
 }
 
-export function GameBanner({ ariaLabel, onClick, image, className = '' }: GameBannerProps) {
+export function GameBanner({
+  ariaLabel,
+  onClick,
+  image,
+  className = '',
+  imageEager = false,
+}: GameBannerProps) {
   return (
     <button
       type="button"
@@ -21,14 +30,12 @@ export function GameBanner({ ariaLabel, onClick, image, className = '' }: GameBa
       ].join(' ')}
     >
       {image ? (
-        <img
+        <DeferredImage
           src={image}
           alt=""
           aria-hidden="true"
+          eager={imageEager}
           className="size-full object-cover"
-          draggable={false}
-          decoding="async"
-          fetchPriority="high"
         />
       ) : null}
     </button>

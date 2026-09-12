@@ -6,9 +6,10 @@ import type { ShopProduct } from '@/types/shop'
 interface ProductCardProps {
   product: ShopProduct
   onBuy: (product: ShopProduct) => void
+  imageEager?: boolean
 }
 
-export function ProductCard({ product, onBuy }: ProductCardProps) {
+export function ProductCard({ product, onBuy, imageEager = false }: ProductCardProps) {
   const theme = productCardTheme[product.category]
 
   return (
@@ -16,6 +17,7 @@ export function ProductCard({ product, onBuy }: ProductCardProps) {
       theme={theme}
       image={product.image}
       imageClassName={product.imageClassName}
+      imageEager={imageEager}
       title={product.name}
       onClick={() => onBuy(product)}
       badge={
