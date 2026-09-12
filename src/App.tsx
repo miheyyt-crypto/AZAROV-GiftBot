@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, type ComponentType } from 'react'
+import { lazy } from 'react'
 import { Route, Routes } from 'react-router-dom'
 
 import { AuthGate } from '@/components/AuthGate'
@@ -7,54 +7,20 @@ import { ServerNotificationToasts } from '@/components/ServerNotificationToasts'
 import { useAppSession } from '@/hooks/useAppSession'
 import { AppLayout } from '@/layouts/AppLayout'
 import { ROUTES } from '@/lib/constants'
-import { tabPerfFirstRender, tabPerfMounted, wrapLazyImport } from '@/lib/tab-perf'
+import {
+  FriendsPage,
+  LeaderboardPage,
+  ProfilePage,
+  TasksPage,
+  withTabPerfPage,
+} from '@/lib/lazy-routes'
+import { wrapLazyImport } from '@/lib/tab-perf'
 import { Home } from '@/pages/Home'
 import { Shop } from '@/pages/Shop'
 
-/** DEBUG: TAB_PERF mount markers — no behavior change when TAB_PERF off. */
-function withTabPerfPage<P extends object>(
-  page: string,
-  Component: ComponentType<P>,
-): ComponentType<P> {
-  function TabPerfWrapped(props: P) {
-    tabPerfFirstRender(page)
-    useEffect(() => {
-      tabPerfMounted(page)
-    }, [])
-    return <Component {...props} />
-  }
-  TabPerfWrapped.displayName = `TabPerf(${page})`
-  return TabPerfWrapped
-}
-
-const LeaderboardPage = lazy(
-  wrapLazyImport('LeaderboardPage', () =>
-    import('@/pages/LeaderboardPage').then((m) => ({ default: m.LeaderboardPage })),
-  ),
-)
-const TasksPage = lazy(
-  wrapLazyImport('Tasks', () =>
-    import('@/pages/Tasks').then((m) => ({
-      default: withTabPerfPage('tasks', m.Tasks),
-    })),
-  ),
-)
 /** Eager Shop: avoid cold Suspense on first Magazin tap. Cases stay lazy inside Shop. */
 const ShopPage = withTabPerfPage('shop', Shop)
-const FriendsPage = lazy(
-  wrapLazyImport('Friends', () =>
-    import('@/pages/Friends').then((m) => ({
-      default: withTabPerfPage('friends', m.Friends),
-    })),
-  ),
-)
-const ProfilePage = lazy(
-  wrapLazyImport('Profile', () =>
-    import('@/pages/Profile').then((m) => ({
-      default: withTabPerfPage('profile', m.Profile),
-    })),
-  ),
-)
+
 const OperationsHistoryPage = lazy(
   wrapLazyImport('OperationsHistoryPage', () =>
     import('@/pages/OperationsHistoryPage').then((m) => ({
@@ -110,14 +76,6 @@ const NotFoundPage = lazy(
   ),
 )
 
-function RouteFallback() {
-  return (
-    <div className="flex min-h-[40vh] items-center justify-center px-4 text-sm text-muted">
-      Загрузка...
-    </div>
-  )
-}
-
 /** Runs only under AuthGate so auth-dependent hooks have a provider. */
 function AuthenticatedSessionEffects() {
   useAppSession()
@@ -130,28 +88,26 @@ export default function App() {
       <AuthenticatedSessionEffects />
       <PresenceHeartbeat />
       <ServerNotificationToasts />
-      <Suspense fallback={<RouteFallback />}>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route path={ROUTES.home} element={<Home />} />
-            <Route path={ROUTES.leaderboard} element={<LeaderboardPage />} />
-            <Route path={ROUTES.tasks} element={<TasksPage />} />
-            <Route path={ROUTES.shop} element={<ShopPage />} />
-            <Route path={ROUTES.friends} element={<FriendsPage />} />
-            <Route path={ROUTES.profile} element={<ProfilePage />} />
-            <Route path={ROUTES.operations} element={<OperationsHistoryPage />} />
-            <Route path={ROUTES.orders} element={<OrdersPage />} />
-            <Route path={ROUTES.giveaways} element={<GiveawaysPage />} />
-            <Route path={`${ROUTES.giveaways}/:giveawayId`} element={<GiveawayDetailPage />} />
-            <Route path={ROUTES.communityAccess} element={<CommunityAccessPage />} />
-            <Route path={ROUTES.referralBattle} element={<ReferralBattlePage />} />
-            <Route path={ROUTES.mines} element={<MinesPage />} />
-            <Route path={ROUTES.tower} element={<TowerPage />} />
-            <Route path={ROUTES.roll} element={<RollRoute />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Route>
-        </Routes>
-      </Suspense>
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route path={ROUTES.home} element={<Home />} />
+          <Route path={ROUTES.leaderboard} element={<LeaderboardPage />} />
+          <Route path={ROUTES.tasks} element={<TasksPage />} />
+          <Route path={ROUTES.shop} element={<ShopPage />} />
+          <Route path={ROUTES.friends} element={<FriendsPage />} />
+          <Route path={ROUTES.profile} element={<ProfilePage />} />
+          <Route path={ROUTES.operations} element={<OperationsHistoryPage />} />
+          <Route path={ROUTES.orders} element={<OrdersPage />} />
+          <Route path={ROUTES.giveaways} element={<GiveawaysPage />} />
+          <Route path={`${ROUTES.giveaways}/:giveawayId`} element={<GiveawayDetailPage />} />
+          <Route path={ROUTES.communityAccess} element={<CommunityAccessPage />} />
+          <Route path={ROUTES.referralBattle} element={<ReferralBattlePage />} />
+          <Route path={ROUTES.mines} element={<MinesPage />} />
+          <Route path={ROUTES.tower} element={<TowerPage />} />
+          <Route path={ROUTES.roll} element={<RollRoute />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+      </Routes>
     </AuthGate>
   )
 }
