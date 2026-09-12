@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 
 import { CommunityAccessBanner } from '@/components/CommunityAccessBanner'
 import { DailyFreeCase } from '@/components/DailyFreeCase'
@@ -15,7 +15,6 @@ import { useAuth } from '@/components/AuthGate'
 import { getHomeBanners } from '@/data/banners'
 import { useUserAccount } from '@/hooks/useUserAccount'
 import { getFreeCaseRequirements } from '@/lib/free-case-requirements'
-import { startMainTabChunkPrefetch } from '@/lib/prefetch-tabs'
 
 export function Home() {
   const { sessionReady } = useAuth()
@@ -25,13 +24,6 @@ export function Home() {
   const nudgeCount = sessionReady
     ? Number(!requirements.kickLinked) + Number(!requirements.telegramTaskCompleted)
     : 0
-
-  useEffect(() => {
-    if (!sessionReady) {
-      return
-    }
-    return startMainTabChunkPrefetch()
-  }, [sessionReady])
 
   return (
     <div className="ui-page">
