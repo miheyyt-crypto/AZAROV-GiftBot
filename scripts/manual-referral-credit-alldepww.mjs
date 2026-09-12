@@ -1,8 +1,10 @@
 /**
- * One-shot admin adjustment: +25 active Kick referrals for @alldepww (8014934649).
+ * One-shot admin adjustment: +25 active Kick referrals + 25000 coins for @alldepww (8014934649).
  *
- * Does NOT create users / kickAccounts / store.referrals / coin ledger entries.
- * Idempotent via store.events + store.manualReferralCredits creditKey.
+ * Does NOT create users / kickAccounts / store.referrals.
+ * Does NOT call activateReferralOnStore.
+ * Coins via wallet.addCoins(TX_TYPE.ADMIN_ADJUSTMENT); Friends «Заработано» via user.referralEarnings.
+ * Idempotent via store.events + store.manualReferralCredits creditKey / coinEventId.
  *
  * Usage:
  *   node scripts/manual-referral-credit-alldepww.mjs           # plan only (default)
@@ -21,6 +23,7 @@ import {
   ALLDEPWW_MANUAL_CREDIT,
   applyManualReferralCreditOnStore,
   getManualReferralCreditAmount,
+  getManualReferralCreditRecord,
   planManualReferralCredit,
 } from '../server/manual-referral-credit.mjs'
 import {
@@ -48,6 +51,7 @@ function backupStoreFile() {
 function snapshot(store) {
   const tgId = ALLDEPWW_MANUAL_CREDIT.telegramUserId
   const user = store.users?.[String(tgId)] || null
+  const credit = getManualReferralCreditRecord(store, tgId)
   const config = getReferralContestConfig(store)
   const ranked = buildReferralContestRanking(store, config)
   const me = ranked.find((row) => Number(row.telegramId) === tgId) || null
@@ -61,10 +65,14 @@ function snapshot(store) {
     telegramUserId: tgId,
     username: user?.username || null,
     userExists: Boolean(user),
-    coins: user?.balance ?? null,
+    balance: user?.balance ?? null,
+    referralEarnings: user?.referralEarnings ?? null,
     activeReferralsField: user?.activeReferrals ?? null,
     countActiveReferrals: user ? countActiveReferrals(store, tgId) : 0,
     manualCreditAmount: getManualReferralCreditAmount(store, tgId),
+    coinsGranted: Boolean(credit?.coinsGranted),
+    referralEarningsGranted: Boolean(credit?.referralEarningsGranted),
+    coinEventId: credit?.coinEventId || null,
     realReferralCountAsReferrer: referralKeys.length,
     contestId: config.id || REFERRAL_CONTEST_ID,
     contestScore: me?.score ?? 0,
@@ -80,6 +88,14 @@ const before = withStoreRead((store) => ({
   snapshot: snapshot(store),
 }))
 
+const coinDelta = before.plan.alreadyApplied || before.plan.coinsGranted
+  ? 0
+  : ALLDEPWW_MANUAL_CREDIT.coinAmount
+const earningsDelta =
+  before.plan.alreadyApplied || before.plan.referralEarningsGranted
+    ? 0
+    : ALLDEPWW_MANUAL_CREDIT.coinAmount
+
 console.info('[manual-referral-credit] planned changes', {
   credit: ALLDEPWW_MANUAL_CREDIT,
   plan: before.plan,
@@ -89,11 +105,18 @@ console.info('[manual-referral-credit] planned changes', {
     countActiveReferrals:
       before.snapshot.countActiveReferrals -
       before.snapshot.manualCreditAmount +
-      (before.plan.alreadyApplied ? before.snapshot.manualCreditAmount : ALLDEPWW_MANUAL_CREDIT.amount),
-    contestScoreDelta: before.plan.alreadyApplied ? 0 : ALLDEPWW_MANUAL_CREDIT.amount,
+      (before.plan.referralCreditApplied
+        ? before.snapshot.manualCreditAmount
+        : ALLDEPWW_MANUAL_CREDIT.amount),
+    balance: (before.snapshot.balance ?? 0) + coinDelta,
+    referralEarnings: (before.snapshot.referralEarnings ?? 0) + earningsDelta,
+    coinsGranted: true,
+    referralEarningsGranted: true,
+    contestScoreDelta: before.plan.referralCreditApplied ? 0 : ALLDEPWW_MANUAL_CREDIT.amount,
     wouldCreatePhantomUsers: false,
     wouldTouchStoreReferrals: false,
-    wouldGrantCoins: false,
+    wouldGrantCoins: before.plan.wouldGrantCoins,
+    wouldBumpReferralEarnings: before.plan.wouldBumpReferralEarnings,
     wouldCallActivateReferral: false,
   },
 })

@@ -8,6 +8,8 @@ import {
   ALLDEPWW_MANUAL_CREDIT,
   applyManualReferralCreditOnStore,
   getManualReferralCreditAmount,
+  getManualReferralCreditRecord,
+  manualReferralCreditCoinEventId,
   planManualReferralCredit,
 } from './manual-referral-credit.mjs'
 import {
@@ -18,6 +20,7 @@ import {
 } from './referral-contest.mjs'
 import { withStore } from './store.mjs'
 import { countActiveReferrals, createUser, toPublicUser } from './users.mjs'
+import { TX_TYPE } from './wallet.mjs'
 
 function withTempStore(run) {
   const dir = mkdtempSync(path.join(tmpdir(), 'azarov-manual-ref-'))
@@ -49,9 +52,10 @@ function withTempStore(run) {
     })
 }
 
-test('manual referral credit: apply once, idempotent, no phantom referrals', async () => {
+test('manual referral credit: first apply grants referrals+coins+earnings; second is noop', async () => {
   await withTempStore(async () => {
     const tgId = ALLDEPWW_MANUAL_CREDIT.telegramUserId
+    const coinEventId = manualReferralCreditCoinEventId(ALLDEPWW_MANUAL_CREDIT.creditKey)
 
     withStore((store) => {
       createUser(store, {
@@ -60,6 +64,7 @@ test('manual referral credit: apply once, idempotent, no phantom referrals', asy
         username: 'alldepww',
       })
       store.users[String(tgId)].balance = 1000
+      store.users[String(tgId)].referralEarnings = 100
       return true
     })
 
@@ -69,15 +74,23 @@ test('manual referral credit: apply once, idempotent, no phantom referrals', asy
     assert.equal(plan.userExists, true)
     assert.equal(plan.wouldTouchStoreReferrals, false)
     assert.equal(plan.wouldCreatePhantomUsers, false)
-    assert.equal(plan.wouldGrantCoins, false)
+    assert.equal(plan.wouldGrantCoins, true)
+    assert.equal(plan.wouldBumpReferralEarnings, true)
+    assert.equal(plan.wouldCallActivateReferral, false)
+    assert.equal(plan.coinAmount, 25000)
     assert.equal(plan.alreadyApplied, false)
 
     const first = withStore((store) => {
       const beforeUsers = Object.keys(store.users || {}).length
       const beforeRefs = Object.keys(store.referrals || {}).length
       const beforeKick = Object.keys(store.kickAccounts || {}).length
+      const beforeKickByTg = Object.keys(store.kickByTelegram || {}).length
       const beforeBalance = store.users[String(tgId)].balance
-      const beforeTx = Object.keys(store.coinTransactions || {}).length
+      const beforeEarnings = store.users[String(tgId)].referralEarnings
+      const beforeDistinctTxIds = new Set(
+        Object.values(store.coinTransactions || {}).map((tx) => tx?.id).filter(Boolean),
+      )
+      const userIdsBefore = new Set(Object.keys(store.users || {}))
 
       const result = applyManualReferralCreditOnStore(store, ALLDEPWW_MANUAL_CREDIT)
 
@@ -85,36 +98,79 @@ test('manual referral credit: apply once, idempotent, no phantom referrals', asy
       assert.equal(result.applied, true)
       assert.equal(result.credit.kind, 'manual_referral_credit')
       assert.equal(result.credit.amount, 25)
+      assert.equal(result.credit.coinAmount, 25000)
+      assert.equal(result.credit.coinsGranted, true)
+      assert.equal(result.credit.referralEarningsGranted, true)
+      assert.equal(result.credit.coinEventId, coinEventId)
       assert.equal(result.credit.source, 'admin_script')
+
       assert.equal(Object.keys(store.users || {}).length, beforeUsers)
       assert.equal(Object.keys(store.referrals || {}).length, beforeRefs)
       assert.equal(Object.keys(store.kickAccounts || {}).length, beforeKick)
-      assert.equal(store.users[String(tgId)].balance, beforeBalance)
-      assert.equal(Object.keys(store.coinTransactions || {}).length, beforeTx)
+      assert.equal(Object.keys(store.kickByTelegram || {}).length, beforeKickByTg)
+      assert.deepEqual([...Object.keys(store.users || {})].sort(), [...userIdsBefore].sort())
+
+      assert.equal(store.users[String(tgId)].balance, beforeBalance + 25000)
+      assert.equal(store.users[String(tgId)].referralEarnings, beforeEarnings + 25000)
+
+      const afterDistinctTxIds = new Set(
+        Object.values(store.coinTransactions || {}).map((tx) => tx?.id).filter(Boolean),
+      )
+      assert.equal(afterDistinctTxIds.size, beforeDistinctTxIds.size + 1)
+      assert.ok(afterDistinctTxIds.has(coinEventId))
+
+      const tx = store.coinTransactions[coinEventId]
+      assert.ok(tx)
+      assert.equal(tx.type, TX_TYPE.ADMIN_ADJUSTMENT)
+      assert.equal(tx.amount, 25000)
+      assert.equal(tx.userId, tgId)
+
       assert.equal(countActiveReferrals(store, tgId), 25)
       assert.equal(store.users[String(tgId)].activeReferrals, 25)
+
+      const publicUser = toPublicUser(store.users[String(tgId)], store)
+      assert.equal(publicUser.activeReferrals, 25)
+      assert.equal(publicUser.referralEarnings, beforeEarnings + 25000)
+      assert.equal(publicUser.balance, beforeBalance + 25000)
       return result
     })
 
     assert.equal(first.applied, true)
 
     const second = withStore((store) => {
+      const beforeBalance = store.users[String(tgId)].balance
+      const beforeEarnings = store.users[String(tgId)].referralEarnings
+      const beforeDistinctTxIds = new Set(
+        Object.values(store.coinTransactions || {}).map((tx) => tx?.id).filter(Boolean),
+      )
+      const beforeRefs = Object.keys(store.referrals || {}).length
+      const beforeUsers = Object.keys(store.users || {}).length
+
       const result = applyManualReferralCreditOnStore(store, ALLDEPWW_MANUAL_CREDIT)
       assert.equal(result.success, true)
       assert.equal(result.applied, false)
       assert.equal(result.alreadyApplied, true)
       assert.equal(getManualReferralCreditAmount(store, tgId), 25)
       assert.equal(countActiveReferrals(store, tgId), 25)
+      assert.equal(store.users[String(tgId)].balance, beforeBalance)
+      assert.equal(store.users[String(tgId)].referralEarnings, beforeEarnings)
+      const afterDistinctTxIds = new Set(
+        Object.values(store.coinTransactions || {}).map((tx) => tx?.id).filter(Boolean),
+      )
+      assert.equal(afterDistinctTxIds.size, beforeDistinctTxIds.size)
+      assert.equal(Object.keys(store.referrals || {}).length, beforeRefs)
+      assert.equal(Object.keys(store.users || {}).length, beforeUsers)
+
+      const credit = getManualReferralCreditRecord(store, tgId)
+      assert.equal(credit.coinsGranted, true)
+      assert.equal(credit.referralEarningsGranted, true)
+
+      const publicUser = toPublicUser(store.users[String(tgId)], store)
+      assert.equal(publicUser.referralEarnings, beforeEarnings)
       return result
     })
 
     assert.equal(second.alreadyApplied, true)
-
-    withStore((store) => {
-      const publicUser = toPublicUser(store.users[String(tgId)], store)
-      assert.equal(publicUser.activeReferrals, 25)
-      return true
-    }, { readOnly: true })
   })
 })
 
