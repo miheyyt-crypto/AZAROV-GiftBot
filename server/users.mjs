@@ -4,6 +4,7 @@ import { hydrateAntiAbuseUserFields } from './anti-abuse.mjs'
 import { REFERRAL_CASE_EVERY, REFERRAL_CODE_LENGTH, REFERRAL_CODE_PREFIX, TELEGRAM_BOT_USERNAME } from './constants.mjs'
 import { buildUserLevelSnapshot } from './level.mjs'
 import { nextLevelRewardAmount } from './level-rewards.mjs'
+import { getManualReferralCreditAmount } from './manual-referral-credit.mjs'
 import { loadStore } from './store.mjs'
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -349,9 +350,10 @@ export function getReferralsByReferrer(store, referrerUserId) {
 }
 
 export function countActiveReferrals(store, referrerUserId) {
-  return getReferralsByReferrer(store, referrerUserId).filter(
+  const fromReferrals = getReferralsByReferrer(store, referrerUserId).filter(
     (item) => item.status === 'active' || item.status === 'rewarded',
   ).length
+  return fromReferrals + getManualReferralCreditAmount(store, referrerUserId)
 }
 
 export function toPublicUser(user, store = null) {
@@ -363,9 +365,7 @@ export function toPublicUser(user, store = null) {
   const referrals = getReferralsByReferrer(source, user.telegramId)
   const invitedCount = referrals.length
   const pendingCount = referrals.filter((item) => item.status === 'pending').length
-  const activeCount = referrals.filter(
-    (item) => item.status === 'active' || item.status === 'rewarded',
-  ).length
+  const activeCount = countActiveReferrals(source, user.telegramId)
   const openedReferralCases = user.openedReferralCases || 0
   const earnedReferralCases = Math.floor(activeCount / REFERRAL_CASE_EVERY)
   const availableReferralCases = Math.max(0, earnedReferralCases - openedReferralCases)

@@ -131,7 +131,7 @@ export function isPersistentStoreDir(dir = getDataDir()) {
 
 export function createEmptyStore() {
   return {
-    version: 23,
+    version: 24,
     users: {},
     referralIndex: {},
     referrals: {},
@@ -169,6 +169,7 @@ export function createEmptyStore() {
     giveaways: {},
     giveawayParticipants: {},
     referralContests: {},
+    manualReferralCredits: {},
     communityAccessRequests: {},
     deviceIndex: {},
     ipHashIndex: {},
@@ -226,6 +227,8 @@ function migrateStore(store) {
   store.pendingBotStarts = store.pendingBotStarts || {}
   store.botLaunchStarts = store.botLaunchStarts || {}
   store.broadcasts = store.broadcasts || {}
+  store.referralContests = store.referralContests || {}
+  store.manualReferralCredits = store.manualReferralCredits || {}
   store.appSettings = store.appSettings || {}
   if (typeof store.appSettings.maintenanceMode !== 'boolean') {
     store.appSettings.maintenanceMode = false
@@ -533,6 +536,12 @@ function migrateStore(store) {
   if (Number(store.version) < 23) {
     store.referralContests = store.referralContests || {}
     store.version = 23
+  }
+
+  // Additive v24: admin/manual active-referral credits (no phantom invitees).
+  if (Number(store.version) < 24) {
+    store.manualReferralCredits = store.manualReferralCredits || {}
+    store.version = 24
   }
 
   return store

@@ -5,6 +5,11 @@
  */
 
 import {
+  getManualReferralCreditAmount,
+  getManualReferralCreditReachedAt,
+  getManualReferralCreditRecord,
+} from './manual-referral-credit.mjs'
+import {
   createNotificationOnStore,
   NOTIFICATION_TYPE,
 } from './notifications.mjs'
@@ -259,7 +264,7 @@ export function buildReferralContestRanking(store, config = getReferralContestCo
     byReferrer.set(referrerId, list)
   }
 
-  const ranked = []
+  const byUser = new Map()
   for (const [telegramId, refs] of byReferrer.entries()) {
     const user = store.users?.[String(telegramId)]
     if (!user) {
@@ -272,13 +277,52 @@ export function buildReferralContestRanking(store, config = getReferralContestCo
     if (score < 1) {
       continue
     }
-    ranked.push({
+    byUser.set(telegramId, {
       telegramId,
       user,
       score,
       reachedAt: referralEventAt(sorted[score - 1]),
     })
   }
+
+  // Admin/manual credits (no phantom invitees) — scoped by contestId when set.
+  for (const [key, credit] of Object.entries(store.manualReferralCredits || {})) {
+    const amount = getManualReferralCreditAmount(store, key)
+    if (amount < 1) {
+      continue
+    }
+    const telegramId = Number(credit?.telegramUserId ?? key)
+    if (!Number.isFinite(telegramId) || telegramId <= 0) {
+      continue
+    }
+    const row = getManualReferralCreditRecord(store, telegramId)
+    if (row?.contestId && row.contestId !== config.id) {
+      continue
+    }
+    const user = store.users?.[String(telegramId)]
+    if (!user) {
+      continue
+    }
+    const creditReachedAt = getManualReferralCreditReachedAt(store, telegramId)
+    const existing = byUser.get(telegramId)
+    if (existing) {
+      existing.score += amount
+      const existingMs = Date.parse(existing.reachedAt || '') || 0
+      const creditMs = Date.parse(creditReachedAt || '') || 0
+      if (creditMs >= existingMs) {
+        existing.reachedAt = creditReachedAt
+      }
+    } else {
+      byUser.set(telegramId, {
+        telegramId,
+        user,
+        score: amount,
+        reachedAt: creditReachedAt,
+      })
+    }
+  }
+
+  const ranked = [...byUser.values()].filter((row) => row.score >= 1)
 
   ranked.sort((a, b) => {
     if (b.score !== a.score) {
