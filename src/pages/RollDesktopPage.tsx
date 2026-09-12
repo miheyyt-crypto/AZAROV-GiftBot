@@ -20,17 +20,7 @@ import type { RollRound } from '@/types/roll'
 export function RollDesktopPage() {
   const navigate = useNavigate()
   const game = useRollGame()
-
-  if (!game.bootstrapped) {
-    return (
-      <div className="roll-desktop">
-        <div className="roll-desktop__scroll">
-          <div className="h-9 w-36 animate-pulse rounded-xl bg-white/[0.06]" />
-          <div className="mx-auto mt-4 size-[min(70vw,280px)] animate-pulse rounded-full bg-white/[0.04]" />
-        </div>
-      </div>
-    )
-  }
+  // Shell paints immediately; bets stay gated until bootstrapped (see useRollGame).
 
   const {
     round,

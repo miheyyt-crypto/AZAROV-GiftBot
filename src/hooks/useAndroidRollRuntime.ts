@@ -156,6 +156,7 @@ export function useAndroidRollRuntime() {
   const amountFloor = addMode ? 1 : minBet
 
   const canSubmit =
+    bootstrapped &&
     !busy &&
     !syncError &&
     phase !== 'placing' &&
@@ -486,24 +487,27 @@ export function useAndroidRollRuntime() {
   ])
 
   useEffect(() => {
-    if (!bettingOpen) {
+    if (!bootstrapped || !bettingOpen) {
       return
     }
     syncBetValue(bet)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amount, amountFloor, bettingOpen, syncBetValue])
+  }, [amount, amountFloor, bettingOpen, bootstrapped, syncBetValue])
 
   const updateBet = useCallback(
     (next: number) => {
-      if (!bettingOpen) {
+      if (!bootstrapped || !bettingOpen) {
         return
       }
       syncBetValue(next)
     },
-    [bettingOpen, syncBetValue],
+    [bettingOpen, bootstrapped, syncBetValue],
   )
 
   function onBetInputChange(raw: string) {
+    if (!bootstrapped || !bettingOpen) {
+      return
+    }
     const cleaned = raw.replace(/[^\d]/g, '')
     setBetInput(cleaned)
     const parsed = parseBetInput(cleaned)
@@ -515,7 +519,7 @@ export function useAndroidRollRuntime() {
   }
 
   async function handleBet() {
-    if (busy || betRequestLockRef.current || placingRef.current) {
+    if (!bootstrapped || busy || betRequestLockRef.current || placingRef.current) {
       return
     }
     if (!canSubmit) {

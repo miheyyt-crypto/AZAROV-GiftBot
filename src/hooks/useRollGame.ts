@@ -130,6 +130,7 @@ export function useRollGame() {
   const amountFloor = addMode ? 1 : minBet
 
   const canSubmit =
+    bootstrapped &&
     !busy &&
     bettingOpen &&
     bet >= amountFloor &&
@@ -511,25 +512,28 @@ export function useRollGame() {
   }, [recoverActiveRoll, spinClock, tryRevealResult])
 
   useEffect(() => {
-    if (!bettingOpen) {
+    if (!bootstrapped || !bettingOpen) {
       return
     }
     syncBetValue(bet)
     // Intentionally omit `bet` — only re-clamp when balance/floor/open changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amount, amountFloor, bettingOpen, syncBetValue])
+  }, [amount, amountFloor, bettingOpen, bootstrapped, syncBetValue])
 
   const updateBet = useCallback(
     (next: number) => {
-      if (!bettingOpen) {
+      if (!bootstrapped || !bettingOpen) {
         return
       }
       syncBetValue(next)
     },
-    [bettingOpen, syncBetValue],
+    [bettingOpen, bootstrapped, syncBetValue],
   )
 
   function onBetInputChange(raw: string) {
+    if (!bootstrapped || !bettingOpen) {
+      return
+    }
     const cleaned = raw.replace(/[^\d]/g, '')
     setBetInput(cleaned)
     const parsed = parseBetInput(cleaned)
@@ -541,7 +545,7 @@ export function useRollGame() {
   }
 
   async function handleBet() {
-    if (busy) {
+    if (!bootstrapped || busy) {
       return
     }
     if (!canSubmit) {
