@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
-import { XP_PER_LEVEL } from './level.mjs'
+import { cumulativeXpForLevel } from './level.mjs'
 import {
   grantPendingLevelRewardsOnStore,
   levelRewardAmount,
@@ -73,7 +73,7 @@ test('level 1 → 2 grants 100', () => {
       grantPendingLevelRewardsOnStore(store, user)
       assert.equal(user.balance, 50)
 
-      user.chatMessages = XP_PER_LEVEL
+      user.chatMessages = cumulativeXpForLevel(2)
       const result = grantPendingLevelRewardsOnStore(store, user)
       assert.deepEqual(result.granted, [{ level: 2, amount: 100 }])
       assert.equal(result.totalAmount, 100)
@@ -88,7 +88,7 @@ test('level 4 → 5 grants 250', () => {
     withStore((store) => {
       const user = createUser(store, { id: 9103, first_name: 'B', username: 'b9103' })
       seedClaimedLevelRewardsWithoutGrant(user, 4)
-      user.chatMessages = XP_PER_LEVEL * 4
+      user.chatMessages = cumulativeXpForLevel(5)
       const result = grantPendingLevelRewardsOnStore(store, user)
       assert.deepEqual(result.granted, [{ level: 5, amount: 250 }])
       assert.equal(user.balance, 250)
@@ -102,7 +102,7 @@ test('multi-level jump 4 → 7 grants 250+300+350', () => {
     withStore((store) => {
       const user = createUser(store, { id: 9104, first_name: 'C', username: 'c9104' })
       seedClaimedLevelRewardsWithoutGrant(user, 4)
-      user.chatMessages = XP_PER_LEVEL * 6
+      user.chatMessages = cumulativeXpForLevel(7)
       const result = grantPendingLevelRewardsOnStore(store, user)
       assert.deepEqual(result.granted, [
         { level: 5, amount: 250 },
@@ -124,7 +124,7 @@ test('unseeded legacy user is seeded without backfill payout', () => {
   withTempStore(() => {
     withStore((store) => {
       const user = createUser(store, { id: 9105, first_name: 'L', username: 'l9105' })
-      user.chatMessages = XP_PER_LEVEL * 19
+      user.chatMessages = cumulativeXpForLevel(20)
       delete user.levelRewardsSeeded
       delete user.claimedLevelRewards
 
@@ -135,7 +135,7 @@ test('unseeded legacy user is seeded without backfill payout', () => {
       assert.equal(user.levelRewardsSeeded, true)
       assert.ok(user.claimedLevelRewards.includes(20))
 
-      user.chatMessages = XP_PER_LEVEL * 20
+      user.chatMessages = cumulativeXpForLevel(21)
       const next = grantPendingLevelRewardsOnStore(store, user)
       assert.deepEqual(next.granted, [{ level: 21, amount: 1050 }])
       assert.equal(user.balance, 1050)
@@ -148,7 +148,7 @@ test('store migration v11 seeds existing users without paying', () => {
   withTempStore(() => {
     withStore((store) => {
       const user = createUser(store, { id: 9106, first_name: 'M', username: 'm9106' })
-      user.chatMessages = XP_PER_LEVEL * 9
+      user.chatMessages = cumulativeXpForLevel(10)
       delete user.levelRewardsSeeded
       delete user.claimedLevelRewards
       store.version = 10
@@ -156,7 +156,7 @@ test('store migration v11 seeds existing users without paying', () => {
     })
 
     withStore((store) => {
-      assert.equal(store.version, 23)
+      assert.equal(store.version, 24)
       const user = store.users['9106']
       assert.equal(user.levelRewardsSeeded, true)
       assert.ok(user.claimedLevelRewards.includes(10))
@@ -173,7 +173,7 @@ test('public user exposes nextLevelReward', () => {
     withStore((store) => {
       const user = createUser(store, { id: 9107, first_name: 'P', username: 'p9107' })
       seedClaimedLevelRewardsWithoutGrant(user, 4)
-      user.chatMessages = XP_PER_LEVEL * 3 + 10
+      user.chatMessages = cumulativeXpForLevel(4) + 10
       const pub = toPublicUser(user, store)
       assert.equal(pub.level, 4)
       assert.equal(pub.nextLevelReward, 250)

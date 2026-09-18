@@ -18,7 +18,7 @@ import {
   updateKickLivestreamStateOnStore,
 } from './kick-streak.mjs'
 import { resetKickLiveNotifyBootstrapForTests } from './kick-live-notify.mjs'
-import { computeLevelProgress, computeXpFromStats, XP_PER_LEVEL } from './level.mjs'
+import { computeLevelProgress, computeXpFromStats, cumulativeXpForLevel, xpRequiredToAdvance } from './level.mjs'
 import { claimAchievementOnStore, readAchievementProgress } from './profile.mjs'
 import { withStore } from './store.mjs'
 import { createUser, toPublicUser } from './users.mjs'
@@ -482,18 +482,24 @@ test('watch: not live confirmed prevents free watch time', async () => {
 
 test('XP and level formulas', () => {
   assert.equal(computeXpFromStats({ chatMessages: 10, watchSeconds: 125 }), 12)
+  assert.equal(xpRequiredToAdvance(10), 1030)
+  assert.equal(xpRequiredToAdvance(70), 3010)
+  assert.equal(cumulativeXpForLevel(1), 0)
+  assert.ok(cumulativeXpForLevel(11) > cumulativeXpForLevel(10))
+
   const mid = computeLevelProgress(1240)
-  assert.equal(mid.level, Math.floor(1240 / XP_PER_LEVEL) + 1)
-  assert.equal(mid.xpForCurrentLevel, XP_PER_LEVEL * (mid.level - 1))
-  assert.equal(mid.xpForNextLevel, XP_PER_LEVEL * mid.level)
+  assert.equal(mid.level, computeLevelProgress(1240).level)
+  assert.equal(mid.xpForCurrentLevel, cumulativeXpForLevel(mid.level))
+  assert.equal(mid.xpForNextLevel, cumulativeXpForLevel(mid.level + 1))
   assert.equal(mid.xp, 1240)
   assert.ok(mid.progress >= 0 && mid.progress <= 100)
+  assert.ok(mid.xpForNextLevel - mid.xpForCurrentLevel > 200)
 
   const zero = computeLevelProgress(0)
   assert.equal(zero.level, 1)
 })
 
-test('level does not decrease when peakLevel is higher', () => {
+test('visible level follows XP curve (peakLevel does not inflate)', () => {
   withTempStore(() => {
     withStore((store) => {
       const user = createUser(store, { id: 701, first_name: 'L', username: 'l701' })
@@ -501,7 +507,8 @@ test('level does not decrease when peakLevel is higher', () => {
       user.watchSeconds = 0
       user.peakLevel = 9
       const pub = toPublicUser(user, store)
-      assert.equal(pub.level, 9)
+      assert.equal(pub.level, 1)
+      assert.equal(user.peakLevel, 9)
       return true
     })
   })
