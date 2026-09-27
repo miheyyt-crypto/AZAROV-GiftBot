@@ -1,0 +1,190 @@
+export const RETIRED_SHOP_PRODUCT_CODES = new Set(["premium-6", "premium-12"]);
+
+export function isRetiredShopProduct(item: {
+  code: string;
+  title?: string;
+}): boolean {
+  if (RETIRED_SHOP_PRODUCT_CODES.has(item.code)) {
+    return true;
+  }
+  return (item.title ?? "").toLowerCase().includes("telegram premium");
+}
+
+export type ShopRequiredField =
+  | "welvuraId"
+  | "slotName"
+  | "displayNickname"
+  | "donationText"
+  | "mediaUrl"
+  | "telegramUsername"
+  | "kickUsername";
+
+export type ShopCategory = "money" | "donations" | "subs" | "other";
+export type ShopOrderStatus = "pending" | "processing" | "fulfilled" | "rejected";
+
+export type ShopCatalogProduct = {
+  code: string;
+  title: string;
+  category: ShopCategory;
+  priceAzc: string;
+  fulfillmentType: "manual" | "instant";
+  requiredFields: ShopRequiredField[];
+  description: string;
+};
+
+export type ShopPurchaseResult = {
+  status: ShopOrderStatus;
+  orderId: string;
+  productCode: string;
+  priceAzc: string;
+  newBalanceAzc: string;
+  replayed?: boolean;
+  inventoryGranted?: { type: "streak_freeze"; quantity: number };
+};
+
+export type AdminShopOrder = {
+  id: string;
+  user: string | null;
+  productCode: string;
+  productName: string;
+  priceAzc: string;
+  status: ShopOrderStatus;
+  submittedPayload: Record<string, string>;
+  createdAt: string;
+  processingAt: string | null;
+  fulfilledAt: string | null;
+  rejectedAt: string | null;
+  rejectionReason: string | null;
+  processedByAdminId: string | null;
+  fulfillmentType: "manual" | "instant";
+};
+
+export const SHOP_FIELD_LABEL: Record<ShopRequiredField, string> = {
+  welvuraId: "Welvura ID",
+  slotName: "Название слота",
+  displayNickname: "Ник для доната",
+  donationText: "Текст доната",
+  mediaUrl: "YouTube или SoundCloud",
+  telegramUsername: "Telegram username",
+  kickUsername: "Kick username",
+};
+
+export function shopPayloadDetailLabel(key: string): string {
+  if (key === "slotName") {
+    return "Слот";
+  }
+  if (key in SHOP_FIELD_LABEL) {
+    return SHOP_FIELD_LABEL[key as ShopRequiredField];
+  }
+  return key;
+}
+
+export function friendlyShopError(code?: string): string {
+  switch (code) {
+    case "SHOP_INSUFFICIENT_BALANCE":
+      return "Недостаточно монет";
+    case "SHOP_INVALID_WELVURA_ID":
+      return "Некорректный Welvura ID";
+    case "SHOP_INVALID_TELEGRAM_USERNAME":
+      return "Некорректный Telegram username";
+    case "SHOP_INVALID_KICK_USERNAME":
+      return "Некорректный Kick username";
+    case "SHOP_INVALID_DONATION_NICKNAME":
+      return "Введите ник для доната";
+    case "SHOP_INVALID_DONATION_TEXT":
+      return "Введите текст доната";
+    case "SHOP_INVALID_MEDIA_URL":
+      return "Разрешены только YouTube или SoundCloud";
+    case "SHOP_INVALID_SLOT_NAME":
+      return "Введите название слота";
+    case "SHOP_PRODUCT_UNAVAILABLE":
+    case "SHOP_PRODUCT_NOT_FOUND":
+      return "Товар недоступен";
+    default:
+      return "Не удалось оформить заказ";
+  }
+}
+
+export function friendlyShopStatus(status: ShopOrderStatus): string {
+  switch (status) {
+    case "pending":
+      return "В ожидании";
+    case "processing":
+      return "В обработке";
+    case "fulfilled":
+      return "Готово";
+    case "rejected":
+      return "Отклонено";
+  }
+}
+
+export function clientShopValidationError(
+  product: ShopCatalogProduct,
+  fields: Record<string, string>,
+): string | undefined {
+  for (const field of product.requiredFields) {
+    const value = (fields[field] ?? "").trim();
+    if (field === "donationText") {
+      if (value.length === 0) {
+        return "Введите текст доната";
+      }
+      if (value.length > 300) {
+        return "Слишком длинный текст";
+      }
+      continue;
+    }
+    if (field === "displayNickname") {
+      if (value.length === 0 || value.length > 20) {
+        return "Введите ник для доната";
+      }
+      continue;
+    }
+    if (field === "mediaUrl") {
+      if (value.length === 0) {
+        return "Разрешены только YouTube или SoundCloud";
+      }
+      try {
+        const parsed = new URL(value);
+        const host = parsed.hostname.toLowerCase();
+        const youtube =
+          host === "youtube.com" ||
+          host === "www.youtube.com" ||
+          host === "m.youtube.com" ||
+          host === "youtu.be" ||
+          host === "www.youtu.be" ||
+          host === "music.youtube.com";
+        const soundcloud =
+          host === "soundcloud.com" ||
+          host === "www.soundcloud.com" ||
+          host.endsWith(".soundcloud.com");
+        if (
+          (parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
+          (!youtube && !soundcloud)
+        ) {
+          return "Разрешены только YouTube или SoundCloud";
+        }
+      } catch {
+        return "Разрешены только YouTube или SoundCloud";
+      }
+      continue;
+    }
+    if (field === "slotName") {
+      if (value.length === 0 || value.length > 80) {
+        return "Введите название слота";
+      }
+      continue;
+    }
+    if (value.length === 0) {
+      if (field === "welvuraId") {
+        return "Некорректный Welvura ID";
+      }
+      if (field === "telegramUsername") {
+        return "Некорректный Telegram username";
+      }
+      if (field === "kickUsername") {
+        return "Некорректный Kick username";
+      }
+    }
+  }
+  return undefined;
+}

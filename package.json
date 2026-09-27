@@ -1,49 +1,54 @@
 {
-  "name": "azarov-giftbot",
+  "name": "azarov-giftbot-v2",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
-  "scripts": {
-    "dev": "concurrently -k \"npm run server:dev\" \"npm run bot:dev\" \"vite\"",
-    "dev:client": "vite",
-    "server": "node server/index.mjs",
-    "server:dev": "node --watch server/index.mjs",
-    "bot": "node server/bot.mjs",
-    "bot:dev": "node --watch server/bot.mjs",
-    "start": "node server/production.mjs",
-    "start:api": "node server/index.mjs",
-    "start:bot": "node server/bot.mjs",
-    "start:production": "node server/production.mjs",
-    "test": "node --experimental-strip-types --test server/*.test.mjs",
-    "reset:kick": "node server/reset-kick.mjs",
-    "build": "tsc -b && vite build",
-    "lint": "oxlint",
-    "preview": "vite preview",
-    "optimize:images": "node scripts/optimize-images.mjs"
+  "packageManager": "pnpm@10.15.1",
+  "engines": {
+    "node": ">=22"
   },
-  "dependencies": {
-    "compression": "^1.8.1",
-    "dotenv": "^17.2.1",
-    "express": "^5.1.0",
-    "lucide-react": "^1.31.0",
-    "multer": "^2.2.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.2",
-    "telegraf": "^4.16.3"
+  "scripts": {
+    "build": "pnpm -r --sort build",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r --sort typecheck",
+    "check": "pnpm -r --sort check",
+    "dev:local": "node scripts/dev-local.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "db:migrate": "pnpm --filter @giftbot/db migrate",
+    "db:test": "pnpm --filter @giftbot/db test",
+    "db:restore-drill": "node scripts/db-restore-drill.mjs",
+    "db:backup-restore-drill": "node scripts/db-backup-restore-drill.mjs",
+    "deploy:test": "pnpm --filter @giftbot/deploy test",
+    "import:test": "pnpm --filter @giftbot/v1-importer test",
+    "cutover:test": "pnpm --filter @giftbot/v1-cutover test",
+    "drain:test": "pnpm --filter @giftbot/v1-game-drain test",
+    "avatar-backfill:test": "pnpm --filter @giftbot/avatar-backfill test",
+    "manual-referral-credit:test": "pnpm --filter @giftbot/manual-referral-credit test",
+    "domain:test": "pnpm --filter @giftbot/domain test",
+    "auth:test": "pnpm --filter @giftbot/auth test",
+    "config:test": "pnpm --filter @giftbot/config test",
+    "jobs:test": "pnpm --filter @giftbot/jobs test",
+    "rate-limit:test": "pnpm --filter @giftbot/rate-limit test",
+    "observability:test": "pnpm --filter @giftbot/observability test",
+    "api:test": "pnpm --filter @giftbot/api test",
+    "web:test": "pnpm --filter @giftbot/web test",
+    "bot:test": "pnpm --filter @giftbot/bot test",
+    "worker:test": "pnpm --filter @giftbot/worker test",
+    "loadtest": "pnpm --filter @giftbot/loadtest start",
+    "loadtest:test": "pnpm --filter @giftbot/loadtest test",
+    "validate": "pnpm --filter @giftbot/validate start",
+    "validate:test": "pnpm --filter @giftbot/validate test"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@embedded-postgres/windows-x64",
+      "esbuild"
+    ]
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.3.3",
-    "@types/compression": "^1.8.1",
-    "@types/node": "^24.13.3",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.4",
-    "concurrently": "^9.2.1",
-    "oxlint": "^1.75.0",
-    "sharp": "^0.35.4",
-    "tailwindcss": "^4.3.3",
-    "typescript": "~6.0.2",
-    "vite": "^8.2.0"
+    "@eslint/js": "^9.35.0",
+    "@types/node": "^22.18.1",
+    "eslint": "^9.35.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.43.0"
   }
 }

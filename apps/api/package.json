@@ -1,0 +1,35 @@
+{
+  "name": "@giftbot/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/app.d.ts",
+      "import": "./dist/app.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check": "node dist/main.js --check",
+    "start": "node dist/main.js",
+    "test": "node --test --test-concurrency=1 dist/*.test.js"
+  },
+  "dependencies": {
+    "@fastify/websocket": "^11.3.0",
+    "@giftbot/auth": "workspace:*",
+    "@giftbot/config": "workspace:*",
+    "@giftbot/db": "workspace:*",
+    "@giftbot/domain": "workspace:*",
+    "@giftbot/jobs": "workspace:*",
+    "@giftbot/observability": "workspace:*",
+    "@giftbot/rate-limit": "workspace:*",
+    "drizzle-orm": "^0.44.5",
+    "fastify": "^5.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.1",
+    "typescript": "^5.9.2"
+  }
+}

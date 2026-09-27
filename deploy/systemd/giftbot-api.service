@@ -1,0 +1,21 @@
+[Unit]
+Description=AZAROV GiftBot V2 API (Mini App, admin, webhooks)
+Documentation=file:///opt/giftbot/current/deploy/README.md
+After=network.target giftbot-migrate.service
+Wants=giftbot-migrate.service
+# Independent of Bot and Worker. Do not merge ExecStart lines.
+
+[Service]
+Type=simple
+User=giftbot
+Group=giftbot
+WorkingDirectory=/opt/giftbot/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/giftbot/env
+ExecStart=/usr/bin/node apps/api/dist/main.js
+Restart=on-failure
+RestartSec=2
+# Health: GET /health/live and GET /health/ready on API_HOST:API_PORT
+
+[Install]
+WantedBy=multi-user.target

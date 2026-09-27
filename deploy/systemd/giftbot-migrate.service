@@ -1,0 +1,19 @@
+[Unit]
+Description=AZAROV GiftBot V2 forward-only migrate (oneshot)
+Documentation=file:///opt/giftbot/current/deploy/README.md
+After=network.target
+# PostgreSQL unit name is host-specific. Start this after the database accepts connections.
+
+[Service]
+Type=oneshot
+User=giftbot
+Group=giftbot
+WorkingDirectory=/opt/giftbot/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/giftbot/env
+ExecStart=/usr/bin/node packages/db/dist/migrate.js
+RemainAfterExit=yes
+# Never invoke a down migration. Rollback is a previous artifact, not this unit.
+
+[Install]
+WantedBy=multi-user.target

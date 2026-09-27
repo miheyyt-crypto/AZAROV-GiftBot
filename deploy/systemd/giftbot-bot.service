@@ -1,0 +1,21 @@
+[Unit]
+Description=AZAROV GiftBot V2 Bot (owner=bot jobs only)
+Documentation=file:///opt/giftbot/current/deploy/README.md
+After=network.target giftbot-migrate.service
+Wants=giftbot-migrate.service
+# Independent of API and Worker. Not a Mini App HTTP API.
+
+[Service]
+Type=simple
+User=giftbot
+Group=giftbot
+WorkingDirectory=/opt/giftbot/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/giftbot/env
+ExecStart=/usr/bin/node apps/bot/dist/main.js
+Restart=on-failure
+RestartSec=2
+# Health only on BOT_HEALTH_HOST:BOT_HEALTH_PORT. Bind to 127.0.0.1 in production.
+
+[Install]
+WantedBy=multi-user.target

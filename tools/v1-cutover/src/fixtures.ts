@@ -1,0 +1,95 @@
+export function fixtureStore(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    version: 24,
+    users: {
+      "1001": {
+        telegramId: 1001,
+        username: "alice",
+        firstName: "Alice",
+        lastName: "A",
+        languageCode: "ru",
+        isPremium: false,
+        balance: 1500,
+        gramBalance: "0.51",
+        referralCode: "alicecode",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        blocked: false,
+        completedTasks: [
+          "telegram-subscribe",
+          "launch-bot",
+          "kick-connect",
+          "kick-follow",
+          "kick-nickname",
+          "referral-invite",
+        ],
+        activeReferrals: 1,
+        openedReferralCases: 0,
+        chatMessages: 12,
+        claimedLevelRewards: [1, 2, 71],
+        claimedAchievements: ["coins-earned"],
+        lastDailyFreeCaseAt: "2026-09-18T12:00:00.000Z",
+      },
+      "1002": {
+        telegramId: 1002,
+        username: "bob",
+        firstName: "Bob",
+        balance: 0,
+        gramBalance: "0.005",
+        referralCode: "bobcode",
+        createdAt: "2026-01-02T00:00:00.000Z",
+        completedTasks: [],
+        activeReferrals: 0,
+        openedReferralCases: 0,
+        chatMessages: 0,
+        claimedLevelRewards: [],
+      },
+    },
+    referrals: {
+      "1001:1002": {
+        referrerUserId: 1001,
+        referredUserId: 1002,
+        status: "rewarded",
+        createdAt: "2026-01-03T00:00:00.000Z",
+        activatedAt: "2026-01-04T00:00:00.000Z",
+        rewardedAt: "2026-01-04T00:00:00.000Z",
+      },
+    },
+    kickAccounts: {},
+    kickStreamStreaks: {},
+    kickWatchStats: {},
+    orders: {},
+    inventory: {},
+    caseOpenings: {},
+    promoCodes: {},
+    promoUsages: {},
+    notifications: {},
+    partnerSubmissions: {},
+    partnerAccountBinds: {},
+    withdrawals: {},
+    giveaways: {},
+    giveawayParticipants: {},
+    minesGames: {},
+    towerGames: {},
+    rollRounds: {},
+    ...overrides,
+  };
+}
+
+export function withKick(store: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...store,
+    kickAccounts: {
+      "kick-99": {
+        kickUserId: "kick-99",
+        telegramUserId: 1001,
+        username: "alicekick",
+        accessToken: "PLAINTEXT_ACCESS",
+        refreshToken: "PLAINTEXT_REFRESH",
+        tokenScope: "user",
+        createdAt: "2026-02-01T00:00:00.000Z",
+      },
+    },
+  };
+}

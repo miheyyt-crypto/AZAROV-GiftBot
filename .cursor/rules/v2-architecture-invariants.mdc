@@ -1,0 +1,20 @@
+---
+description: AZAROV GiftBot V2 architecture invariants and phase gate
+alwaysApply: true
+---
+
+# V2 architecture invariants
+
+Canonical source: `ARCHITECTURE.md`. Pending product items: `docs/architecture/PENDING_PRODUCT_DECISIONS.md`. Phases: `docs/architecture/PHASES.md`.
+
+Current gate: Phase 16 complete. There is no Phase 17. Remaining pending product values stay flagged off. Shop catalog prices (#5), Paid Case odds for Нищий/Средний/Блатной (#8), referral Kick activation (#1 +1000/+1000), referral case odds, and Tasks/Welvura (#7) are product-decided.
+
+- PostgreSQL is the only source of truth. No `store.json`. No Redis in stage 1.
+- GET is read-only. Mutations are POST/PATCH/DELETE or jobs from a write path.
+- Money: `Wallet.apply` only — ledger row + `FOR UPDATE` + idempotency. New wallets start at 0.
+- One inbound webhook body lives in `inbound_events` only (variant A).
+- Jobs have exclusive `owner`: `bot` or `worker`. Worker never calls Telegram API. Bot is not a Mini App API.
+- Mini App: small staged bootstrap. Client never supplies game results.
+- Migrations: expand/contract, forward-only in production. App rollback is not a destructive down migration.
+- Do not invent PENDING product values (Kick watch-time, game rewards, giveaways). Shop prices, referral Kick activation, paid/referral case odds, Tasks/Welvura (#7), and auth/session TTL (#9) are decided — see `PENDING_PRODUCT_DECISIONS.md`.
+- Do not copy V1. V1 importer is Phase 15 only and is not runtime.

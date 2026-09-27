@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: giftbot
+      POSTGRES_PASSWORD: giftbot
+      POSTGRES_DB: giftbot
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U giftbot -d giftbot"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - giftbot-pg-data:/var/lib/postgresql/data
+
+volumes:
+  giftbot-pg-data:

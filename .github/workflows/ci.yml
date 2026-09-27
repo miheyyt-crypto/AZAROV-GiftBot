@@ -1,0 +1,102 @@
+name: CI smoke
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Build
+        run: pnpm build
+      - name: Env skeleton
+        run: pnpm check
+      - name: Hello-health smoke
+        run: pnpm smoke
+      - name: Mini App startup tests
+        run: pnpm web:test
+
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: giftbot
+          POSTGRES_PASSWORD: giftbot
+          POSTGRES_DB: giftbot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U giftbot -d giftbot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://giftbot:giftbot@127.0.0.1:5432/giftbot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Build
+        run: pnpm build
+      - name: Migrate empty database
+        run: pnpm db:migrate
+      - name: Schema constraint tests
+        run: pnpm db:test
+      - name: Domain tests
+        run: pnpm domain:test
+      - name: Auth tests
+        run: pnpm auth:test
+      - name: Rate-limit tests
+        run: pnpm rate-limit:test
+      - name: Jobs ingress tests
+        run: pnpm jobs:test
+      - name: API route tests
+        run: pnpm api:test
+      - name: Bot process tests
+        run: pnpm bot:test
+      - name: Worker process tests
+        run: pnpm worker:test
+      - name: Phase 16 validation
+        run: pnpm validate:test
+      - name: Restore drill
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGUSER: giftbot
+          PGPASSWORD: giftbot
+        run: |
+          psql -d giftbot -v ON_ERROR_STOP=1 -c "insert into app_config (key, value) values ('restore_probe', '\"phase-2-restore-drill\"'::jsonb) on conflict (key) do update set value = excluded.value"
+          pg_dump -Fc -d giftbot -f /tmp/giftbot.dump
+          dropdb --if-exists --force giftbot_restore || true
+          createdb giftbot_restore
+          pg_restore --no-owner -d giftbot_restore /tmp/giftbot.dump
+          test "$(psql -d giftbot_restore -t -A -c "select value #>> '{}' from app_config where key = 'restore_probe'")" = "phase-2-restore-drill"
+          test "$(psql -d giftbot_restore -t -A -c "select count(*) from pg_tables where schemaname = 'public' and tablename in ('kick_events','telegram_events','store')")" = "0"
