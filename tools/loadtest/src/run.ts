@@ -294,16 +294,6 @@ export async function runLoadtest(
         scenarios.push(
           await runAuthedGetLadder(
             owned,
-            `contest-page-${String(concurrency)}`,
-            "/contest/referral",
-            concurrency,
-            telegramCursor,
-          ),
-        );
-        telegramCursor += concurrency;
-        scenarios.push(
-          await runAuthedGetLadder(
-            owned,
             `recent-wins-${String(concurrency)}`,
             "/recent-wins?limit=12",
             concurrency,
@@ -376,7 +366,6 @@ export async function runLoadtest(
         { name: "leaderboard", path: "/leaderboard/balance" },
         { name: "giveaways", path: "/giveaways" },
         { name: "contest-summary", path: "/contest/referral/summary" },
-        { name: "contest-page", path: "/contest/referral" },
       ];
       let telegramCursor = TELEGRAM_ID_BASE;
       for (const concurrency of [10, 25, 50, 100, 200] as const) {

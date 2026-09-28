@@ -46,10 +46,6 @@ test("parseHash maps nested Mini App screens", () => {
   });
   assert.deepEqual(parseHash("#/admin/welvura"), { name: "admin-welvura" });
   assert.deepEqual(parseHash("#/admin/broadcast"), { name: "admin-broadcast" });
-  assert.deepEqual(parseHash("#/contest/referral"), { name: "contest-referral" });
-  assert.deepEqual(parseHash("#/admin/contest/referral"), {
-    name: "admin-contest-referral",
-  });
 });
 
 test("unknown hashes fall back to home and do not invent extra tabs", () => {
@@ -61,10 +57,9 @@ test("unknown hashes fall back to home and do not invent extra tabs", () => {
   assert.equal(tabFor({ name: "game", slug: "rolls" }), "home");
   assert.equal(tabFor({ name: "giveaways" }), "home");
   assert.equal(hrefFor({ name: "giveaways" }), "#/giveaways");
-  assert.equal(hrefFor({ name: "contest-referral" }), "#/contest/referral");
-  assert.equal(tabFor({ name: "contest-referral" }), "home");
-  assert.equal(showsBottomNav({ name: "contest-referral" }), true);
   assert.equal(hrefFor({ name: "admin-giveaways" }), "#/admin/giveaways");
+  assert.deepEqual(parseHash("#/contest/referral"), { name: "home" });
+  assert.deepEqual(parseHash("#/admin/contest/referral"), { name: "home" });
   assert.equal(isMainTab({ name: "home" }), true);
   assert.equal(isMainTab({ name: "leaderboard" }), false);
   assert.equal(showsBottomNav({ name: "leaderboard" }), true);

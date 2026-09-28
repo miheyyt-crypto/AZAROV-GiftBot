@@ -28,7 +28,6 @@ const MinesPage = lazy(async () => import("../pages/MinesPage.js"));
 const DicePage = lazy(async () => import("../pages/DicePage.js"));
 const RollsPage = lazy(async () => import("../pages/RollsPage.js"));
 const LeaderboardPage = lazy(async () => import("../pages/LeaderboardPage.js"));
-const ContestReferralPage = lazy(async () => import("../pages/ContestReferralPage.js"));
 const AdminPromoPage = lazy(async () => import("../pages/AdminPromoPage.js"));
 const AdminGiveawaysPage = lazy(async () => import("../pages/AdminGiveawaysPage.js"));
 const GramWithdrawalsPage = lazy(async () => import("../pages/GramWithdrawalsPage.js"));
@@ -43,9 +42,6 @@ const AdminCashWithdrawalsPage = lazy(
 );
 const AdminWelvuraPage = lazy(async () => import("../pages/AdminWelvuraPage.js"));
 const AdminBroadcastPage = lazy(async () => import("../pages/AdminBroadcastPage.js"));
-const AdminContestReferralPage = lazy(
-  async () => import("../pages/AdminContestReferralPage.js"),
-);
 
 function RouteView({
   route,
@@ -110,8 +106,6 @@ function RouteView({
           viewerPublicId={viewerPublicId}
         />
       );
-    case "contest-referral":
-      return <ContestReferralPage token={token} skipRemote={skipRemote} />;
     case "game":
       if (route.slug === "mines") {
         return <MinesPage token={token} skipRemote={skipRemote} />;
@@ -169,13 +163,6 @@ function RouteView({
     case "admin-broadcast":
       return (
         <AdminBroadcastPage
-          skipRemote={skipRemote}
-          isSuperAdmin={isSuperAdmin}
-        />
-      );
-    case "admin-contest-referral":
-      return (
-        <AdminContestReferralPage
           skipRemote={skipRemote}
           isSuperAdmin={isSuperAdmin}
         />

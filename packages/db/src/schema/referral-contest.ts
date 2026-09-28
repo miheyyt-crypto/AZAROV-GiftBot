@@ -24,9 +24,9 @@ export const referralContests = pgTable(
     endAt: timestamp("end_at", { withTimezone: true }).notNull(),
     prizePoolAzc: bigint("prize_pool_azc", { mode: "bigint" }).notNull(),
     prizeDistribution: jsonb("prize_distribution").notNull(),
-    createdByUserId: uuid("created_by_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "restrict",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -34,9 +34,7 @@ export const referralContests = pgTable(
     finalizedAt: timestamp("finalized_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("referral_contests_one_open")
-      .on(sql`(1)`)
-      .where(sql`${table.finalizedAt} is null`),
+    uniqueIndex("referral_contests_singleton").on(sql`(1)`),
     index("referral_contests_status_end_idx").on(table.status, table.endAt),
   ],
 );

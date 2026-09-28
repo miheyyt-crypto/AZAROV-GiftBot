@@ -329,7 +329,7 @@ Artifact restart (no migrate): restart the three runtime units only. See [`deplo
 - Proxy Mini App/API/webhook prefixes to `127.0.0.1:3000` only
 - **Do not** proxy Mini App routes to Bot or Worker
 
-Proxied prefixes include: `/auth/`, `/admin/`, `/bootstrap`, `/sections/`, `/kick/`, `/games/`, `/rounds/`, `/cases/`, `/products/`, `/tasks/`, `/referrals/`, `/telegram/`, `/health/`.
+Proxied prefixes include: `/auth/`, `/admin/`, `/bootstrap`, `/sections/`, `/kick/`, `/games/`, `/rounds/`, `/cases/`, `/contest/`, `/products/`, `/tasks/`, `/referrals/`, `/telegram/`, `/health/`.
 
 ### 12.2 HTTPS / WSS requirements
 

@@ -7,6 +7,7 @@ import {
 import { createDb } from "@giftbot/db";
 import {
   createHttpKickOAuthClient,
+  ensureDefaultReferralContest,
   parseTokenEncryptionKey,
 } from "@giftbot/domain";
 import { createLogger, createMetrics } from "@giftbot/observability";
@@ -80,6 +81,7 @@ async function main(): Promise<void> {
   });
 
   if (dbHandle) {
+    await ensureDefaultReferralContest(dbHandle.db);
     const deps: WorkerJobDeps = {};
     if (
       env.KICK_CLIENT_ID &&

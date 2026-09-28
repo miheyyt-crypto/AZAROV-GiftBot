@@ -12,7 +12,6 @@ export const ADMIN_NAV: Array<{
   { href: "#/admin/gram-withdrawals", label: "Выводы Gram", route: "admin-gram-withdrawals" },
   { href: "#/admin/promo-codes", label: "Промокоды", route: "admin-promo-codes" },
   { href: "#/admin/broadcast", label: "Рассылка", route: "admin-broadcast" },
-  { href: "#/admin/contest/referral", label: "Реферальный конкурс", route: "admin-contest-referral" },
 ];
 
 export function isAdminRouteName(name: AppRoute["name"]): boolean {

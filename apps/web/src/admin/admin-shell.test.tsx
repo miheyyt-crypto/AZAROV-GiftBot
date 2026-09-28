@@ -11,7 +11,6 @@ import { AdminPromoPage } from "../pages/AdminPromoPage.js";
 import { AdminShopOrdersPage } from "../pages/AdminShopOrdersPage.js";
 import { AdminWelvuraPage } from "../pages/AdminWelvuraPage.js";
 import { AdminBroadcastPage } from "../pages/AdminBroadcastPage.js";
-import { AdminContestReferralPage } from "../pages/AdminContestReferralPage.js";
 import { AdminShell } from "./AdminShell.js";
 import { ADMIN_NAV, adminRouteFromHref } from "./nav.js";
 
@@ -26,7 +25,6 @@ test("admin nav lists only real sections", () => {
       "admin-gram-withdrawals",
       "admin-promo-codes",
       "admin-broadcast",
-      "admin-contest-referral",
     ],
   );
 });
@@ -116,12 +114,6 @@ test("each admin page renders its own title", () => {
         createElement(AdminBroadcastPage, { skipRemote: true, isSuperAdmin: true }),
       ),
       "Рассылка в Telegram",
-    ],
-    [
-      renderToStaticMarkup(
-        createElement(AdminContestReferralPage, { skipRemote: true, isSuperAdmin: true }),
-      ),
-      "Реферальный конкурс",
     ],
   ] as const;
   for (const [html, title] of pages) {

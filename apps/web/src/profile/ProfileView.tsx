@@ -252,7 +252,6 @@ export function ProfileView({
         { href: "#/admin/shop/orders", label: "Заказы" },
         { href: "#/admin/cash-withdrawals", label: "₽ заявки" },
         { href: "#/admin/welvura", label: "Welvura" },
-        { href: "#/admin/contest/referral", label: "Реферальный конкурс" },
       ]
     : [];
 

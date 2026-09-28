@@ -8,13 +8,7 @@ import {
   parseReferralCaseOpenResult,
 } from "./referral-case/parse.js";
 import { parseBalanceLeaderboard, parseReferralLeaderboard } from "./leaderboard/parse.js";
-import {
-  parseAdminContestDetail,
-  parseAdminContestList,
-  parseContestHomeSummaryResponse,
-  parseContestPage,
-} from "./contest/parse.js";
-import type { ReferralContestPrize } from "./contest/types.js";
+import { parseContestHomeSummaryResponse } from "./contest/parse.js";
 import { parseReferralList, parseReferralMe } from "./referrals/parse.js";
 import {
   parseAdminWelvuraAccounts,
@@ -793,72 +787,6 @@ export async function loadReferralLeaderboard(token: string) {
 
 export async function loadContestReferralSummary(token: string) {
   return loadJson(token, "/contest/referral/summary", parseContestHomeSummaryResponse);
-}
-
-export async function loadContestReferralPage(token: string) {
-  return loadJson(token, "/contest/referral", parseContestPage);
-}
-
-export async function loadAdminReferralContests(token: string) {
-  const response = await apiFetch("/admin/contest/referral", {
-    headers: { authorization: `Bearer ${token}` },
-  });
-  return parseAdminContestList(await readJson(response));
-}
-
-export async function loadAdminReferralContestDetail(
-  token: string,
-  contestId: string,
-) {
-  const response = await apiFetch(
-    `/admin/contest/referral/${encodeURIComponent(contestId)}`,
-    { headers: { authorization: `Bearer ${token}` } },
-  );
-  return parseAdminContestDetail(await readJson(response));
-}
-
-export async function createAdminReferralContest(
-  token: string,
-  input: {
-    startNow: boolean;
-    startAt?: string;
-    prizes: ReferralContestPrize[];
-    title?: string;
-  },
-  idempotencyKey: string,
-) {
-  const response = await apiFetch("/admin/contest/referral", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-      "idempotency-key": idempotencyKey,
-    },
-    body: JSON.stringify(input),
-  });
-  return readJson<{ id: string; status: string; startAt: string; endAt: string }>(
-    response,
-  );
-}
-
-export async function finalizeAdminReferralContest(
-  token: string,
-  contestId: string,
-  idempotencyKey: string,
-) {
-  const response = await apiFetch(
-    `/admin/contest/referral/${encodeURIComponent(contestId)}/finalize`,
-    {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        "content-type": "application/json",
-        "idempotency-key": idempotencyKey,
-      },
-      body: JSON.stringify({}),
-    },
-  );
-  return readJson<{ replayed: boolean; winnerCount: number }>(response);
 }
 
 export async function loadTasks(token: string) {

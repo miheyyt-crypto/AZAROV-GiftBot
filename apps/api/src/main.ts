@@ -12,6 +12,7 @@ import {
 import { createDb } from "@giftbot/db";
 import {
   createHttpKickOAuthClient,
+  ensureDefaultReferralContest,
   ensureShopCatalog,
   parseTokenEncryptionKey,
 } from "@giftbot/domain";
@@ -148,6 +149,7 @@ async function main(): Promise<void> {
 
   if (dbHandle) {
     await ensureShopCatalog(dbHandle.db);
+    await ensureDefaultReferralContest(dbHandle.db);
   }
 
   await app.listen({ host: env.API_HOST, port: env.API_PORT });

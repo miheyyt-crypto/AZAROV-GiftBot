@@ -15,18 +15,17 @@ CREATE TABLE IF NOT EXISTS referral_contests (
   end_at timestamptz NOT NULL,
   prize_pool_azc bigint NOT NULL,
   prize_distribution jsonb NOT NULL,
-  created_by_user_id uuid NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
+  created_by_user_id uuid REFERENCES users (id) ON DELETE RESTRICT,
   created_at timestamptz NOT NULL DEFAULT now(),
   started_at timestamptz,
   finalized_at timestamptz,
   CONSTRAINT referral_contests_window CHECK (end_at > start_at),
   CONSTRAINT referral_contests_pool_positive CHECK (prize_pool_azc > 0),
-  CONSTRAINT referral_contests_prize_places CHECK (jsonb_typeof(prize_distribution) = 'array' AND jsonb_array_length(prize_distribution) = 10)
+  CONSTRAINT referral_contests_prize_places CHECK (jsonb_typeof(prize_distribution) = 'array' AND jsonb_array_length(prize_distribution) = 5)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS referral_contests_one_open
-  ON referral_contests ((1))
-  WHERE finalized_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS referral_contests_singleton
+  ON referral_contests ((1));
 
 CREATE INDEX IF NOT EXISTS referral_contests_status_end_idx
   ON referral_contests (status, end_at);

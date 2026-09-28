@@ -3,145 +3,179 @@ import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ContestHomeBanner } from "./ContestHomeBanner.js";
-import { ContestReferralView } from "./ContestReferralView.js";
-import { parseContestHomeSummaryResponse, parseContestPage } from "./parse.js";
-import { formatCountdown, remainingFromEndsAt } from "./messages.js";
-import type { ReferralContestPage } from "./types.js";
+import { parseContestHomeSummaryResponse } from "./parse.js";
+import { remainingFromEndsAt } from "./messages.js";
+import type { ReferralContestHomeSummary } from "./types.js";
 
 const SERVER = "2026-09-22T12:00:00.000Z";
 const FETCHED = Date.parse(SERVER);
 
-const PAGE: ReferralContestPage = {
+const PAGE: ReferralContestHomeSummary = {
   contest: {
     id: "c1",
     status: "active",
-    title: "РЕФЕРАЛЬНЫЙ БАТТЛ",
     startAt: "2026-09-21T12:00:00.000Z",
     endAt: "2026-09-23T12:00:00.000Z",
-    prizePoolAzc: "100000",
-    prizePlaces: 10,
     prizes: [
-      { place: 1, rewardAzc: "25000" },
-      { place: 2, rewardAzc: "17000" },
-      { place: 3, rewardAzc: "15000" },
-      { place: 4, rewardAzc: "10000" },
-      { place: 5, rewardAzc: "8000" },
-      { place: 6, rewardAzc: "7000" },
-      { place: 7, rewardAzc: "6000" },
-      { place: 8, rewardAzc: "5000" },
-      { place: 9, rewardAzc: "4000" },
-      { place: 10, rewardAzc: "3000" },
+      { place: 1, rewardAzc: "50000" },
+      { place: 2, rewardAzc: "34000" },
+      { place: 3, rewardAzc: "30000" },
+      { place: 4, rewardAzc: "20000" },
+      { place: 5, rewardAzc: "16000" },
     ],
-    finalizedAt: null,
+    serverNow: SERVER,
   },
   leaderboard: [
     {
       rank: 1,
-      publicId: "p1",
       displayName: "One",
       username: "user1",
       avatarUrl: null,
-      referralCount: 34,
-      prizePlace: 1,
-      rewardAzc: "25000",
+      referralCount: 14,
       isYou: false,
     },
     {
-      rank: 7,
-      publicId: "me",
+      rank: 2,
+      displayName: "Two",
+      username: "user2",
+      avatarUrl: null,
+      referralCount: 11,
+      isYou: false,
+    },
+    {
+      rank: 3,
       displayName: "Me",
       username: "meuser",
       avatarUrl: null,
-      referralCount: 12,
-      prizePlace: 7,
-      rewardAzc: "6000",
+      referralCount: 7,
       isYou: true,
+    },
+    {
+      rank: 4,
+      displayName: "Four",
+      username: "user4",
+      avatarUrl: null,
+      referralCount: 5,
+      isYou: false,
+    },
+    {
+      rank: 5,
+      displayName: "Five",
+      username: "user5",
+      avatarUrl: null,
+      referralCount: 4,
+      isYou: false,
     },
   ],
   me: {
-    rank: 7,
-    referralCount: 12,
-    nextRankGap: 2,
-    prizePlace: 7,
-    potentialRewardAzc: "6000",
+    rank: 3,
+    referralCount: 7,
+    potentialRewardAzc: "30000",
     referralUrl: "https://t.me/AZAROV_GiftBot?start=abc",
   },
   serverNow: SERVER,
 };
 
-test("contest page shows pool, prizes, board and my position", () => {
+test("home banner shows prizes, TOP5, own stats and invite without contest page", () => {
   const html = renderToStaticMarkup(
-    createElement(ContestReferralView, {
+    createElement(ContestHomeBanner, {
       page: PAGE,
       fetchedAtMs: FETCHED,
       nowMs: FETCHED,
       onInvite: () => undefined,
     }),
   );
-  assert.match(html, /100 000/);
-  assert.match(html, /1 место/);
-  assert.match(html, /10 место/);
+  assert.match(html, /РЕФЕРАЛЬНЫЙ/);
+  assert.match(html, /БАТТЛ/);
+  assert.match(html, /До конца/);
+  assert.match(html, /24:00:00/);
+  assert.match(html, /ПРИЗЫ/);
+  assert.match(html, /50 000/);
+  assert.match(html, /34 000/);
+  assert.match(html, /30 000/);
+  assert.match(html, /20 000/);
+  assert.match(html, /16 000/);
+  assert.match(html, /TOP 5/);
+  assert.match(html, /Приз от 5 активных рефералов/);
   assert.match(html, /@user1/);
-  assert.match(html, /Твоя позиция/);
-  assert.match(html, /#7/);
-  assert.match(html, /7 место · потенциальная награда 6000 AZC/);
+  assert.match(html, /@user5/);
+  assert.match(html, /Приглашено/);
+  assert.match(html, />7</);
+  assert.match(html, /Твоё место/);
+  assert.match(html, /#3/);
+  assert.match(html, /\(Ты\)/);
   assert.match(html, /Пригласить друзей/);
+  assert.doesNotMatch(html, /contest\/referral/);
+  assert.doesNotMatch(html, /Участвовать/);
 });
 
-test("home banner is summary-only and links to contest", () => {
+test("home banner hides invite after finalize", () => {
   const html = renderToStaticMarkup(
     createElement(ContestHomeBanner, {
-      contest: {
-        id: "c1",
-        status: "active",
-        title: "РЕФЕРАЛЬНЫЙ БАТТЛ",
-        startAt: PAGE.contest!.startAt,
-        endAt: PAGE.contest!.endAt,
-        prizePoolAzc: "100000",
-        prizePlaces: 10,
-        serverNow: SERVER,
+      page: {
+        ...PAGE,
+        contest: PAGE.contest
+          ? { ...PAGE.contest, status: "finalized" }
+          : null,
       },
       fetchedAtMs: FETCHED,
       nowMs: FETCHED,
+      onInvite: () => undefined,
     }),
   );
-  assert.match(html, /РЕФЕРАЛЬНЫЙ БАТТЛ/);
-  assert.match(html, /10 ПРИЗОВЫХ МЕСТ/);
-  assert.match(html, /Участвовать/);
-  assert.doesNotMatch(html, /@user1/);
+  assert.match(html, /КОНКУРС ЗАВЕРШЁН/);
+  assert.match(html, /@user1/);
+  assert.doesNotMatch(html, /Пригласить друзей/);
+  assert.doesNotMatch(html, /До конца/);
 });
 
-test("summary parser rejects leaderboard-shaped payloads without required fields", () => {
-  const parsed = parseContestHomeSummaryResponse({
-    contest: {
-      id: "c1",
-      status: "active",
-      title: "t",
-      startAt: SERVER,
-      endAt: SERVER,
-      prizePoolAzc: "100000",
-      prizePlaces: 10,
-      serverNow: SERVER,
-    },
-  });
+test("home banner empty leaderboard stays compact", () => {
+  const html = renderToStaticMarkup(
+    createElement(ContestHomeBanner, {
+      page: { ...PAGE, leaderboard: [] },
+      fetchedAtMs: FETCHED,
+      nowMs: FETCHED,
+      onInvite: () => undefined,
+    }),
+  );
+  assert.match(html, /Пока никто не пригласил друзей/);
+  assert.match(html, /Стань первым!/);
+  assert.match(html, /Приз от 5 активных рефералов/);
+  assert.match(html, /Пригласить друзей/);
+});
+
+test("home banner rank fallback is a dash when unranked", () => {
+  const html = renderToStaticMarkup(
+    createElement(ContestHomeBanner, {
+      page: {
+        ...PAGE,
+        me: { ...PAGE.me, rank: 0, referralCount: 0 },
+        leaderboard: PAGE.leaderboard.map((row) => ({ ...row, isYou: false })),
+      },
+      fetchedAtMs: FETCHED,
+      nowMs: FETCHED,
+      onInvite: () => undefined,
+    }),
+  );
+  assert.match(html, /Твоё место/);
+  assert.match(html, />—</);
+  assert.doesNotMatch(html, /\(Ты\)/);
+});
+
+test("summary parser keeps prizes, leaderboard and referralUrl", () => {
+  const parsed = parseContestHomeSummaryResponse(PAGE);
   assert.equal(parsed.contest?.id, "c1");
-  assert.equal("leaderboard" in (parsed.contest ?? {}), false);
-});
-
-test("page parser keeps referralUrl for existing share flow", () => {
-  const parsed = parseContestPage(PAGE);
-  assert.equal(parsed.me?.referralUrl, "https://t.me/AZAROV_GiftBot?start=abc");
+  assert.equal(parsed.contest?.prizes.length, 5);
+  assert.equal(parsed.leaderboard.length, 5);
+  assert.equal(parsed.me.referralUrl, "https://t.me/AZAROV_GiftBot?start=abc");
 });
 
 test("countdown uses server timestamps", () => {
-  assert.equal(formatCountdown(3661), "01:01:01");
-  assert.equal(
-    remainingFromEndsAt(
-      "2026-09-22T13:00:00.000Z",
-      SERVER,
-      FETCHED,
-      FETCHED,
-    ),
-    3600,
+  const remaining = remainingFromEndsAt(
+    "2026-09-22T12:01:00.000Z",
+    SERVER,
+    FETCHED,
+    FETCHED,
   );
+  assert.equal(remaining, 60);
 });

@@ -14,33 +14,27 @@ import { publicAvatarUrl } from "./https-url.js";
 import { asBigInt } from "./money.js";
 import { applyIn } from "./wallet.js";
 
-export const REFERRAL_CONTEST_PRIZE_POOL_AZC = 100_000n;
-export const REFERRAL_CONTEST_PRIZE_PLACES = 10;
-export const REFERRAL_CONTEST_FIRST_PLACE_MAX_AZC = 25_000n;
+export const REFERRAL_CONTEST_PRIZE_POOL_AZC = 150_000n;
+export const REFERRAL_CONTEST_PRIZE_PLACES = 5;
+export const REFERRAL_CONTEST_FIRST_PLACE_MAX_AZC = 50_000n;
+export const REFERRAL_CONTEST_MIN_ACTIVE_REFERRALS_FOR_REWARD = 5;
 export const REFERRAL_CONTEST_DURATION_MS = 24 * 60 * 60 * 1000;
 export const REFERRAL_CONTEST_TITLE = "РЕФЕРАЛЬНЫЙ БАТТЛ";
-export const REFERRAL_CONTEST_LEADERBOARD_LIMIT = 10;
+export const REFERRAL_CONTEST_LEADERBOARD_LIMIT = 5;
 export const REFERRAL_CONTEST_FINALIZE_JOB = "referral_contest.finalize";
 
-/** Canonical product split. Places 4–10 share the remaining 43 000. */
 export const REFERRAL_CONTEST_DEFAULT_PRIZES: ReadonlyArray<{
   place: number;
   rewardAzc: string;
 }> = [
-  { place: 1, rewardAzc: "25000" },
-  { place: 2, rewardAzc: "17000" },
-  { place: 3, rewardAzc: "15000" },
-  { place: 4, rewardAzc: "10000" },
-  { place: 5, rewardAzc: "8000" },
-  { place: 6, rewardAzc: "7000" },
-  { place: 7, rewardAzc: "6000" },
-  { place: 8, rewardAzc: "5000" },
-  { place: 9, rewardAzc: "4000" },
-  { place: 10, rewardAzc: "3000" },
+  { place: 1, rewardAzc: "50000" },
+  { place: 2, rewardAzc: "34000" },
+  { place: 3, rewardAzc: "30000" },
+  { place: 4, rewardAzc: "20000" },
+  { place: 5, rewardAzc: "16000" },
 ];
 
 const LEADERBOARD_CACHE_TTL_MS = 5_000;
-const SUMMARY_CACHE_TTL_MS = 5_000;
 
 export type ReferralContestPrize = {
   place: number;
@@ -73,37 +67,21 @@ export type ReferralContestLeaderboardEntry = {
 export type ReferralContestMe = {
   rank: number;
   referralCount: number;
-  nextRankGap: number;
-  prizePlace: number | null;
   potentialRewardAzc: string | null;
   referralUrl: string | null;
 };
 
-export type ReferralContestView = {
+export type ReferralContestHomeSummary = {
   contest: {
     id: string;
     status: ReferralContestPublicStatus;
-    title: string;
     startAt: string;
     endAt: string;
-    prizePoolAzc: string;
-    prizePlaces: number;
     prizes: ReferralContestPrizeDto[];
-    finalizedAt: string | null;
-  };
+    serverNow: string;
+  } | null;
   leaderboard: ReferralContestLeaderboardEntry[];
   me: ReferralContestMe;
-  serverNow: string;
-};
-
-export type ReferralContestHomeSummary = {
-  id: string;
-  status: ReferralContestPublicStatus;
-  title: string;
-  startAt: string;
-  endAt: string;
-  prizePoolAzc: string;
-  prizePlaces: number;
   serverNow: string;
 };
 
@@ -128,15 +106,10 @@ type LeaderboardCache = {
 let leaderboardCache: LeaderboardCache | null = null;
 let leaderboardInflight: { contestId: string; promise: Promise<RankedRow[]> } | null =
   null;
-let summaryCache: { at: number; value: ReferralContestHomeSummary | null } | null =
-  null;
-let summaryInflight: Promise<ReferralContestHomeSummary | null> | null = null;
 
 export function invalidateReferralContestCache(): void {
   leaderboardCache = null;
   leaderboardInflight = null;
-  summaryCache = null;
-  summaryInflight = null;
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -226,6 +199,21 @@ export function publicContestStatus(
 
 function prizeMap(prizes: ReferralContestPrize[]): Map<number, bigint> {
   return new Map(prizes.map((row) => [row.place, row.rewardAzc]));
+}
+
+export function contestPayoutForPlace(
+  place: number,
+  referralCount: number,
+  prizes: Map<number, bigint>,
+): bigint {
+  if (
+    place < 1 ||
+    place > REFERRAL_CONTEST_PRIZE_PLACES ||
+    referralCount < REFERRAL_CONTEST_MIN_ACTIVE_REFERRALS_FOR_REWARD
+  ) {
+    return 0n;
+  }
+  return prizes.get(place) ?? 0n;
 }
 
 function liveRankSql(startAt: Date, endAt: Date) {
@@ -386,7 +374,7 @@ function toEntry(
   prizes: Map<number, bigint>,
 ): ReferralContestLeaderboardEntry {
   const inPrizes = row.place <= REFERRAL_CONTEST_PRIZE_PLACES;
-  const reward = inPrizes ? prizes.get(row.place) ?? null : null;
+  const reward = contestPayoutForPlace(row.place, row.referralCount, prizes);
   return {
     rank: row.place,
     publicId: row.publicId,
@@ -395,7 +383,7 @@ function toEntry(
     avatarUrl: publicAvatarUrl(row.photoUrl),
     referralCount: row.referralCount,
     prizePlace: inPrizes ? row.place : null,
-    rewardAzc: reward ? reward.toString() : null,
+    rewardAzc: reward > 0n ? reward.toString() : null,
     isYou: row.userId === viewerId,
   };
 }
@@ -407,42 +395,15 @@ function buildMe(
   referralUrl: string | null,
 ): ReferralContestMe {
   const mine = rows.find((row) => row.userId === viewerId);
-  const rank = mine ? mine.place : rows.length + 1;
+  const rank = mine?.place ?? 0;
   const referralCount = mine?.referralCount ?? 0;
-  const prev = rank > 1 ? rows.find((row) => row.place === rank - 1) : undefined;
-  let nextRankGap = 0;
-  if (prev) {
-    nextRankGap = Math.max(1, prev.referralCount - referralCount);
-  }
-  const prizePlace =
-    rank >= 1 && rank <= REFERRAL_CONTEST_PRIZE_PLACES && referralCount > 0
-      ? rank
-      : null;
-  const potential = prizePlace ? prizes.get(prizePlace) ?? null : null;
+  const potential = contestPayoutForPlace(rank, referralCount, prizes);
   return {
     rank,
     referralCount,
-    nextRankGap,
-    prizePlace,
     potentialRewardAzc: potential ? potential.toString() : null,
     referralUrl,
   };
-}
-
-async function loadContestRow(
-  db: GiftbotDb | GiftbotTx,
-  id: string,
-): Promise<typeof referralContests.$inferSelect> {
-  const rows = await db
-    .select()
-    .from(referralContests)
-    .where(eq(referralContests.id, id))
-    .limit(1);
-  const row = rows[0];
-  if (!row) {
-    throw new NotFoundError("contest not found", "CONTEST_NOT_FOUND");
-  }
-  return row;
 }
 
 export async function findOpenReferralContest(
@@ -472,76 +433,44 @@ export async function findCurrentReferralContest(
   return rows[0] ?? null;
 }
 
-function serializeContest(
-  row: typeof referralContests.$inferSelect,
-  now: Date,
-): ReferralContestView["contest"] {
-  const prizes = parsePrizeDistribution(row.prizeDistribution);
-  return {
-    id: row.id,
-    status: publicContestStatus(row, now),
-    title: row.title,
-    startAt: row.startAt.toISOString(),
-    endAt: row.endAt.toISOString(),
-    prizePoolAzc: asBigInt(row.prizePoolAzc).toString(),
-    prizePlaces: REFERRAL_CONTEST_PRIZE_PLACES,
-    prizes: prizesToJson(prizes),
-    finalizedAt: row.finalizedAt ? row.finalizedAt.toISOString() : null,
-  };
-}
-
 export async function readReferralContestHomeSummary(
   db: GiftbotDb,
-  clock: Clock = systemClock,
-): Promise<ReferralContestHomeSummary | null> {
-  const now = Date.now();
-  if (summaryCache && now - summaryCache.at < SUMMARY_CACHE_TTL_MS) {
-    return summaryCache.value;
-  }
-  if (summaryInflight) {
-    return summaryInflight;
-  }
-  summaryInflight = (async () => {
-    const row = await findOpenReferralContest(db);
-    const serverNow = clock.now();
-    const value = row
-      ? {
-          id: row.id,
-          status: publicContestStatus(row, serverNow),
-          title: row.title,
-          startAt: row.startAt.toISOString(),
-          endAt: row.endAt.toISOString(),
-          prizePoolAzc: asBigInt(row.prizePoolAzc).toString(),
-          prizePlaces: REFERRAL_CONTEST_PRIZE_PLACES,
-          serverNow: serverNow.toISOString(),
-        }
-      : null;
-    summaryCache = { at: Date.now(), value };
-    return value;
-  })().finally(() => {
-    summaryInflight = null;
-  });
-  return summaryInflight;
-}
-
-export async function readReferralContestPage(
-  db: GiftbotDb,
   input: { userId: string; referralUrl: string | null; clock?: Clock },
-): Promise<ReferralContestView | { contest: null; serverNow: string }> {
+): Promise<ReferralContestHomeSummary> {
   const clock = input.clock ?? systemClock;
   const now = clock.now();
+  const serverNow = now.toISOString();
+  const emptyMe: ReferralContestMe = {
+    rank: 0,
+    referralCount: 0,
+    potentialRewardAzc: null,
+    referralUrl: input.referralUrl,
+  };
   const row = await findCurrentReferralContest(db);
   if (!row) {
-    return { contest: null, serverNow: now.toISOString() };
+    return {
+      contest: null,
+      leaderboard: [],
+      me: emptyMe,
+      serverNow,
+    };
   }
-  const prizes = prizeMap(parsePrizeDistribution(row.prizeDistribution));
+  const parsed = parsePrizeDistribution(row.prizeDistribution);
+  const prizes = prizeMap(parsed);
   const ranked = await rankingForContest(db, row);
   const top = ranked.slice(0, REFERRAL_CONTEST_LEADERBOARD_LIMIT);
   return {
-    contest: serializeContest(row, now),
+    contest: {
+      id: row.id,
+      status: publicContestStatus(row, now),
+      startAt: row.startAt.toISOString(),
+      endAt: row.endAt.toISOString(),
+      prizes: prizesToJson(parsed),
+      serverNow,
+    },
     leaderboard: top.map((entry) => toEntry(entry, input.userId, prizes)),
     me: buildMe(ranked, input.userId, prizes, input.referralUrl),
-    serverNow: now.toISOString(),
+    serverNow,
   };
 }
 
@@ -562,40 +491,35 @@ async function enqueueFinalizeJob(
     .onConflictDoNothing({ target: [jobs.type, jobs.idempotencyKey] });
 }
 
-export async function createReferralContest(
+export async function ensureDefaultReferralContest(
   db: GiftbotDb,
-  input: {
-    adminUserId: string;
-    prizes: unknown;
-    startAt?: Date | string | null;
-    startNow?: boolean;
-    title?: string;
-    clock?: Clock;
-    reason?: string;
-  },
+  input: { clock?: Clock } = {},
 ): Promise<{ id: string; status: string; startAt: string; endAt: string }> {
-  const prizes = parsePrizeDistribution(input.prizes);
   const clock = input.clock ?? systemClock;
-  const now = clock.now();
-  const startAt = input.startNow || !input.startAt ? now : new Date(input.startAt);
-  if (Number.isNaN(startAt.getTime())) {
-    throw new InvalidAmountError("startAt is invalid");
-  }
-  const endAt = new Date(startAt.getTime() + REFERRAL_CONTEST_DURATION_MS);
-  const status = startAt.getTime() > now.getTime() ? "scheduled" : "active";
-  try {
-    const created = await db.transaction(async (tx) => {
+  const existing = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${"referral-contest-ensure-default"}))`,
+    );
+    const rows = await tx.select().from(referralContests).limit(1);
+    const found = rows[0];
+    if (found) {
+      return found;
+    }
+    const now = clock.now();
+    const startAt = now;
+    const endAt = new Date(startAt.getTime() + REFERRAL_CONTEST_DURATION_MS);
+    const prizes = parsePrizeDistribution([...REFERRAL_CONTEST_DEFAULT_PRIZES]);
+    try {
       const inserted = await tx
         .insert(referralContests)
         .values({
-          status,
-          title: (input.title ?? REFERRAL_CONTEST_TITLE).trim() || REFERRAL_CONTEST_TITLE,
+          status: "active",
+          title: REFERRAL_CONTEST_TITLE,
           startAt,
           endAt,
           prizePoolAzc: REFERRAL_CONTEST_PRIZE_POOL_AZC,
           prizeDistribution: prizesToJson(prizes),
-          createdByUserId: input.adminUserId,
-          ...(status === "active" ? { startedAt: startAt } : {}),
+          startedAt: startAt,
         })
         .returning();
       const row = inserted[0];
@@ -603,36 +527,26 @@ export async function createReferralContest(
         throw new Error("contest insert failed");
       }
       await enqueueFinalizeJob(tx, row.id, endAt);
-      await writeAuditIn(tx, {
-        actorId: input.adminUserId,
-        action: "referral_contest.create",
-        targetType: "referral_contest",
-        targetId: row.id,
-        reason: input.reason ?? "create referral contest",
-        after: {
-          status: row.status,
-          startAt: row.startAt.toISOString(),
-          endAt: row.endAt.toISOString(),
-        },
-      });
       return row;
-    });
-    invalidateReferralContestCache();
-    return {
-      id: created.id,
-      status: created.status,
-      startAt: created.startAt.toISOString(),
-      endAt: created.endAt.toISOString(),
-    };
-  } catch (error) {
-    if (isUniqueViolation(error)) {
-      throw new ConflictError(
-        "an open referral contest already exists",
-        "CONTEST_ALREADY_ACTIVE",
-      );
+    } catch (error) {
+      if (!isUniqueViolation(error)) {
+        throw error;
+      }
+      const again = await tx.select().from(referralContests).limit(1);
+      const recovered = again[0];
+      if (!recovered) {
+        throw error;
+      }
+      return recovered;
     }
-    throw error;
-  }
+  });
+  invalidateReferralContestCache();
+  return {
+    id: existing.id,
+    status: existing.status,
+    startAt: existing.startAt.toISOString(),
+    endAt: existing.endAt.toISOString(),
+  };
 }
 
 async function insertInbox(
@@ -747,7 +661,7 @@ export async function finalizeReferralContest(
     const ranked = await loadLiveRanking(tx, contest.startAt, contest.endAt);
 
     for (const row of ranked) {
-      const reward = rewards.get(row.place) ?? 0n;
+      const reward = contestPayoutForPlace(row.place, row.referralCount, rewards);
       await tx
         .insert(referralContestResults)
         .values({
@@ -837,55 +751,4 @@ export async function finalizeReferralContest(
   });
   invalidateReferralContestCache();
   return result;
-}
-
-export async function listAdminReferralContests(
-  db: GiftbotDb,
-  clock: Clock = systemClock,
-) {
-  const now = clock.now();
-  const rows = await db
-    .select()
-    .from(referralContests)
-    .orderBy(sql`${referralContests.createdAt} desc`)
-    .limit(40);
-  const items = [];
-  for (const row of rows) {
-    const prizes = parsePrizeDistribution(row.prizeDistribution);
-    const ranked = row.finalizedAt
-      ? await loadFrozenRanking(db, row.id)
-      : await loadLiveRanking(db, row.startAt, row.endAt);
-    items.push({
-      ...serializeContest(row, now),
-      participantCount: ranked.length,
-      top10: ranked
-        .slice(0, REFERRAL_CONTEST_LEADERBOARD_LIMIT)
-        .map((entry) => toEntry(entry, "", prizeMap(prizes))),
-    });
-  }
-  return { items, serverNow: now.toISOString() };
-}
-
-export async function getAdminReferralContest(
-  db: GiftbotDb,
-  contestId: string,
-  clock: Clock = systemClock,
-) {
-  const now = clock.now();
-  const row = await loadContestRow(db, contestId);
-  const prizes = prizeMap(parsePrizeDistribution(row.prizeDistribution));
-  const ranked = row.finalizedAt
-    ? await loadFrozenRanking(db, row.id)
-    : await loadLiveRanking(db, row.startAt, row.endAt);
-  return {
-    contest: serializeContest(row, now),
-    participantCount: ranked.length,
-    leaderboard: ranked
-      .slice(0, REFERRAL_CONTEST_LEADERBOARD_LIMIT)
-      .map((entry) => toEntry(entry, "", prizes)),
-    winners: ranked
-      .filter((entry) => entry.place <= REFERRAL_CONTEST_PRIZE_PLACES)
-      .map((entry) => toEntry(entry, "", prizes)),
-    serverNow: now.toISOString(),
-  };
 }

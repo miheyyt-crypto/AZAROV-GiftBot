@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ApiRequestError, loadGiveaways, loadJson, openFreeCase } from "../api.js";
+import { openTelegramLink } from "../telegram.js";
 import { navigate } from "../app/routes.js";
 import { IconGift } from "../assets/icons.js";
 import { Avatar } from "../components/Avatar.js";
@@ -277,7 +278,7 @@ export function HomePage({
       loadJson(token, "/contest/referral/summary", parseContestHomeSummaryResponse)
         .then((summary) => {
           if (!cancelled) {
-            setContestSummary(summary.contest);
+            setContestSummary(summary);
             setContestFetchedAtMs(Date.now());
           }
         })
@@ -394,11 +395,20 @@ export function HomePage({
   return (
     <div className="stack home-page">
       <IdentityHeader summary={profile} balanceAzc={balanceAzc} />
-      {contestSummary ? (
+      {contestSummary?.contest ? (
         <ContestHomeBanner
-          contest={contestSummary}
+          page={contestSummary}
           fetchedAtMs={contestFetchedAtMs}
           nowMs={nowMs}
+          onInvite={() => {
+            const url = contestSummary.me.referralUrl;
+            if (!url) {
+              return;
+            }
+            openTelegramLink(
+              `https://t.me/share/url?url=${encodeURIComponent(url)}`,
+            );
+          }}
         />
       ) : null}
       {statusReady ? (

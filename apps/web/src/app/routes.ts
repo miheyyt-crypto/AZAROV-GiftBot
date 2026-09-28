@@ -13,7 +13,6 @@ export type AppRoute =
   | { name: "cash-withdrawals" }
   | { name: "achievements" }
   | { name: "giveaways" }
-  | { name: "contest-referral" }
   | { name: "game"; slug: "rolls" | "mines" | "dice" }
   | { name: "leaderboard" }
   | { name: "admin-promo-codes" }
@@ -23,8 +22,7 @@ export type AppRoute =
   | { name: "admin-shop-orders" }
   | { name: "admin-cash-withdrawals" }
   | { name: "admin-welvura" }
-  | { name: "admin-broadcast" }
-  | { name: "admin-contest-referral" };
+  | { name: "admin-broadcast" };
 
 export type TabId = "home" | "tasks" | "shop" | "friends" | "profile";
 
@@ -86,9 +84,6 @@ export function parseHash(hash: string): AppRoute {
   if (parts[0] === "profile") {
     return { name: "profile" };
   }
-  if (parts[0] === "contest" && parts[1] === "referral") {
-    return { name: "contest-referral" };
-  }
   if (parts[0] === "giveaways") {
     return { name: "giveaways" };
   }
@@ -121,9 +116,6 @@ export function parseHash(hash: string): AppRoute {
   }
   if (parts[0] === "admin" && parts[1] === "broadcast") {
     return { name: "admin-broadcast" };
-  }
-  if (parts[0] === "admin" && parts[1] === "contest" && parts[2] === "referral") {
-    return { name: "admin-contest-referral" };
   }
   if (parts[0] === "leaderboard") {
     return { name: "leaderboard" };
@@ -161,8 +153,6 @@ export function hrefFor(route: AppRoute): string {
       return "#/profile/achievements";
     case "giveaways":
       return "#/giveaways";
-    case "contest-referral":
-      return "#/contest/referral";
     case "game":
       return `#/games/${route.slug}`;
     case "leaderboard":
@@ -183,8 +173,6 @@ export function hrefFor(route: AppRoute): string {
       return "#/admin/welvura";
     case "admin-broadcast":
       return "#/admin/broadcast";
-    case "admin-contest-referral":
-      return "#/admin/contest/referral";
   }
 }
 
@@ -193,7 +181,6 @@ export function tabFor(route: AppRoute): TabId | undefined {
     case "home":
     case "leaderboard":
     case "giveaways":
-    case "contest-referral":
     case "game":
       return "home";
     case "tasks":
@@ -221,7 +208,6 @@ export function tabFor(route: AppRoute): TabId | undefined {
     case "admin-cash-withdrawals":
     case "admin-welvura":
     case "admin-broadcast":
-    case "admin-contest-referral":
       return undefined;
   }
 }
@@ -251,7 +237,6 @@ export function showsBottomNav(route: AppRoute): boolean {
     isMainTab(route) ||
     route.name === "leaderboard" ||
     route.name === "giveaways" ||
-    route.name === "contest-referral" ||
     route.name === "game" ||
     route.name === "shop-orders" ||
     route.name === "cash-withdrawals" ||

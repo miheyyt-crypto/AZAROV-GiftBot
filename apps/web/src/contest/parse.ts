@@ -1,13 +1,8 @@
 import type {
-  AdminReferralContestDetail,
-  AdminReferralContestList,
-  AdminReferralContestListItem,
   ReferralContestHomeSummary,
   ReferralContestLeaderboardEntry,
   ReferralContestMe,
-  ReferralContestPage,
   ReferralContestPrize,
-  ReferralContestPublic,
   ReferralContestPublicStatus,
 } from "./types.js";
 
@@ -61,65 +56,17 @@ function parsePrize(value: unknown): ReferralContestPrize {
   };
 }
 
-export function parseContestPublic(value: unknown): ReferralContestPublic {
-  if (!isRecord(value) || !Array.isArray(value.prizes)) {
-    throw new Error("invalid contest");
-  }
-  return {
-    id: readString(value.id),
-    status: parseStatus(value.status),
-    title: readString(value.title),
-    startAt: readString(value.startAt),
-    endAt: readString(value.endAt),
-    prizePoolAzc: readString(value.prizePoolAzc),
-    prizePlaces: readNumber(value.prizePlaces),
-    prizes: value.prizes.map(parsePrize),
-    finalizedAt:
-      value.finalizedAt === undefined ? null : readNullableString(value.finalizedAt),
-  };
-}
-
-export function parseContestHomeSummaryResponse(value: unknown): {
-  contest: ReferralContestHomeSummary | null;
-} {
-  if (!isRecord(value)) {
-    throw new Error("invalid contest summary");
-  }
-  if (value.contest === null) {
-    return { contest: null };
-  }
-  if (!isRecord(value.contest)) {
-    throw new Error("invalid contest summary");
-  }
-  const row = value.contest;
-  return {
-    contest: {
-      id: readString(row.id),
-      status: parseStatus(row.status),
-      title: readString(row.title),
-      startAt: readString(row.startAt),
-      endAt: readString(row.endAt),
-      prizePoolAzc: readString(row.prizePoolAzc),
-      prizePlaces: readNumber(row.prizePlaces),
-      serverNow: readString(row.serverNow),
-    },
-  };
-}
-
 function parseEntry(value: unknown): ReferralContestLeaderboardEntry {
   if (!isRecord(value)) {
     throw new Error("invalid contest entry");
   }
   return {
     rank: readNumber(value.rank),
-    publicId: readNullableString(value.publicId),
-    displayName: readNullableString(value.displayName),
-    username: readNullableString(value.username),
+    displayName: value.displayName === undefined ? null : readNullableString(value.displayName),
+    username: value.username === undefined ? null : readNullableString(value.username),
     avatarUrl:
       value.avatarUrl === undefined ? null : readNullableString(value.avatarUrl),
     referralCount: readNumber(value.referralCount),
-    prizePlace: value.prizePlace === null ? null : readNumber(value.prizePlace),
-    rewardAzc: value.rewardAzc === null ? null : readString(value.rewardAzc),
     isYou: value.isYou === true,
   };
 }
@@ -131,10 +78,8 @@ function parseMe(value: unknown): ReferralContestMe {
   return {
     rank: readNumber(value.rank),
     referralCount: readNumber(value.referralCount),
-    nextRankGap: readNumber(value.nextRankGap),
-    prizePlace: value.prizePlace === null ? null : readNumber(value.prizePlace),
     potentialRewardAzc:
-      value.potentialRewardAzc === null
+      value.potentialRewardAzc === undefined || value.potentialRewardAzc === null
         ? null
         : readString(value.potentialRewardAzc),
     referralUrl:
@@ -144,64 +89,48 @@ function parseMe(value: unknown): ReferralContestMe {
   };
 }
 
-export function parseContestPage(value: unknown): ReferralContestPage {
+export function parseContestHomeSummaryResponse(value: unknown): ReferralContestHomeSummary {
   if (!isRecord(value)) {
-    throw new Error("invalid contest page");
+    throw new Error("invalid contest summary");
   }
-  const contest = value.contest === null ? null : parseContestPublic(value.contest);
+  const serverNow = readString(value.serverNow);
+  if (value.contest === null) {
+    return {
+      contest: null,
+      leaderboard: [],
+      me: parseMe(value.me ?? { rank: 0, referralCount: 0, potentialRewardAzc: null, referralUrl: null }),
+      serverNow,
+    };
+  }
+  if (!isRecord(value.contest) || !Array.isArray(value.contest.prizes)) {
+    throw new Error("invalid contest summary");
+  }
+  const contest = value.contest;
+  const prizes = value.contest.prizes;
   const leaderboard = Array.isArray(value.leaderboard)
     ? value.leaderboard.map(parseEntry)
     : [];
-  const me = contest && value.me ? parseMe(value.me) : null;
   return {
-    contest,
+    contest: {
+      id: readString(contest.id),
+      status: parseStatus(contest.status),
+      startAt: readString(contest.startAt),
+      endAt: readString(contest.endAt),
+      prizes: prizes.map(parsePrize),
+      serverNow: readString(contest.serverNow ?? serverNow),
+    },
     leaderboard,
-    me,
-    serverNow: readString(value.serverNow),
-  };
-}
-
-function parseAdminListItem(value: unknown): AdminReferralContestListItem {
-  if (!isRecord(value) || !Array.isArray(value.top10)) {
-    throw new Error("invalid admin contest");
-  }
-  return {
-    ...parseContestPublic(value),
-    participantCount: readNumber(value.participantCount),
-    top10: value.top10.map(parseEntry),
-  };
-}
-
-export function parseAdminContestList(value: unknown): AdminReferralContestList {
-  if (!isRecord(value) || !Array.isArray(value.items)) {
-    throw new Error("invalid admin contest list");
-  }
-  return {
-    items: value.items.map(parseAdminListItem),
-    serverNow: readString(value.serverNow),
-  };
-}
-
-export function parseAdminContestDetail(value: unknown): AdminReferralContestDetail {
-  if (!isRecord(value) || !Array.isArray(value.leaderboard) || !Array.isArray(value.winners)) {
-    throw new Error("invalid admin contest detail");
-  }
-  return {
-    contest: parseContestPublic(value.contest),
-    participantCount: readNumber(value.participantCount),
-    leaderboard: value.leaderboard.map(parseEntry),
-    winners: value.winners.map(parseEntry),
-    serverNow: readString(value.serverNow),
+    me: parseMe(value.me),
+    serverNow,
   };
 }
 
 export function contestDisplayName(row: {
   displayName: string | null;
   username: string | null;
-  publicId: string | null;
 }): string {
   if (row.username) {
     return `@${row.username.replace(/^@/, "")}`;
   }
-  return row.displayName || row.publicId || "Игрок";
+  return row.displayName || "Игрок";
 }

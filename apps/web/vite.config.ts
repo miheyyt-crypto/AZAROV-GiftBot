@@ -22,6 +22,7 @@ export default defineConfig({
       "/products": "http://127.0.0.1:3000",
       "/tasks": "http://127.0.0.1:3000",
       "/referrals": "http://127.0.0.1:3000",
+      "/contest": "http://127.0.0.1:3000",
       "/profile": "http://127.0.0.1:3000",
       "/promo": "http://127.0.0.1:3000",
       "/gram": "http://127.0.0.1:3000",
