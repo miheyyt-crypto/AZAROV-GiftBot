@@ -7,6 +7,7 @@ import {
   resetProfileStoreForTests,
   seedProfileFromBootstrap,
 } from "./profile-store.js";
+import { EMPTY_PROFILE_SUMMARY } from "./types.js";
 import type { BootstrapPayload } from "../types.js";
 
 const bootstrap: BootstrapPayload = {
@@ -27,6 +28,40 @@ test("bootstrap seed is served without GET /profile", async () => {
   const loaded = await loadSharedProfile("tok");
   assert.equal(loaded.user.displayName, "Zemiks");
   assert.equal(loaded.balances.azc, "1500");
+});
+
+test("force refresh bypasses bootstrap freshness and hits GET /profile", async () => {
+  resetProfileStoreForTests();
+  seedProfileFromBootstrap("tok", bootstrap);
+  const originalFetch = globalThis.fetch;
+  let hits = 0;
+  globalThis.fetch = (async () => {
+    hits += 1;
+    return new Response(
+      JSON.stringify({
+        ...EMPTY_PROFILE_SUMMARY,
+        user: {
+          ...EMPTY_PROFILE_SUMMARY.user,
+          displayName: "Remote",
+        },
+        level: { ...EMPTY_PROFILE_SUMMARY.level, current: 3 },
+        activity: { kickChatMessages: "57" },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }) as typeof fetch;
+  try {
+    const withoutForce = await loadSharedProfile("tok");
+    assert.equal(withoutForce.user.displayName, "Zemiks");
+    assert.equal(hits, 0);
+    const forced = await loadSharedProfile("tok", { force: true });
+    assert.equal(hits, 1);
+    assert.equal(forced.user.displayName, "Remote");
+    assert.equal(forced.level.current, 3);
+    assert.equal(forced.activity.kickChatMessages, "57");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("mutation patches cached AZC without waiting for GET /profile", () => {

@@ -30,6 +30,8 @@
     "src/profile/from-bootstrap.ts",
     "src/profile/profile-store.ts",
     "src/profile/profile-store.test.ts",
+    "src/profile/profile-live.ts",
+    "src/profile/profile-page.test.tsx",
     "src/profile/parse.ts",
     "src/profile/parse.test.ts",
     "src/profile/ProfileView.tsx",

@@ -8,6 +8,10 @@ import { friendlyGramError } from "../profile/gram-messages.js";
 import { ProfileView } from "../profile/ProfileView.js";
 import { friendlyPromoError } from "../profile/promo-messages.js";
 import {
+  applyProfileRefreshOutcome,
+  scheduleProfileLiveRefresh,
+} from "../profile/profile-live.js";
+import {
   invalidateSharedProfile,
   loadSharedProfile,
   readCachedProfile,
@@ -67,28 +71,48 @@ export function ProfilePage({
     if (skipRemote) {
       return;
     }
-    const hit = readCachedProfile(token);
-    if (hit) {
-      setProfileState({ status: "ready", data: hit });
-      return;
-    }
     let cancelled = false;
-    void loadSharedProfile(token)
-      .then((data) => {
-        if (!cancelled) {
-          setProfileState({ status: "ready", data });
+    const cachedNow = readCachedProfile(token);
+    if (cachedNow) {
+      setProfileState({ status: "ready", data: cachedNow });
+    }
+    function refresh(): void {
+      void loadSharedProfile(token, { force: true })
+        .then((data) => {
+          if (!cancelled) {
+            setProfileState({ status: "ready", data });
+          }
+        })
+        .catch((error: unknown) => {
+          if (cancelled) {
+            return;
+          }
+          const message =
+            error instanceof Error ? error.message : "request failed";
+          setProfileState((current) =>
+            applyProfileRefreshOutcome(current, { ok: false, message }),
+          );
+        });
+    }
+    const dispose = scheduleProfileLiveRefresh({
+      skipRemote: false,
+      isVisible: () =>
+        typeof document === "undefined" ||
+        document.visibilityState === "visible",
+      onRefresh: refresh,
+      addVisibilityListener: (listener) => {
+        if (typeof document === "undefined") {
+          return () => undefined;
         }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setProfileState({
-            status: "error",
-            message: error instanceof Error ? error.message : "request failed",
-          });
-        }
-      });
+        document.addEventListener("visibilitychange", listener);
+        return () => {
+          document.removeEventListener("visibilitychange", listener);
+        };
+      },
+    });
     return () => {
       cancelled = true;
+      dispose();
     };
   }, [token, skipRemote]);
 
