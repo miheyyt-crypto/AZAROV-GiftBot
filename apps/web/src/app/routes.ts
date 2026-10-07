@@ -23,7 +23,6 @@ export type AppRoute =
   | { name: "admin-cash-withdrawals" }
   | { name: "admin-welvura" }
   | { name: "admin-broadcast" }
-  | { name: "support" }
   | { name: "admin-donations" };
 
 export type TabId = "home" | "tasks" | "shop" | "friends" | "profile";
@@ -86,9 +85,6 @@ export function parseHash(hash: string): AppRoute {
   if (parts[0] === "profile") {
     return { name: "profile" };
   }
-  if (parts[0] === "support") {
-    return { name: "support" };
-  }
   if (parts[0] === "giveaways") {
     return { name: "giveaways" };
   }
@@ -135,8 +131,6 @@ export function hrefFor(route: AppRoute): string {
   switch (route.name) {
     case "home":
       return "#/";
-    case "support":
-      return "#/support";
     case "tasks":
       return "#/tasks";
     case "welvura":
@@ -191,7 +185,6 @@ export function hrefFor(route: AppRoute): string {
 export function tabFor(route: AppRoute): TabId | undefined {
   switch (route.name) {
     case "home":
-    case "support":
     case "leaderboard":
     case "giveaways":
     case "game":
@@ -249,7 +242,6 @@ export function isProfileSheet(route: AppRoute): boolean {
 export function showsBottomNav(route: AppRoute): boolean {
   return (
     isMainTab(route) ||
-    route.name === "support" ||
     route.name === "leaderboard" ||
     route.name === "giveaways" ||
     route.name === "game" ||

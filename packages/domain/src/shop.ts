@@ -37,6 +37,9 @@ import {
 import { assertTransition, shopOrderTransitions } from "./states.js";
 import { applyIn } from "./wallet.js";
 import { createTtlCache } from "./read-cache.js";
+import { enqueueStreamDonationIn } from "./stream-donation.js";
+
+export const STREAM_ALERT_SHOP_PRODUCT_CODE = "donat";
 
 export type ShopFulfillmentType = "manual" | "instant";
 export type ShopCategory = "money" | "donations" | "subs" | "other";
@@ -104,7 +107,7 @@ export const SHOP_CATALOG: readonly ShopCatalogProduct[] = [
     priceAzc: 1000n,
     fulfillmentType: "manual",
     requiredFields: ["displayNickname", "donationText"],
-    description: "Admin размещает донат на стриме вручную.",
+    description: "Сообщение появится на стриме автоматически.",
   },
   {
     code: "music",
@@ -736,10 +739,20 @@ export async function createShopOrder(
     }
 
     const now = new Date();
-    const nextStatus =
-      catalog.fulfillmentType === "instant" ? "delivered" : "created";
+    const autoAlert = catalog.code === STREAM_ALERT_SHOP_PRODUCT_CODE;
+    const autoDeliver = catalog.fulfillmentType === "instant" || autoAlert;
+    const nextStatus = autoDeliver ? "delivered" : "created";
     if (catalog.fulfillmentType === "instant") {
       await grantStreakFreeze(tx, input.userId, inserted.id);
+    }
+    if (autoAlert) {
+      await enqueueStreamDonationIn(tx, {
+        userId: input.userId,
+        purchaseId: inserted.id,
+        walletTransactionId: paid.transaction.id,
+        message: submitted.donationText,
+        amountAzc: catalog.priceAzc,
+      });
     }
     const updated = await tx
       .update(purchases)
@@ -747,9 +760,7 @@ export async function createShopOrder(
         status: nextStatus,
         walletTransactionId: paid.transaction.id,
         updatedAt: now,
-        ...(catalog.fulfillmentType === "instant"
-          ? { fulfilledAt: now }
-          : {}),
+        ...(autoDeliver ? { fulfilledAt: now } : {}),
       })
       .where(eq(purchases.id, inserted.id))
       .returning();
@@ -757,16 +768,15 @@ export async function createShopOrder(
 
     await insertInbox(tx, {
       userId: input.userId,
-      type:
-        catalog.fulfillmentType === "instant"
-          ? "shop_order_fulfilled"
-          : "shop_order_created",
-      title:
-        catalog.fulfillmentType === "instant"
+      type: autoDeliver ? "shop_order_fulfilled" : "shop_order_created",
+      title: autoAlert
+        ? "Донат отправлен на стрим"
+        : catalog.fulfillmentType === "instant"
           ? "Streak Freeze добавлен в инвентарь"
           : "Заказ создан",
-      body:
-        catalog.fulfillmentType === "instant"
+      body: autoAlert
+        ? "Сообщение появится на эфире автоматически"
+        : catalog.fulfillmentType === "instant"
           ? "Streak Freeze добавлен в инвентарь"
           : `${catalog.title} — заявка отправлена`,
       orderId: next.id,

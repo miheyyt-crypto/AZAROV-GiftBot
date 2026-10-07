@@ -1447,28 +1447,6 @@ export type StreamDonationItem = {
   finishedAt: string | null;
 };
 
-export type StreamDonationPurchase = StreamDonationItem & {
-  newBalanceAzc: string;
-  replayed?: boolean;
-};
-
-export async function createStreamDonation(
-  token: string,
-  message: string,
-  idempotencyKey: string,
-): Promise<StreamDonationPurchase> {
-  const response = await apiFetch("/stream-donations", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-      "idempotency-key": idempotencyKey,
-    },
-    body: JSON.stringify({ message }),
-  });
-  return readJson(response) as Promise<StreamDonationPurchase>;
-}
-
 export async function loadAdminStreamDonations(
   token: string,
 ): Promise<{ items: StreamDonationItem[] }> {

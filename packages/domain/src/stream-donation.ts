@@ -3,30 +3,24 @@ import {
   streamDonations,
   telegramAccounts,
   users,
-  wallets,
 } from "@giftbot/db/schema";
 import { and, asc, desc, eq, lt, sql } from "drizzle-orm";
 import type { Clock } from "./clock.js";
 import { systemClock } from "./clock.js";
 import type { GiftbotDb, GiftbotTx } from "./db.js";
 import {
-  InsufficientFundsError,
   OverlayBusyError,
   StreamDonationInvalidMessageError,
   StreamDonationInvalidRequestError,
 } from "./errors.js";
 import { asBigInt } from "./money.js";
-import { applyIn } from "./wallet.js";
 
-export const STREAM_DONATION_PRICE_AZC = 1000n;
-export const STREAM_DONATION_MESSAGE_MAX = 200;
+export const STREAM_DONATION_MESSAGE_MAX = 300;
 export const STREAM_DONATION_VISIBLE_MS = 8_000;
 export const STREAM_DONATION_PLAYING_LEASE_MS = 45_000;
 export const STREAM_ALERT_CONSUMER_LEASE_MS = 30_000;
 export const STREAM_DONATION_ADMIN_LIMIT = 40;
 
-const CLIENT_REQUEST_ID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OVERLAY_SESSION_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -44,8 +38,7 @@ export type StreamDonationView = {
   finishedAt: string | null;
 };
 
-export type StreamDonationPurchaseResult = StreamDonationView & {
-  newBalanceAzc: string;
+export type StreamDonationEnqueueResult = StreamDonationView & {
   replayed: boolean;
 };
 
@@ -66,14 +59,6 @@ function isUniqueViolation(error: unknown): boolean {
     current = (current as { cause: unknown }).cause;
   }
   return false;
-}
-
-export function parseStreamDonationClientRequestId(raw: string): string {
-  const value = raw.trim();
-  if (!CLIENT_REQUEST_ID_RE.test(value)) {
-    throw new StreamDonationInvalidRequestError();
-  }
-  return value;
 }
 
 export function parseOverlaySessionId(raw: string): string {
@@ -141,15 +126,6 @@ function toView(
   };
 }
 
-async function readBalanceAzc(tx: GiftbotTx, userId: string): Promise<string> {
-  const rows = await tx
-    .select({ balanceMinor: wallets.balanceMinor })
-    .from(wallets)
-    .where(eq(wallets.userId, userId))
-    .limit(1);
-  return asBigInt(rows[0]?.balanceMinor ?? 0n).toString();
-}
-
 async function loadIdentity(
   tx: GiftbotTx,
   userId: string,
@@ -193,130 +169,66 @@ async function loadIdentity(
   };
 }
 
-export async function createStreamDonation(
-  db: GiftbotDb,
+export async function enqueueStreamDonationIn(
+  tx: GiftbotTx,
   input: {
     userId: string;
+    purchaseId: string;
+    walletTransactionId: string;
     message: unknown;
-    clientRequestId: string;
-    submittedUserId?: unknown;
-    submittedDisplayName?: unknown;
+    amountAzc: bigint;
   },
-): Promise<StreamDonationPurchaseResult> {
-  if (
-    input.submittedUserId !== undefined &&
-    input.submittedUserId !== null &&
-    String(input.submittedUserId) !== input.userId
-  ) {
-    throw new StreamDonationInvalidRequestError();
-  }
-  if (
-    input.submittedDisplayName !== undefined &&
-    input.submittedDisplayName !== null
-  ) {
-    throw new StreamDonationInvalidRequestError();
-  }
+): Promise<StreamDonationEnqueueResult> {
   const message = normalizeStreamDonationMessage(input.message);
-  const clientRequestId = parseStreamDonationClientRequestId(
-    input.clientRequestId,
-  );
-
-  return db.transaction(async (tx) => {
-    const identity = await loadIdentity(tx, input.userId);
-    const existing = await tx
-      .select()
-      .from(streamDonations)
-      .where(
-        and(
-          eq(streamDonations.userId, input.userId),
-          eq(streamDonations.clientRequestId, clientRequestId),
-        ),
-      )
-      .limit(1);
-    const prior = existing[0];
-    if (prior) {
-      return {
-        ...toView(prior),
-        newBalanceAzc: await readBalanceAzc(tx, input.userId),
-        replayed: true,
-      };
-    }
-
-    let paid;
-    try {
-      paid = await applyIn(tx, {
+  const purchaseId = parseStreamDonationId(input.purchaseId);
+  if (input.amountAzc <= 0n) {
+    throw new StreamDonationInvalidRequestError();
+  }
+  const existing = await tx
+    .select()
+    .from(streamDonations)
+    .where(eq(streamDonations.shopPurchaseId, purchaseId))
+    .limit(1);
+  const prior = existing[0];
+  if (prior) {
+    return { ...toView(prior), replayed: true };
+  }
+  const identity = await loadIdentity(tx, input.userId);
+  try {
+    const inserted = await tx
+      .insert(streamDonations)
+      .values({
         userId: input.userId,
-        type: "stream_donation",
-        amountMinor: -STREAM_DONATION_PRICE_AZC,
-        idempotencyKey: `stream_donation:${input.userId}:${clientRequestId}`,
-        actorType: "user",
-        actorId: input.userId,
-        referenceType: "stream_donation",
-        metadata: {
-          priceAzc: STREAM_DONATION_PRICE_AZC.toString(),
-        },
-      });
-    } catch (error) {
-      if (error instanceof InsufficientFundsError) {
-        throw error;
-      }
+        telegramUserId: identity.telegramUserId,
+        displayName: identity.displayName,
+        message,
+        amountAzc: input.amountAzc,
+        status: "queued",
+        clientRequestId: purchaseId,
+        shopPurchaseId: purchaseId,
+        walletTransactionId: input.walletTransactionId,
+      })
+      .returning();
+    const row = inserted[0];
+    if (!row) {
+      throw new Error("stream donation insert failed");
+    }
+    return { ...toView(row), replayed: false };
+  } catch (error) {
+    if (!isUniqueViolation(error)) {
       throw error;
     }
-
-    try {
-      const inserted = await tx
-        .insert(streamDonations)
-        .values({
-          userId: input.userId,
-          telegramUserId: identity.telegramUserId,
-          displayName: identity.displayName,
-          message,
-          amountAzc: STREAM_DONATION_PRICE_AZC,
-          status: "queued",
-          clientRequestId,
-          walletTransactionId: paid.transaction.id,
-        })
-        .returning();
-      const row = inserted[0];
-      if (!row) {
-        throw new Error("stream donation insert failed");
-      }
-      await tx
-        .update(streamDonations)
-        .set({
-          walletTransactionId: paid.transaction.id,
-        })
-        .where(eq(streamDonations.id, row.id));
-      return {
-        ...toView(row),
-        newBalanceAzc: asBigInt(paid.wallet.balanceMinor).toString(),
-        replayed: paid.replayed,
-      };
-    } catch (error) {
-      if (!isUniqueViolation(error)) {
-        throw error;
-      }
-      const raced = await tx
-        .select()
-        .from(streamDonations)
-        .where(
-          and(
-            eq(streamDonations.userId, input.userId),
-            eq(streamDonations.clientRequestId, clientRequestId),
-          ),
-        )
-        .limit(1);
-      const recovered = raced[0];
-      if (!recovered) {
-        throw error;
-      }
-      return {
-        ...toView(recovered),
-        newBalanceAzc: await readBalanceAzc(tx, input.userId),
-        replayed: true,
-      };
+    const raced = await tx
+      .select()
+      .from(streamDonations)
+      .where(eq(streamDonations.shopPurchaseId, purchaseId))
+      .limit(1);
+    const recovered = raced[0];
+    if (!recovered) {
+      throw error;
     }
-  });
+    return { ...toView(recovered), replayed: true };
+  }
 }
 
 export async function listMyStreamDonations(

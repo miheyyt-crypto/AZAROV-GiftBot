@@ -210,6 +210,7 @@ export function ShopPage({
       setSuccessOrder({
         orderId: result.orderId,
         productTitle: selected.title,
+        productCode: selected.code,
         priceAzc: result.priceAzc,
         fulfillmentType: selected.fulfillmentType,
       });

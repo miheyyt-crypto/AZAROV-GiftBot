@@ -163,6 +163,7 @@ export function ShopView({
         ? {
             orderId: "",
             productTitle: selected.title,
+            productCode: selected.code,
             priceAzc: selected.priceAzc,
             fulfillmentType: selected.fulfillmentType,
           }
@@ -361,9 +362,11 @@ export function ShopView({
             <div className="shop-product-sheet__info">
               <IconInfo size={16} />
               <p>
-                {selected.fulfillmentType === "instant"
-                  ? "Награда сразу попадёт в инвентарь."
-                  : "Заявку обработает администратор — статус увидишь в «Моих заказах»."}
+                {selected.code === "donat"
+                  ? "Сообщение появится на стриме автоматически."
+                  : selected.fulfillmentType === "instant"
+                    ? "Награда сразу попадёт в инвентарь."
+                    : "Заявку обработает администратор — статус увидишь в «Моих заказах»."}
               </p>
             </div>
             {selected.requiredFields.map((field) => (

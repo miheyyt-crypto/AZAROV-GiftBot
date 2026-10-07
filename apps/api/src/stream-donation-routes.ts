@@ -2,32 +2,24 @@ import {
   ADMIN_PERMISSIONS,
   authorizeAdmin,
   ForbiddenError,
-  resolveMiniAppSession,
   type AuthDatabase,
 } from "@giftbot/auth";
 import {
   attachStreamAlertConsumer,
   claimNextStreamDonation,
   completeStreamDonation,
-  createStreamDonation,
   listAdminStreamDonations,
-  listMyStreamDonations,
-  STREAM_DONATION_MESSAGE_MAX,
-  STREAM_DONATION_PRICE_AZC,
   STREAM_DONATION_VISIBLE_MS,
   type StreamDonationView,
 } from "@giftbot/domain";
-import { runIdempotentPost } from "@giftbot/jobs";
 import { createLogger } from "@giftbot/observability";
 import type { RateLimiter } from "@giftbot/rate-limit";
-import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { ApiError, sendHttpError } from "./errors.js";
-import { consumeAuthed, consumeIp } from "./http-limit.js";
+import { consumeIp } from "./http-limit.js";
 import { readBearer } from "./http-auth.js";
-import { withRequestCorrelation } from "./observability.js";
 import { assertOverlayToken, readOverlayToken } from "./overlay-token.js";
-import { notifyStreamAlertsQueued, subscribeStreamAlerts } from "./stream-alert-hub.js";
+import { subscribeStreamAlerts } from "./stream-alert-hub.js";
 
 const logger = createLogger("api.stream-alerts");
 
@@ -35,24 +27,6 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null
     ? (value as Record<string, unknown>)
     : undefined;
-}
-
-function headerValue(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function readIdempotencyKey(
-  headers: Record<string, string | string[] | undefined>,
-): string {
-  const key = headerValue(headers["idempotency-key"]);
-  if (!key) {
-    throw new ApiError("BAD_REQUEST", "Idempotency-Key is required", 400);
-  }
-  return key;
-}
-
-function requestHash(body: unknown): string {
-  return createHash("sha256").update(JSON.stringify(body ?? {})).digest("hex");
 }
 
 function publicDonation(row: StreamDonationView) {
@@ -103,95 +77,6 @@ export function registerStreamDonationRoutes(
   limiter: RateLimiter | undefined,
   overlayToken: string | undefined,
 ): void {
-  app.get("/stream-donations/quote", async (request, reply) => {
-    try {
-      const session = await resolveMiniAppSession(
-        db,
-        readBearer(request.headers.authorization),
-      );
-      await consumeAuthed(limiter, request, reply, "stream-donations", session.userId);
-      return {
-        priceAzc: STREAM_DONATION_PRICE_AZC.toString(),
-        messageMax: STREAM_DONATION_MESSAGE_MAX,
-        visibleMs: STREAM_DONATION_VISIBLE_MS,
-      };
-    } catch (error) {
-      return sendHttpError(reply, error);
-    }
-  });
-
-  app.get("/stream-donations/me", async (request, reply) => {
-    try {
-      const session = await resolveMiniAppSession(
-        db,
-        readBearer(request.headers.authorization),
-      );
-      await consumeAuthed(limiter, request, reply, "stream-donations", session.userId);
-      const items = await listMyStreamDonations(db, session.userId);
-      return { items: items.map(publicDonation) };
-    } catch (error) {
-      return sendHttpError(reply, error);
-    }
-  });
-
-  app.post("/stream-donations", async (request, reply) => {
-    try {
-      const session = await resolveMiniAppSession(
-        db,
-        readBearer(request.headers.authorization),
-      );
-      await consumeAuthed(limiter, request, reply, "stream-donations", session.userId);
-      const body = asRecord(request.body) ?? {};
-      const idempotencyKey = readIdempotencyKey(request.headers);
-      if (
-        body.clientRequestId !== undefined &&
-        body.clientRequestId !== null &&
-        String(body.clientRequestId) !== idempotencyKey
-      ) {
-        throw new ApiError("BAD_REQUEST", "clientRequestId mismatch", 400);
-      }
-      const result = await runIdempotentPost(
-        db,
-        {
-          userId: session.userId,
-          route: "POST /stream-donations",
-          key: idempotencyKey,
-          requestHash: requestHash({ message: body.message }),
-        },
-        async () => {
-          const created = await withRequestCorrelation(request, () =>
-            createStreamDonation(db, {
-              userId: session.userId,
-              message: body.message,
-              clientRequestId: idempotencyKey,
-              submittedUserId: body.userId,
-              submittedDisplayName: body.displayName ?? body.username,
-            }),
-          );
-          return {
-            status: 200,
-            body: {
-              ...publicDonation(created),
-              newBalanceAzc: created.newBalanceAzc,
-              replayed: created.replayed,
-            },
-          };
-        },
-      );
-      const payload = {
-        ...result.body,
-        replayed: result.replayed || Boolean(result.body.replayed),
-      };
-      if (!payload.replayed) {
-        logger.info("donation_created", { donation_id: payload.id });
-        notifyStreamAlertsQueued();
-      }
-      return reply.code(result.status).send(payload);
-    } catch (error) {
-      return sendHttpError(reply, error);
-    }
-  });
-
   app.get("/admin/stream-donations", async (request, reply) => {
     try {
       await consumeIp(limiter, request, reply, "admin");

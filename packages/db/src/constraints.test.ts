@@ -332,6 +332,21 @@ test("shop catalog seed has the approved product prices", async () => {
   assert.ok(names.includes("shop_refund"));
   assert.ok(names.includes("referral_contest_reward"));
   assert.ok(names.includes("stream_donation"));
+
+  const streamCols = await sql<{ column_name: string }[]>`
+    select column_name
+    from information_schema.columns
+    where table_name = 'stream_donations'
+      and column_name = 'shop_purchase_id'
+  `;
+  assert.equal(streamCols.length, 1);
+  const streamIndexes = await sql<{ indexname: string }[]>`
+    select indexname
+    from pg_indexes
+    where tablename = 'stream_donations'
+      and indexname = 'stream_donations_shop_purchase_unique'
+  `;
+  assert.equal(streamIndexes.length, 1);
 });
 
 test("super_admin role exists and no admin identities are seeded", async () => {

@@ -12,6 +12,7 @@ import {
 } from "@giftbot/db/schema";
 import {
   apply,
+  ensureShopCatalog,
   STREAM_DONATION_PLAYING_LEASE_MS,
 } from "@giftbot/domain";
 import { eq } from "drizzle-orm";
@@ -33,6 +34,7 @@ before(async () => {
   await runMigrations(postgres.url);
   const handle = createDb(postgres.url);
   db = handle.db;
+  await ensureShopCatalog(db);
   sqlEnd = async () => {
     await handle.sql.end({ timeout: 5 });
   };
@@ -125,7 +127,37 @@ function appWithOverlay() {
   });
 }
 
-test("POST /stream-donations requires auth", async () => {
+async function buyDonat(
+  app: ReturnType<typeof createApiApp>,
+  token: string,
+  message: string,
+  key: string,
+  extra: Record<string, unknown> = {},
+) {
+  return app.inject({
+    method: "POST",
+    url: "/shop/orders",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "idempotency-key": key,
+    },
+    payload: {
+      productCode: "donat",
+      submittedData: { displayNickname: "FormNick", donationText: message },
+      ...extra,
+    },
+  });
+}
+
+async function streamRowForOrder(orderId: string) {
+  const rows = await db
+    .select()
+    .from(streamDonations)
+    .where(eq(streamDonations.shopPurchaseId, orderId));
+  return rows[0];
+}
+
+test("legacy POST /stream-donations is not a purchase endpoint", async () => {
   const app = appWithOverlay();
   const response = await app.inject({
     method: "POST",
@@ -133,126 +165,117 @@ test("POST /stream-donations requires auth", async () => {
     headers: { "idempotency-key": randomUUID() },
     payload: { message: "hi" },
   });
-  assert.equal(response.statusCode, 401);
+  assert.equal(response.statusCode, 404);
   await app.close();
 });
 
-test("1500 AZC donation leaves 500 and uses session identity", async () => {
+test("shop donat purchase leaves 500 and uses session identity", async () => {
   const mini = await miniToken(982001, "realnick");
   await credit(mini.userId, 1500n, `dep:${mini.userId}:1500`);
   const app = appWithOverlay();
-  const response = await app.inject({
+  const ok = await buyDonat(app, mini.token, "  hello  ", randomUUID(), {
+    userId: randomUUID(),
+    displayName: "@hacker",
+  });
+  assert.equal(ok.statusCode, 200);
+  const body = ok.json() as {
+    status: string;
+    orderId: string;
+    newBalanceAzc: string;
+    priceAzc: string;
+    productCode: string;
+  };
+  assert.equal(body.status, "fulfilled");
+  assert.equal(body.productCode, "donat");
+  assert.equal(body.newBalanceAzc, "500");
+  assert.equal(body.priceAzc, "1000");
+  const donation = await streamRowForOrder(body.orderId);
+  assert.ok(donation);
+  assert.equal(donation.displayName, "@realnick");
+  assert.equal(donation.message, "hello");
+  assert.equal(donation.amountAzc.toString(), "1000");
+  await app.close();
+});
+
+test("999 AZC shop donat is rejected", async () => {
+  const mini = await miniToken(982002);
+  await credit(mini.userId, 999n, `dep:${mini.userId}:999`);
+  const app = appWithOverlay();
+  const response = await buyDonat(app, mini.token, "nope", randomUUID());
+  assert.equal(response.statusCode, 409);
+  assert.equal(
+    (response.json() as { error: string }).error,
+    "SHOP_INSUFFICIENT_BALANCE",
+  );
+  const rows = await db
+    .select()
+    .from(streamDonations)
+    .where(eq(streamDonations.userId, mini.userId));
+  assert.equal(rows.length, 0);
+  await app.close();
+});
+
+test("duplicate shop Idempotency-Key does not double-charge or double-alert", async () => {
+  const mini = await miniToken(982003);
+  await credit(mini.userId, 3000n, `dep:${mini.userId}:3000`);
+  const key = randomUUID();
+  const app = appWithOverlay();
+  const first = await buyDonat(app, mini.token, "once", key);
+  const second = await buyDonat(app, mini.token, "once", key);
+  assert.equal(first.statusCode, 200);
+  assert.equal(second.statusCode, 200);
+  const a = first.json() as { orderId: string; newBalanceAzc: string };
+  const b = second.json() as {
+    orderId: string;
+    replayed: boolean;
+    newBalanceAzc: string;
+  };
+  assert.equal(a.orderId, b.orderId);
+  assert.equal(b.replayed, true);
+  assert.equal(a.newBalanceAzc, "2000");
+  assert.equal(b.newBalanceAzc, "2000");
+  const rows = await db
+    .select()
+    .from(streamDonations)
+    .where(eq(streamDonations.userId, mini.userId));
+  assert.equal(rows.length, 1);
+  await app.close();
+});
+
+test("empty and oversized shop donation messages are rejected", async () => {
+  const mini = await miniToken(982004);
+  await credit(mini.userId, 2000n, `dep:${mini.userId}:msg`);
+  const app = appWithOverlay();
+  const empty = await buyDonat(app, mini.token, "   ", randomUUID());
+  const long = await buyDonat(app, mini.token, "x".repeat(301), randomUUID());
+  assert.equal(empty.statusCode, 400);
+  assert.equal(long.statusCode, 400);
+  await app.close();
+});
+
+test("music purchase does not enqueue a stream alert", async () => {
+  const mini = await miniToken(982009);
+  await credit(mini.userId, 4000n, `dep:${mini.userId}:music`);
+  const app = appWithOverlay();
+  const created = await app.inject({
     method: "POST",
-    url: "/stream-donations",
+    url: "/shop/orders",
     headers: {
       authorization: `Bearer ${mini.token}`,
       "idempotency-key": randomUUID(),
     },
     payload: {
-      message: "  hello  ",
-      userId: randomUUID(),
-      displayName: "@hacker",
+      productCode: "music",
+      submittedData: { mediaUrl: "https://soundcloud.com/a/b" },
     },
   });
-  assert.equal(response.statusCode, 400);
-  const ok = await app.inject({
-    method: "POST",
-    url: "/stream-donations",
-    headers: {
-      authorization: `Bearer ${mini.token}`,
-      "idempotency-key": randomUUID(),
-    },
-    payload: { message: "  hello  " },
-  });
-  assert.equal(ok.statusCode, 200);
-  const body = ok.json() as {
-    newBalanceAzc: string;
-    displayName: string;
-    message: string;
-    amountAzc: string;
-  };
-  assert.equal(body.newBalanceAzc, "500");
-  assert.equal(body.displayName, "@realnick");
-  assert.equal(body.message, "hello");
-  assert.equal(body.amountAzc, "1000");
-  await app.close();
-});
-
-test("999 AZC donation is rejected", async () => {
-  const mini = await miniToken(982002);
-  await credit(mini.userId, 999n, `dep:${mini.userId}:999`);
-  const app = appWithOverlay();
-  const response = await app.inject({
-    method: "POST",
-    url: "/stream-donations",
-    headers: {
-      authorization: `Bearer ${mini.token}`,
-      "idempotency-key": randomUUID(),
-    },
-    payload: { message: "nope" },
-  });
-  assert.equal(response.statusCode, 409);
-  await app.close();
-});
-
-test("duplicate Idempotency-Key does not double-charge", async () => {
-  const mini = await miniToken(982003);
-  await credit(mini.userId, 3000n, `dep:${mini.userId}:3000`);
-  const key = randomUUID();
-  const app = appWithOverlay();
-  const first = await app.inject({
-    method: "POST",
-    url: "/stream-donations",
-    headers: {
-      authorization: `Bearer ${mini.token}`,
-      "idempotency-key": key,
-    },
-    payload: { message: "once" },
-  });
-  const second = await app.inject({
-    method: "POST",
-    url: "/stream-donations",
-    headers: {
-      authorization: `Bearer ${mini.token}`,
-      "idempotency-key": key,
-    },
-    payload: { message: "once" },
-  });
-  assert.equal(first.statusCode, 200);
-  assert.equal(second.statusCode, 200);
-  const a = first.json() as { id: string; newBalanceAzc: string };
-  const b = second.json() as { id: string; replayed: boolean; newBalanceAzc: string };
-  assert.equal(a.id, b.id);
-  assert.equal(b.replayed, true);
-  assert.equal(a.newBalanceAzc, "2000");
-  assert.equal(b.newBalanceAzc, "2000");
-  await app.close();
-});
-
-test("empty and oversized messages are rejected", async () => {
-  const mini = await miniToken(982004);
-  await credit(mini.userId, 2000n, `dep:${mini.userId}:msg`);
-  const app = appWithOverlay();
-  const empty = await app.inject({
-    method: "POST",
-    url: "/stream-donations",
-    headers: {
-      authorization: `Bearer ${mini.token}`,
-      "idempotency-key": randomUUID(),
-    },
-    payload: { message: "   " },
-  });
-  const long = await app.inject({
-    method: "POST",
-    url: "/stream-donations",
-    headers: {
-      authorization: `Bearer ${mini.token}`,
-      "idempotency-key": randomUUID(),
-    },
-    payload: { message: "x".repeat(201) },
-  });
-  assert.equal(empty.statusCode, 400);
-  assert.equal(long.statusCode, 400);
+  assert.equal(created.statusCode, 200);
+  assert.equal((created.json() as { status: string }).status, "pending");
+  const rows = await db
+    .select()
+    .from(streamDonations)
+    .where(eq(streamDonations.userId, mini.userId));
+  assert.equal(rows.length, 0);
   await app.close();
 });
 
@@ -279,26 +302,15 @@ test("overlay token is required and FIFO claim then finish", async () => {
   assert.equal(missing.statusCode, 503);
   await unconfigured.close();
 
-  const first = await app.inject({
-    method: "POST",
-    url: "/stream-donations",
-    headers: {
-      authorization: `Bearer ${mini.token}`,
-      "idempotency-key": randomUUID(),
-    },
-    payload: { message: "A" },
-  });
-  const second = await app.inject({
-    method: "POST",
-    url: "/stream-donations",
-    headers: {
-      authorization: `Bearer ${mini.token}`,
-      "idempotency-key": randomUUID(),
-    },
-    payload: { message: "B" },
-  });
-  const a = first.json() as { id: string };
-  const b = second.json() as { id: string };
+  const first = await buyDonat(app, mini.token, "A", randomUUID());
+  const second = await buyDonat(app, mini.token, "B", randomUUID());
+  const a = await streamRowForOrder(
+    (first.json() as { orderId: string }).orderId,
+  );
+  const b = await streamRowForOrder(
+    (second.json() as { orderId: string }).orderId,
+  );
+  assert.ok(a && b);
   const sessionId = randomUUID();
   const attached = await app.inject({
     method: "POST",
@@ -349,16 +361,11 @@ test("expired playing donation is recovered", async () => {
   const mini = await miniToken(982006);
   await credit(mini.userId, 1000n, `dep:${mini.userId}:lease`);
   const app = appWithOverlay();
-  const created = await app.inject({
-    method: "POST",
-    url: "/stream-donations",
-    headers: {
-      authorization: `Bearer ${mini.token}`,
-      "idempotency-key": randomUUID(),
-    },
-    payload: { message: "hold" },
-  });
-  const donation = created.json() as { id: string };
+  const created = await buyDonat(app, mini.token, "hold", randomUUID());
+  const donation = await streamRowForOrder(
+    (created.json() as { orderId: string }).orderId,
+  );
+  assert.ok(donation);
   const sessionId = randomUUID();
   await app.inject({
     method: "POST",
@@ -399,20 +406,12 @@ test("expired playing donation is recovered", async () => {
   await app.close();
 });
 
-test("admin can list donations", async () => {
+test("admin can list shop-created donations", async () => {
   const mini = await miniToken(982007, "hist");
   await credit(mini.userId, 1000n, `dep:${mini.userId}:hist`);
   const admin = await adminToken(982008);
   const app = appWithOverlay();
-  await app.inject({
-    method: "POST",
-    url: "/stream-donations",
-    headers: {
-      authorization: `Bearer ${mini.token}`,
-      "idempotency-key": randomUUID(),
-    },
-    payload: { message: "listed" },
-  });
+  await buyDonat(app, mini.token, "listed", randomUUID());
   const listed = await app.inject({
     method: "GET",
     url: "/admin/stream-donations",
@@ -426,6 +425,6 @@ test("admin can list donations", async () => {
     url: "/stream-donations/me",
     headers: { authorization: `Bearer ${mini.token}` },
   });
-  assert.equal(me.statusCode, 200);
+  assert.equal(me.statusCode, 404);
   await app.close();
 });

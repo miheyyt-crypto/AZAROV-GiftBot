@@ -61,7 +61,7 @@ const SAMPLE_CATALOG: ShopCatalogProduct[] = [
     priceAzc: "1000",
     fulfillmentType: "manual",
     requiredFields: ["displayNickname", "donationText"],
-    description: "Донат на стрим.",
+    description: "Сообщение появится на стриме автоматически.",
   },
   {
     code: "music",
@@ -346,6 +346,28 @@ test("purchase sheet shows dynamic fields loading success and errors", () => {
   assert.match(freezeOk, /Заказ создан/);
   assert.match(freezeOk, /Streak Freeze добавлен в инвентарь/);
   assert.match(freezeOk, /data-testid="shop-order-success"/);
+
+  const donat = SAMPLE_CATALOG.find((item) => item.code === "donat")!;
+  const donatOk = renderToStaticMarkup(
+    createElement(ShopView, {
+      catalog: SAMPLE_CATALOG,
+      balanceAzc: "7285",
+      mainTab: "store",
+      filter: "all",
+      selected: donat,
+      fields: {},
+      success: true,
+      onMainTabChange: () => undefined,
+      onFilterChange: () => undefined,
+      onSelect: () => undefined,
+      onClose: () => undefined,
+      onFieldChange: () => undefined,
+      onBuy: () => undefined,
+      onOrders: () => undefined,
+    }),
+  );
+  assert.match(donatOk, /Сообщение появится на стриме автоматически/);
+  assert.doesNotMatch(donatOk, /Он уже передан в обработку/);
 
   for (const item of SAMPLE_CATALOG) {
     const html = renderToStaticMarkup(

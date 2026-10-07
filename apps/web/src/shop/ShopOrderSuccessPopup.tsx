@@ -7,6 +7,7 @@ import type { ShopCatalogProduct } from "./shop-messages.js";
 export type ShopSuccessOrder = {
   orderId: string;
   productTitle: string;
+  productCode?: string;
   priceAzc: string;
   fulfillmentType: ShopCatalogProduct["fulfillmentType"];
 };
@@ -20,7 +21,8 @@ export function ShopOrderSuccessPopup({
   onClose: () => void;
   onOrders: () => void;
 }) {
-  const processing = order.fulfillmentType !== "instant";
+  const streamAlert = order.productCode === "donat";
+  const processing = !streamAlert && order.fulfillmentType !== "instant";
   return (
     <OverlayPortal>
     <div className="gift-overlay gift-overlay--compact" role="presentation">
@@ -48,9 +50,11 @@ export function ShopOrderSuccessPopup({
         </h2>
         <p className="shop-order-popup__lead">Ваш заказ успешно оформлен</p>
         <p className="shop-order-popup__sub">
-          {processing
-            ? "Он уже передан в обработку"
-            : "Streak Freeze добавлен в инвентарь"}
+          {streamAlert
+            ? "Сообщение появится на стриме автоматически"
+            : processing
+              ? "Он уже передан в обработку"
+              : "Streak Freeze добавлен в инвентарь"}
         </p>
         <div className="shop-order-popup__meta">
           <p className="shop-order-popup__product">{order.productTitle}</p>

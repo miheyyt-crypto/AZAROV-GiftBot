@@ -9,6 +9,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { streamDonationStatus } from "./enums.js";
+import { purchases } from "./growth.js";
 import { users } from "./identity.js";
 import { walletTransactions } from "./wallet.js";
 
@@ -25,6 +26,9 @@ export const streamDonations = pgTable(
     amountAzc: bigint("amount_azc", { mode: "bigint" }).notNull(),
     status: streamDonationStatus("status").notNull().default("queued"),
     clientRequestId: text("client_request_id").notNull(),
+    shopPurchaseId: uuid("shop_purchase_id").references(() => purchases.id, {
+      onDelete: "restrict",
+    }),
     walletTransactionId: uuid("wallet_transaction_id").references(
       () => walletTransactions.id,
       { onDelete: "restrict" },
@@ -44,6 +48,7 @@ export const streamDonations = pgTable(
       table.userId,
       table.clientRequestId,
     ),
+    uniqueIndex("stream_donations_shop_purchase_unique").on(table.shopPurchaseId),
     index("stream_donations_status_created_idx").on(
       table.status,
       table.createdAt,

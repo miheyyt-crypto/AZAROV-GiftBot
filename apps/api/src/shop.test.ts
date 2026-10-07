@@ -519,7 +519,7 @@ test("super_admin can list, process, fulfill, and reject with exact refund", asy
   assert.equal(replayProcess.statusCode, 200);
 
   const fulfilledUser = await miniToken(96011);
-  await credit(fulfilledUser.userId, 1000n, `deposit:${fulfilledUser.userId}:ful`);
+  await credit(fulfilledUser.userId, 4000n, `deposit:${fulfilledUser.userId}:ful`);
   const toFulfill = await app.inject({
     method: "POST",
     url: "/shop/orders",
@@ -528,8 +528,8 @@ test("super_admin can list, process, fulfill, and reject with exact refund", asy
       "idempotency-key": "shop-admin-fulfill",
     },
     payload: {
-      productCode: "donat",
-      submittedData: { displayNickname: "Ful", donationText: "ok" },
+      productCode: "music",
+      submittedData: { mediaUrl: "https://soundcloud.com/a/b" },
     },
   });
   const fulfillId = (toFulfill.json() as { orderId: string }).orderId;

@@ -3,6 +3,7 @@ import {
   notifications,
   products,
   purchases,
+  streamDonations,
   walletTransactions,
 } from "@giftbot/db/schema";
 import { eq } from "drizzle-orm";
@@ -226,6 +227,29 @@ test("manual purchase debits through Wallet.apply and stays pending", async () =
   assert.ok(notes.some((row) => row.title === "Заказ создан"));
 });
 
+test("donat purchase is fulfilled and enqueues one stream alert", async () => {
+  const user = await provisionUser(harness.db);
+  await credit(user.userId, 1500n, `deposit:${user.userId}:donat-auto`);
+  const created = await createShopOrder(harness.db, {
+    userId: user.userId,
+    productCode: "donat",
+    submittedData: { displayNickname: "FormNick", donationText: "on stream" },
+    idempotencyKey: `shop:${user.userId}:donat-auto`,
+  });
+  assert.equal(created.status, "fulfilled");
+  const notes = await harness.db
+    .select()
+    .from(notifications)
+    .where(eq(notifications.userId, user.userId));
+  assert.ok(notes.some((row) => row.title === "Донат отправлен на стрим"));
+  const alerts = await harness.db
+    .select()
+    .from(streamDonations)
+    .where(eq(streamDonations.shopPurchaseId, created.orderId));
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0]?.message, "on stream");
+});
+
 test("insufficient balance becomes SHOP_INSUFFICIENT_BALANCE", async () => {
   const user = await provisionUser(harness.db);
   await credit(user.userId, 10n, `deposit:${user.userId}:shop-low`);
@@ -241,6 +265,11 @@ test("insufficient balance becomes SHOP_INSUFFICIENT_BALANCE", async () => {
   );
   const report = await reconcileWallet(harness.db, user.userId);
   assert.equal(report.balanceMinor, 10n);
+  const alerts = await harness.db
+    .select()
+    .from(streamDonations)
+    .where(eq(streamDonations.userId, user.userId));
+  assert.equal(alerts.length, 0);
 });
 
 test("streak freeze purchase grants inventory atomically", async () => {
@@ -330,11 +359,11 @@ test("reject refunds the snapshot price and cannot refund twice", async () => {
 test("fulfilled orders cannot be refunded", async () => {
   const admin = await provisionUser(harness.db);
   const user = await provisionUser(harness.db);
-  await credit(user.userId, 1000n, `deposit:${user.userId}:ful`);
+  await credit(user.userId, 4000n, `deposit:${user.userId}:ful`);
   const created = await createShopOrder(harness.db, {
     userId: user.userId,
-    productCode: "donat",
-    submittedData: { displayNickname: "Nick", donationText: "hi" },
+    productCode: "music",
+    submittedData: { mediaUrl: "https://soundcloud.com/a/b" },
     idempotencyKey: `shop:${user.userId}:ful`,
   });
   await fulfillShopOrder(harness.db, {
@@ -438,11 +467,11 @@ test("fulfill vs reject race has one terminal outcome", async () => {
   const adminA = await provisionUser(harness.db);
   const adminB = await provisionUser(harness.db);
   const user = await provisionUser(harness.db);
-  await credit(user.userId, 1000n, `deposit:${user.userId}:race`);
+  await credit(user.userId, 4000n, `deposit:${user.userId}:race`);
   const created = await createShopOrder(harness.db, {
     userId: user.userId,
-    productCode: "donat",
-    submittedData: { displayNickname: "Race", donationText: "race" },
+    productCode: "music",
+    submittedData: { mediaUrl: "https://soundcloud.com/a/b" },
     idempotencyKey: `shop:${user.userId}:race`,
   });
   const results = await Promise.allSettled([

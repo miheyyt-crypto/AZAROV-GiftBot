@@ -14,6 +14,7 @@ import {
   listShopCatalog,
   markShopOrderProcessing,
   rejectShopOrder,
+  STREAM_ALERT_SHOP_PRODUCT_CODE,
   type ShopOrderRecord,
   type ShopOrderStatus,
 } from "@giftbot/domain";
@@ -25,6 +26,7 @@ import { ApiError, sendHttpError } from "./errors.js";
 import { consumeAuthed, consumeIp } from "./http-limit.js";
 import { readBearer } from "./http-auth.js";
 import { withRequestCorrelation } from "./observability.js";
+import { notifyStreamAlertsQueued } from "./stream-alert-hub.js";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -215,10 +217,17 @@ export function registerShopRoutes(
       );
       // HTTP-layer replay must surface replayed=true even though the cached
       // body was stored from the first create (replayed=false).
-      return reply.code(result.status).send({
+      const payload = {
         ...result.body,
         replayed: result.replayed,
-      });
+      };
+      if (
+        !payload.replayed &&
+        payload.productCode === STREAM_ALERT_SHOP_PRODUCT_CODE
+      ) {
+        notifyStreamAlertsQueued();
+      }
+      return reply.code(result.status).send(payload);
     } catch (error) {
       return sendHttpError(reply, error);
     }
