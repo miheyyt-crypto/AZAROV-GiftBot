@@ -1,0 +1,21 @@
+Silero CIS TTS stack used by the GiftBot worker helper (apps/worker/tts).
+
+Weights
+- Model: v5_cis_base_nostress
+- Source: https://models.silero.ai/models/tts/ru/v5_cis_base_nostress.pt
+- Docs: https://github.com/snakers4/silero-models (V5 CIS Base Models)
+- Weights license: MIT (LICENSE_CIS), Silero Team 2025-present
+- File: LICENSE_CIS
+
+Accentuation
+- Package: silero-stress 1.5
+- Source: https://pypi.org/project/silero-stress/ / https://github.com/snakers4/silero-stress
+- License: MIT, Silero Team
+- File: LICENSE_silero_stress
+
+Runtime (not vendored)
+- PyTorch CPU wheels: BSD-style, https://github.com/pytorch/pytorch
+- NumPy: BSD, https://github.com/numpy/numpy
+
+Worker helper: silero_worker.py (this tree).
+Do not enable overlay speech until ops sets SILERO_TTS_MODEL and STREAM_ALERT_TTS_ENABLED.

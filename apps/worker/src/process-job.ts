@@ -18,6 +18,7 @@ import {
   reconcileAllWallets,
   reconcileWallet,
   STREAM_ALERT_TTS_JOB_TIMEOUT_MS,
+  prepareStreamAlertTtsText,
   settleAsyncRound,
   settleFromCatalog,
   streamDonationAudioPath,
@@ -29,6 +30,7 @@ import {
 import { access, readFile } from "node:fs/promises";
 import { DEFAULT_PIPER_VOICE } from "./piper-voices.js";
 import { runPiper, withOneTtsAtATime } from "./piper-tts.js";
+import { DEFAULT_SILERO_SPEAKER, runSilero } from "./silero-tts.js";
 import {
   completeJob,
   JOB_TYPES,
@@ -122,56 +124,90 @@ async function processStreamAlertTts(
     return;
   }
   const ttsDir = deps.ttsDir;
-  const model = deps.piperModel;
-  const bin = deps.piperBin;
-  if (!ttsDir || !model || !bin) {
+  const sileroModel = deps.sileroModel;
+  const piperModel = deps.piperModel;
+  const piperBin = deps.piperBin;
+  const useSilero = Boolean(sileroModel) || deps.ttsEngine === "silero";
+  const voice = useSilero
+    ? (deps.sileroSpeaker ?? DEFAULT_SILERO_SPEAKER)
+    : (deps.piperVoice ?? deps.ttsVoice ?? DEFAULT_PIPER_VOICE);
+  const configured =
+    Boolean(ttsDir) &&
+    (Boolean(deps.synthesizeTts) ||
+      Boolean(sileroModel) ||
+      Boolean(piperBin && piperModel));
+  if (!ttsDir || !configured) {
     await markStreamDonationTtsTerminal(db, {
       donationId,
       status: "skipped",
-      error: "piper is not configured",
+      error: "tts is not configured",
     });
     return;
   }
   await ensureStreamAlertsTtsDir(ttsDir);
-  const outputFile = streamDonationAudioPath(ttsDir, donationId);
+  const outputFile = streamDonationAudioPath(ttsDir, donationId, voice);
   if (await fileExists(outputFile)) {
     const durationMs = wavDurationMs(await readFile(outputFile));
     await markStreamDonationTtsReady(db, {
       donationId,
-      voice: deps.piperVoice ?? DEFAULT_PIPER_VOICE,
+      voice,
       durationMs,
     });
     await cleanupOldStreamAlertTtsFiles(ttsDir);
     return;
   }
+  const spoken = prepareStreamAlertTtsText(row.message);
+  const timeoutMs =
+    deps.ttsTimeoutMs ??
+    deps.piperTimeoutMs ??
+    STREAM_ALERT_TTS_JOB_TIMEOUT_MS;
   try {
     const durationMs = await withOneTtsAtATime(async () => {
       if (deps.synthesizeTts) {
         return deps.synthesizeTts({
-          text: row.message,
+          text: spoken,
           outputFile,
-          model,
-          timeoutMs: deps.piperTimeoutMs ?? STREAM_ALERT_TTS_JOB_TIMEOUT_MS,
+          model: sileroModel ?? piperModel ?? "",
+          timeoutMs,
         });
       }
+      if (sileroModel) {
+        return runSilero({
+          python: deps.sileroPython ?? "python3",
+          model: sileroModel,
+          speaker: voice,
+          text: spoken,
+          outputFile,
+          timeoutMs,
+          ...(deps.sileroSampleRate !== undefined
+            ? { sampleRate: deps.sileroSampleRate }
+            : {}),
+          ...(deps.sileroThreads !== undefined
+            ? { threads: deps.sileroThreads }
+            : {}),
+        });
+      }
+      if (!piperBin || !piperModel) {
+        throw new Error("tts is not configured");
+      }
       return runPiper({
-        bin,
-        model,
-        text: row.message,
+        bin: piperBin,
+        model: piperModel,
+        text: spoken,
         outputFile,
-        timeoutMs: deps.piperTimeoutMs ?? STREAM_ALERT_TTS_JOB_TIMEOUT_MS,
+        timeoutMs,
       });
     });
     await markStreamDonationTtsReady(db, {
       donationId,
-      voice: deps.piperVoice ?? DEFAULT_PIPER_VOICE,
+      voice,
       durationMs,
     });
   } catch (error) {
     await markStreamDonationTtsTerminal(db, {
       donationId,
       status: "failed",
-      error: error instanceof Error ? error.message : "piper failed",
+      error: error instanceof Error ? error.message : "tts failed",
     });
     deps.logger?.warn("stream alert tts failed", {
       donation_id: donationId,
@@ -224,10 +260,18 @@ export type WorkerJobDeps = {
   metrics?: Metrics;
   logger?: StructuredLogger;
   ttsDir?: string;
+  ttsEngine?: "silero" | "piper";
+  ttsVoice?: string;
+  ttsTimeoutMs?: number;
   piperBin?: string;
   piperModel?: string;
   piperVoice?: string;
   piperTimeoutMs?: number;
+  sileroModel?: string;
+  sileroSpeaker?: string;
+  sileroPython?: string;
+  sileroSampleRate?: number;
+  sileroThreads?: number;
   synthesizeTts?: StreamAlertTtsSynthesizer;
 };
 

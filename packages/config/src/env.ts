@@ -78,6 +78,23 @@ export const envSchema = z.object({
   /** Voice id recorded on the donation row (default dmitri). */
   PIPER_VOICE: z.string().min(1).optional(),
   PIPER_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).optional(),
+  /** Silero CIS .pt weights. Worker-only; unset skips Silero. */
+  SILERO_TTS_MODEL: z.string().min(1).optional(),
+  /** Silero speaker id (default ru_roman). */
+  SILERO_TTS_SPEAKER: z.string().min(1).optional(),
+  SILERO_TTS_PYTHON: z.string().min(1).optional(),
+  SILERO_TTS_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(120_000)
+    .optional(),
+  SILERO_TTS_SAMPLE_RATE: z.coerce
+    .number()
+    .int()
+    .refine((n) => n === 8_000 || n === 24_000 || n === 48_000)
+    .optional(),
+  SILERO_TTS_THREADS: z.coerce.number().int().positive().max(8).optional(),
   /** postgres.js pool max per process (defaults differ by role). */
   DB_POOL_MAX: z.coerce.number().int().positive().max(200).optional(),
   DB_CONNECT_TIMEOUT_SECONDS: z.coerce

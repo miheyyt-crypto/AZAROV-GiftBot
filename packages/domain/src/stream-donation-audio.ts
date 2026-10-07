@@ -18,12 +18,15 @@ export const STREAM_ALERT_TTS_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 export const STREAM_ALERT_DING_GAP_MS = 400;
 /** Ceiling of applepay.mp3 duration (~1.41s); lease must cover the full ding. */
 export const STREAM_ALERT_DING_MS = 1_500;
-export const STREAM_ALERT_TTS_WAIT_MS = 12_000;
+/** Overlay poll after ding+400ms. Cold load ~10.4s + 300-char synth ~1.3–3s. */
+export const STREAM_ALERT_TTS_WAIT_MS = 20_000;
 export const STREAM_ALERT_TTS_PLAY_MAX_MS = 90_000;
 export const STREAM_ALERT_COMPLETE_TIMEOUT_MS = 120_000;
 export const STREAM_ALERT_HEARTBEAT_EXTEND_MS = 45_000;
 export const STREAM_ALERT_PLAYING_MAX_MS = 180_000;
-export const STREAM_ALERT_TTS_JOB_TIMEOUT_MS = 20_000;
+/** Warm 300-char Silero is ~2–4s; 60s covers cold load + stress + synth. */
+export const STREAM_ALERT_TTS_JOB_TIMEOUT_MS = 60_000;
+export const DEFAULT_STREAM_ALERT_TTS_VOICE = "ru_roman";
 
 export type StreamDonationTtsStatus =
   | "pending"
@@ -44,21 +47,37 @@ export function resolveStreamAlertsTtsDir(input: {
   return undefined;
 }
 
-export function streamDonationAudioFileName(donationId: string): string {
-  return `${donationIdOf(donationId)}.wav`;
+export function streamDonationTtsVoiceId(raw: string): string {
+  const value = raw.trim().toLowerCase();
+  if (!/^[a-z0-9_]{1,64}$/.test(value)) {
+    throw new StreamDonationInvalidRequestError();
+  }
+  return value;
+}
+
+export function streamDonationAudioFileName(
+  donationId: string,
+  voice?: string,
+): string {
+  const id = donationIdOf(donationId);
+  if (!voice) {
+    return `${id}.wav`;
+  }
+  return `${id}.${streamDonationTtsVoiceId(voice)}.wav`;
 }
 
 export function streamDonationAudioPath(
   ttsDir: string,
   donationId: string,
+  voice?: string,
 ): string {
   const root = resolve(ttsDir);
-  const file = join(root, streamDonationAudioFileName(donationId));
+  const file = join(root, streamDonationAudioFileName(donationId, voice));
   const relative = file.slice(root.length);
   if (!relative.startsWith(sep) || relative.includes("..")) {
     throw new Error("tts path escaped storage dir");
   }
-  if (basename(file) !== streamDonationAudioFileName(donationId)) {
+  if (basename(file) !== streamDonationAudioFileName(donationId, voice)) {
     throw new Error("tts path escaped storage dir");
   }
   return file;

@@ -145,7 +145,7 @@ test("ding play failure does not block speech", async () => {
 });
 
 test("TTS kill switch skips speech wait even when status is pending", async () => {
-  assert.equal(STREAM_ALERT_TTS_ENABLED, false);
+  assert.equal(STREAM_ALERT_TTS_ENABLED, true);
   const events: string[] = [];
   const mode = await playDonationAlert(
     { id: "d-kill", displayName: "A", message: "ok", ttsStatus: "pending" },
@@ -164,11 +164,23 @@ test("TTS kill switch skips speech wait even when status is pending", async () =
         throw new Error("must not speak while TTS is disabled");
       },
       heartbeat: async () => undefined,
+      ttsEnabled: false,
     },
   );
   assert.equal(mode, "text-only");
   assert.equal(events[0], "ding");
   assert.equal(events.includes("sleep:400"), false);
+});
+
+test("card keeps the original donation message, not the spoken form", async () => {
+  const donation = {
+    id: "d-msg",
+    displayName: "A",
+    message: "Привет 1000 AZC",
+    ttsStatus: "ready" as const,
+  };
+  assert.equal(donation.message, "Привет 1000 AZC");
+  assert.doesNotMatch(donation.message, /тысяча/);
 });
 
 test("TTS timeout keeps the card as text and continues", async () => {
@@ -189,7 +201,7 @@ test("TTS timeout keeps the card as text and continues", async () => {
   assert.equal(mode, "text-only");
 });
 
-test("late 200 after the 12s TTS wait is ignored", async () => {
+test("late 200 after the TTS wait is ignored", async () => {
   const got = await pollSpeechUrl({
     url: "/stream-alerts/audio/late",
     timeoutMs: 40,

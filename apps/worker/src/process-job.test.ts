@@ -634,7 +634,8 @@ test("stream alert tts writes wav once and reuses it", async () => {
     piperVoice: "dmitri",
     synthesizeTts: async ({ text, outputFile }) => {
       synthCalls += 1;
-      assert.equal(text, "только текст сообщения");
+      assert.equal(text, "только текст сообщения.");
+      assert.match(outputFile, /\.dmitri\.wav$/);
       assert.doesNotMatch(outputFile, /;|&|\|/);
       await writeFile(outputFile, wav);
       return wavDurationMs(wav);
@@ -648,7 +649,7 @@ test("stream alert tts writes wav once and reuses it", async () => {
   )[0];
   assert.equal(ready?.ttsStatus, "ready");
   assert.equal(ready?.ttsVoice, "dmitri");
-  const written = await readFile(join(ttsDir, `${donation.id}.wav`));
+  const written = await readFile(join(ttsDir, `${donation.id}.dmitri.wav`));
   assert.equal(written.equals(wav), true);
   await harness.db
     .update(streamDonations)
@@ -672,6 +673,221 @@ test("stream alert tts writes wav once and reuses it", async () => {
       .where(eq(streamDonations.id, donation.id))
   )[0];
   assert.equal(reused?.ttsStatus, "ready");
+});
+
+test("stream alert tts prepares speech but keeps the shop message", async () => {
+  await ensureShopCatalog(harness.db);
+  const user = await provisionUser(harness.db);
+  await harness.db.insert(telegramAccounts).values({
+    userId: user.userId,
+    telegramUserId: 771003n,
+    username: "prep",
+    isActive: true,
+  });
+  await apply(harness.db, {
+    userId: user.userId,
+    type: "deposit",
+    amountMinor: 2000n,
+    idempotencyKey: `dep:${user.userId}:tts-prep`,
+    actorType: "system",
+  });
+  const order = await createShopOrder(harness.db, {
+    userId: user.userId,
+    productCode: "donat",
+    submittedData: { displayNickname: "N", donationText: "Привет 1000 AZC" },
+    idempotencyKey: `shop:${user.userId}:tts-prep`,
+  });
+  const donation = (
+    await harness.db
+      .select()
+      .from(streamDonations)
+      .where(eq(streamDonations.shopPurchaseId, order.orderId))
+  )[0];
+  assert.ok(donation);
+  const ttsDir = await mkdtemp(join(tmpdir(), "giftbot-worker-tts-"));
+  const wav = encodePcmWav(new Int16Array(11_025), 22_050);
+  const job = (
+    await harness.db
+      .select()
+      .from(jobs)
+      .where(eq(jobs.idempotencyKey, `stream_alert.tts:${donation.id}`))
+  )[0];
+  assert.ok(job);
+  let spoken = "";
+  await processWorkerJob(harness.db, await loadJob(job.id), {
+    ttsDir,
+    sileroModel: join(ttsDir, "v5_cis_base_nostress.pt"),
+    sileroSpeaker: "ru_roman",
+    ttsEngine: "silero",
+    synthesizeTts: async ({ text, outputFile }) => {
+      spoken = text;
+      assert.match(outputFile, /\.ru_roman\.wav$/);
+      await writeFile(outputFile, wav);
+      return wavDurationMs(wav);
+    },
+  });
+  const after = (
+    await harness.db
+      .select()
+      .from(streamDonations)
+      .where(eq(streamDonations.id, donation.id))
+  )[0];
+  assert.equal(after?.message, "Привет 1000 AZC");
+  assert.equal(after?.ttsVoice, "ru_roman");
+  assert.match(spoken, /привет/);
+  assert.match(spoken, /тысяча/);
+  assert.match(spoken, /а зэ цэ/);
+  assert.doesNotMatch(spoken, /1000/);
+});
+
+test("stream alert tts does not reuse a dmitri wav for ru_roman", async () => {
+  await ensureShopCatalog(harness.db);
+  const user = await provisionUser(harness.db);
+  await harness.db.insert(telegramAccounts).values({
+    userId: user.userId,
+    telegramUserId: 771004n,
+    username: "voice-swap",
+    isActive: true,
+  });
+  await apply(harness.db, {
+    userId: user.userId,
+    type: "deposit",
+    amountMinor: 2000n,
+    idempotencyKey: `dep:${user.userId}:tts-swap`,
+    actorType: "system",
+  });
+  const order = await createShopOrder(harness.db, {
+    userId: user.userId,
+    productCode: "donat",
+    submittedData: { displayNickname: "N", donationText: "новый голос" },
+    idempotencyKey: `shop:${user.userId}:tts-swap`,
+  });
+  const donation = (
+    await harness.db
+      .select()
+      .from(streamDonations)
+      .where(eq(streamDonations.shopPurchaseId, order.orderId))
+  )[0];
+  assert.ok(donation);
+  const ttsDir = await mkdtemp(join(tmpdir(), "giftbot-worker-tts-"));
+  const stale = encodePcmWav(new Int16Array(4_000), 22_050);
+  const fresh = encodePcmWav(new Int16Array(8_000), 22_050);
+  await writeFile(join(ttsDir, `${donation.id}.wav`), stale);
+  await writeFile(join(ttsDir, `${donation.id}.dmitri.wav`), stale);
+  const job = (
+    await harness.db
+      .select()
+      .from(jobs)
+      .where(eq(jobs.idempotencyKey, `stream_alert.tts:${donation.id}`))
+  )[0];
+  assert.ok(job);
+  let synthCalls = 0;
+  await processWorkerJob(harness.db, await loadJob(job.id), {
+    ttsDir,
+    sileroModel: join(ttsDir, "model.pt"),
+    sileroSpeaker: "ru_roman",
+    ttsEngine: "silero",
+    synthesizeTts: async ({ outputFile }) => {
+      synthCalls += 1;
+      assert.match(outputFile, /\.ru_roman\.wav$/);
+      await writeFile(outputFile, fresh);
+      return wavDurationMs(fresh);
+    },
+  });
+  assert.equal(synthCalls, 1);
+  const written = await readFile(join(ttsDir, `${donation.id}.ru_roman.wav`));
+  assert.equal(written.equals(fresh), true);
+});
+
+test("first tts timeout fails open; second donation still synthesizes", async () => {
+  await ensureShopCatalog(harness.db);
+  const user = await provisionUser(harness.db);
+  await harness.db.insert(telegramAccounts).values({
+    userId: user.userId,
+    telegramUserId: 771005n,
+    username: "seq",
+    isActive: true,
+  });
+  await apply(harness.db, {
+    userId: user.userId,
+    type: "deposit",
+    amountMinor: 4000n,
+    idempotencyKey: `dep:${user.userId}:tts-seq`,
+    actorType: "system",
+  });
+  const firstOrder = await createShopOrder(harness.db, {
+    userId: user.userId,
+    productCode: "donat",
+    submittedData: { displayNickname: "N", donationText: "первое" },
+    idempotencyKey: `shop:${user.userId}:tts-seq-1`,
+  });
+  const secondOrder = await createShopOrder(harness.db, {
+    userId: user.userId,
+    productCode: "donat",
+    submittedData: { displayNickname: "N", donationText: "второе" },
+    idempotencyKey: `shop:${user.userId}:tts-seq-2`,
+  });
+  const first = (
+    await harness.db
+      .select()
+      .from(streamDonations)
+      .where(eq(streamDonations.shopPurchaseId, firstOrder.orderId))
+  )[0];
+  const second = (
+    await harness.db
+      .select()
+      .from(streamDonations)
+      .where(eq(streamDonations.shopPurchaseId, secondOrder.orderId))
+  )[0];
+  assert.ok(first && second);
+  const ttsDir = await mkdtemp(join(tmpdir(), "giftbot-worker-tts-"));
+  const wav = encodePcmWav(new Int16Array(11_025), 22_050);
+  const firstJob = (
+    await harness.db
+      .select()
+      .from(jobs)
+      .where(eq(jobs.idempotencyKey, `stream_alert.tts:${first.id}`))
+  )[0];
+  const secondJob = (
+    await harness.db
+      .select()
+      .from(jobs)
+      .where(eq(jobs.idempotencyKey, `stream_alert.tts:${second.id}`))
+  )[0];
+  assert.ok(firstJob && secondJob);
+  await processWorkerJob(harness.db, await loadJob(firstJob.id), {
+    ttsDir,
+    sileroModel: join(ttsDir, "model.pt"),
+    sileroSpeaker: "ru_roman",
+    synthesizeTts: async () => {
+      throw new Error("silero timed out");
+    },
+  });
+  await processWorkerJob(harness.db, await loadJob(secondJob.id), {
+    ttsDir,
+    sileroModel: join(ttsDir, "model.pt"),
+    sileroSpeaker: "ru_roman",
+    synthesizeTts: async ({ outputFile }) => {
+      await writeFile(outputFile, wav);
+      return wavDurationMs(wav);
+    },
+  });
+  const afterFirst = (
+    await harness.db
+      .select()
+      .from(streamDonations)
+      .where(eq(streamDonations.id, first.id))
+  )[0];
+  const afterSecond = (
+    await harness.db
+      .select()
+      .from(streamDonations)
+      .where(eq(streamDonations.id, second.id))
+  )[0];
+  assert.equal(afterFirst?.ttsStatus, "failed");
+  assert.equal(afterFirst?.message, "первое");
+  assert.equal(afterSecond?.ttsStatus, "ready");
+  assert.equal(afterSecond?.ttsVoice, "ru_roman");
 });
 
 test("referral_contest.finalize job requires contest_id", async () => {

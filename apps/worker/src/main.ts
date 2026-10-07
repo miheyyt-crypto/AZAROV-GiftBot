@@ -17,6 +17,7 @@ import { runWorkerConsumer } from "./consume.js";
 import { close, createWorkerHealthServer, listen } from "./health.js";
 import { DEFAULT_PIPER_VOICE } from "./piper-voices.js";
 import type { WorkerJobDeps } from "./process-job.js";
+import { DEFAULT_SILERO_SPEAKER } from "./silero-tts.js";
 
 const env = loadEnv();
 const processName = "worker" as const;
@@ -98,6 +99,21 @@ async function main(): Promise<void> {
       ...(env.PIPER_TIMEOUT_MS !== undefined
         ? { piperTimeoutMs: env.PIPER_TIMEOUT_MS }
         : {}),
+      ...(env.SILERO_TTS_MODEL ? { sileroModel: env.SILERO_TTS_MODEL } : {}),
+      sileroSpeaker: env.SILERO_TTS_SPEAKER ?? DEFAULT_SILERO_SPEAKER,
+      ...(env.SILERO_TTS_PYTHON
+        ? { sileroPython: env.SILERO_TTS_PYTHON }
+        : {}),
+      ...(env.SILERO_TTS_TIMEOUT_MS !== undefined
+        ? { ttsTimeoutMs: env.SILERO_TTS_TIMEOUT_MS }
+        : {}),
+      ...(env.SILERO_TTS_SAMPLE_RATE !== undefined
+        ? { sileroSampleRate: env.SILERO_TTS_SAMPLE_RATE }
+        : {}),
+      ...(env.SILERO_TTS_THREADS !== undefined
+        ? { sileroThreads: env.SILERO_TTS_THREADS }
+        : {}),
+      ...(env.SILERO_TTS_MODEL ? { ttsEngine: "silero" as const } : {}),
     };
     if (
       env.KICK_CLIENT_ID &&

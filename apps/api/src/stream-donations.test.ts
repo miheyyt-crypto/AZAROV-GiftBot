@@ -436,12 +436,12 @@ test("overlay audio is token-gated and stays GET-only", async () => {
   });
   assert.equal(denied.statusCode, 401);
   await writeFile(
-    join(ttsDir, `${donation.id}.wav`),
+    join(ttsDir, `${donation.id}.ru_roman.wav`),
     encodePcmWav(new Int16Array(2_205), 22_050),
   );
   await db
     .update(streamDonations)
-    .set({ ttsStatus: "ready", ttsDurationMs: 100 })
+    .set({ ttsStatus: "ready", ttsVoice: "ru_roman", ttsDurationMs: 100 })
     .where(eq(streamDonations.id, donation.id));
   const ready = await app.inject({
     method: "GET",

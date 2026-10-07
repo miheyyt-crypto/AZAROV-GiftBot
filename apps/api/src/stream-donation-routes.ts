@@ -173,10 +173,10 @@ export function registerStreamDonationRoutes(
       if (row.ttsStatus === "pending") {
         return reply.code(202).send();
       }
-      if (row.ttsStatus !== "ready" || !ttsDir) {
+      if (row.ttsStatus !== "ready" || !ttsDir || !row.ttsVoice) {
         return reply.code(204).send();
       }
-      const filePath = streamDonationAudioPath(ttsDir, donationId);
+      const filePath = streamDonationAudioPath(ttsDir, donationId, row.ttsVoice);
       try {
         await access(filePath);
       } catch {

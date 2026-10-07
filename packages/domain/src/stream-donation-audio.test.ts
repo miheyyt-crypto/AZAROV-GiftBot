@@ -50,6 +50,19 @@ test("audio path rejects traversal", () => {
     () => streamDonationAudioPath("/tmp/tts", "../secret"),
     StreamDonationInvalidRequestError,
   );
+  assert.throws(
+    () => streamDonationAudioPath("/tmp/tts", "00000000-0000-4000-8000-000000000001", "../x"),
+    StreamDonationInvalidRequestError,
+  );
+});
+
+test("voice is part of the wav name so dmitri cannot satisfy ru_roman", () => {
+  const id = "00000000-0000-4000-8000-000000000001";
+  const dmitri = streamDonationAudioPath("/tmp/tts", id, "dmitri");
+  const roman = streamDonationAudioPath("/tmp/tts", id, "ru_roman");
+  assert.match(dmitri, /\.dmitri\.wav$/);
+  assert.match(roman, /\.ru_roman\.wav$/);
+  assert.notEqual(dmitri, roman);
 });
 
 test("old tts files are deleted", async () => {

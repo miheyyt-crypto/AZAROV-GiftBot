@@ -3,9 +3,8 @@ import { STREAM_DONATION_VISIBLE_MS } from "./overlay-dom.js";
 export const STREAM_ALERT_DING_GAP_MS = 400;
 /** Watchdog only; applepay.mp3 is ~1.41s and must play to completion. */
 export const STREAM_ALERT_DING_PLAY_MAX_MS = 10_000;
-/** Speech stays off until a licensed voice is chosen. */
-export const STREAM_ALERT_TTS_ENABLED = false;
-export const STREAM_ALERT_TTS_WAIT_MS = 12_000;
+export const STREAM_ALERT_TTS_ENABLED = true;
+export const STREAM_ALERT_TTS_WAIT_MS = 20_000;
 export const STREAM_ALERT_TTS_PLAY_MAX_MS = 90_000;
 export const STREAM_ALERT_COMPLETE_TIMEOUT_MS = 120_000;
 export const STREAM_ALERT_HEARTBEAT_MS = 8_000;
