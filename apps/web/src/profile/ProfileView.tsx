@@ -250,6 +250,7 @@ export function ProfileView({
         { href: "#/admin/giveaways", label: "Розыгрыши" },
         { href: "#/admin/gram-withdrawals", label: "Gram заявки" },
         { href: "#/admin/shop/orders", label: "Заказы" },
+        { href: "#/admin/donations", label: "Донаты" },
         { href: "#/admin/cash-withdrawals", label: "₽ заявки" },
         { href: "#/admin/welvura", label: "Welvura" },
       ]

@@ -9027,6 +9027,7 @@ button.profile-kick {
   gap: 0.2rem;
   flex: 1;
   min-width: 0;
+  overflow-y: auto;
 }
 
 .admin-nav__link {

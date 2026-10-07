@@ -362,6 +362,7 @@ test("promo form shows success, friendly errors, and disables while loading", ()
   assert.match(admin, /Розыгрыши/);
   assert.match(admin, /Gram заявки/);
   assert.match(admin, /Заказы/);
+  assert.match(admin, /Донаты/);
 });
 
 test("gram card keeps withdraw rule and remains openable below minimum", () => {

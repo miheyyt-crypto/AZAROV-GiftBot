@@ -95,6 +95,8 @@ async function showDonation(donation: OverlayDonation): Promise<void> {
 }
 
 let pumping = false;
+let eventsSource: EventSource | null = null;
+let eventsReconnectTimer = 0;
 
 async function pumpQueue(): Promise<void> {
   if (pumping) {
@@ -132,6 +134,7 @@ async function pumpQueue(): Promise<void> {
 async function attach(): Promise<void> {
   try {
     await postJson("/stream-alerts/attach", { sessionId });
+    void pumpQueue();
   } catch (error) {
     const code = (error as { code?: string }).code;
     if (code === "OVERLAY_BUSY") {
@@ -141,13 +144,29 @@ async function attach(): Promise<void> {
 }
 
 function connectEvents(): void {
+  if (eventsSource) {
+    eventsSource.close();
+    eventsSource = null;
+  }
   const source = new EventSource(overlayUrl("/stream-alerts/events"));
+  eventsSource = source;
   source.addEventListener("queued", () => {
     void pumpQueue();
   });
   source.addEventListener("ready", () => {
     void pumpQueue();
   });
+  source.onerror = () => {
+    source.close();
+    if (eventsSource === source) {
+      eventsSource = null;
+    }
+    window.clearTimeout(eventsReconnectTimer);
+    eventsReconnectTimer = window.setTimeout(() => {
+      connectEvents();
+      void pumpQueue();
+    }, 2000);
+  };
 }
 
 void (async () => {
@@ -156,5 +175,4 @@ void (async () => {
     void attach();
   }, 10_000);
   connectEvents();
-  await pumpQueue();
 })();
