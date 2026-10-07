@@ -8,10 +8,26 @@ import {
   encodeDonationDingWav,
   encodePcmWav,
   streamDonationAudioPath,
+  STREAM_ALERT_DING_GAP_MS,
+  STREAM_ALERT_DING_MS,
   streamDonationPlayingHoldMs,
   wavDurationMs,
 } from "./stream-donation-audio.js";
 import { StreamDonationInvalidRequestError } from "./errors.js";
+
+test("playing hold includes the applepay ding duration", () => {
+  const hold = streamDonationPlayingHoldMs({
+    ttsStatus: "failed",
+    ttsDurationMs: null,
+  });
+  assert.ok(STREAM_ALERT_DING_MS >= 1_410);
+  assert.equal(hold, 45_000);
+  const pending = streamDonationPlayingHoldMs({
+    ttsStatus: "pending",
+    ttsDurationMs: null,
+  });
+  assert.ok(pending > STREAM_ALERT_DING_MS + STREAM_ALERT_DING_GAP_MS);
+});
 
 test("ready speech hold outlives the 45s fallback lease", () => {
   const hold = streamDonationPlayingHoldMs({

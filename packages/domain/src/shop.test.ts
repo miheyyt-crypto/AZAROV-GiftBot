@@ -164,6 +164,31 @@ test("submitted field validation is strict per product", () => {
       }),
     ShopInvalidDonationTextError,
   );
+  const threeHundred = "я".repeat(300);
+  assert.equal(threeHundred.length, 300);
+  assert.equal(
+    validateShopSubmittedData(getShopProduct("donat"), {
+      displayNickname: "ok",
+      donationText: threeHundred,
+    }).donationText,
+    threeHundred,
+  );
+  const emoji = "👍";
+  assert.equal(emoji.length, 2);
+  assert.doesNotThrow(() =>
+    validateShopSubmittedData(getShopProduct("donat"), {
+      displayNickname: "ok",
+      donationText: `${"a".repeat(298)}${emoji}`,
+    }),
+  );
+  assert.throws(
+    () =>
+      validateShopSubmittedData(getShopProduct("donat"), {
+        displayNickname: "ok",
+        donationText: `${"a".repeat(299)}${emoji}`,
+      }),
+    ShopInvalidDonationTextError,
+  );
   assert.equal(
     parseMediaUrl("https://www.youtube.com/watch?v=dQw4w9wgGcQ"),
     "https://www.youtube.com/watch?v=dQw4w9wgGcQ",

@@ -16,6 +16,8 @@ function donationIdOf(raw: string): string {
 export const STREAM_ALERT_TTS_SUBDIR = "stream-alerts-tts";
 export const STREAM_ALERT_TTS_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 export const STREAM_ALERT_DING_GAP_MS = 400;
+/** Ceiling of applepay.mp3 duration (~1.41s); lease must cover the full ding. */
+export const STREAM_ALERT_DING_MS = 1_500;
 export const STREAM_ALERT_TTS_WAIT_MS = 12_000;
 export const STREAM_ALERT_TTS_PLAY_MAX_MS = 90_000;
 export const STREAM_ALERT_COMPLETE_TIMEOUT_MS = 120_000;
@@ -124,7 +126,7 @@ export function streamDonationPlayingHoldMs(input: {
   ttsStatus: StreamDonationTtsStatus;
   ttsDurationMs: number | null;
 }): number {
-  const dingAndGap = 800 + STREAM_ALERT_DING_GAP_MS;
+  const dingAndGap = STREAM_ALERT_DING_MS + STREAM_ALERT_DING_GAP_MS;
   const fade = 900;
   const buffer = 20_000;
   if (input.ttsStatus === "ready" && (input.ttsDurationMs ?? 0) > 0) {

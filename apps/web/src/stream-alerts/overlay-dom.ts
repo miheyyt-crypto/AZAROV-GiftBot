@@ -1,5 +1,5 @@
 export const DONATION_ALERT_ICON_SRC = "/assets/donation-alert-icon.png";
-export const DONATION_ALERT_AUDIO_SRC = "/assets/donation-alert.wav";
+export const DONATION_ALERT_AUDIO_SRC = "/assets/applepay.mp3";
 export const STREAM_DONATION_VISIBLE_MS = 8_000;
 export const STREAM_DONATION_FADE_MS = 900;
 

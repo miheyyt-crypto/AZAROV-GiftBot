@@ -6,9 +6,13 @@ import {
   overlaySessionId,
 } from "./overlay-dom.js";
 import {
+  createBrowserAudio,
   parseOverlayVolumes,
+  playBoundedAudio,
   playDonationAlert,
-  STREAM_ALERT_COMPLETE_TIMEOUT_MS,
+  pollSpeechUrl,
+  settleDonationPlayback,
+  STREAM_ALERT_DING_PLAY_MAX_MS,
   type OverlayPlaybackDonation,
   type OverlayTtsStatus,
 } from "./overlay-player.js";
@@ -74,55 +78,36 @@ function playHtmlAudio(
   src: string,
   volume: number,
   maxMs: number,
+  signal?: AbortSignal,
 ): Promise<void> {
-  return new Promise((resolve) => {
-    const audio = new Audio(src);
-    audio.volume = volume;
-    const finish = (): void => {
-      audio.pause();
-      audio.removeAttribute("src");
-      resolve();
-    };
-    const timer = window.setTimeout(finish, maxMs);
-    audio.addEventListener("ended", () => {
-      window.clearTimeout(timer);
-      finish();
-    });
-    audio.addEventListener("error", () => {
-      window.clearTimeout(timer);
-      finish();
-    });
-    void audio.play().catch(() => {
-      window.clearTimeout(timer);
-      finish();
-    });
+  return playBoundedAudio({
+    src,
+    volume,
+    maxMs,
+    signal,
+    sleep,
+    createAudio: createBrowserAudio,
   });
 }
 
-async function waitForSpeechUrl(
+function waitForSpeechUrl(
   donationId: string,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<string | null> {
-  const started = Date.now();
-  const path = overlayUrl(`/stream-alerts/audio/${donationId}`);
-  while (Date.now() - started < timeoutMs) {
-    try {
-      const response = await fetch(path, { method: "GET" });
-      if (response.status === 200) {
-        return path;
-      }
-      if (response.status !== 202) {
-        return null;
-      }
-    } catch {
-      return null;
-    }
-    await sleep(400);
-  }
-  return null;
+  return pollSpeechUrl({
+    url: overlayUrl(`/stream-alerts/audio/${donationId}`),
+    timeoutMs,
+    fetch: (url, init) => fetch(url, init),
+    sleep,
+    signal,
+  });
 }
 
-async function showDonation(donation: OverlayPlaybackDonation): Promise<void> {
+async function showDonation(
+  donation: OverlayPlaybackDonation,
+  signal: AbortSignal,
+): Promise<void> {
   if (!root || !nameEl || !messageEl) {
     return;
   }
@@ -132,10 +117,18 @@ async function showDonation(donation: OverlayPlaybackDonation): Promise<void> {
   root.setAttribute("data-visible", "true");
   try {
     await playDonationAlert(donation, volumes, {
+      signal,
       sleep,
-      playDing: (volume) => playHtmlAudio(DONATION_ALERT_AUDIO_SRC, volume, 2_000),
+      playDing: (volume, playSignal) =>
+        playHtmlAudio(
+          DONATION_ALERT_AUDIO_SRC,
+          volume,
+          STREAM_ALERT_DING_PLAY_MAX_MS,
+          playSignal,
+        ),
       waitForSpeechUrl,
-      playSpeech: (url, volume, maxMs) => playHtmlAudio(url, volume, maxMs),
+      playSpeech: (url, volume, maxMs, playSignal) =>
+        playHtmlAudio(url, volume, maxMs, playSignal),
       heartbeat: async (donationId) => {
         await postJson("/stream-alerts/heartbeat", { sessionId, donationId });
       },
@@ -143,7 +136,9 @@ async function showDonation(donation: OverlayPlaybackDonation): Promise<void> {
   } finally {
     root.classList.remove("is-in");
     root.classList.add("is-out");
-    await sleep(STREAM_DONATION_FADE_MS);
+    if (!signal.aborted) {
+      await sleep(STREAM_DONATION_FADE_MS);
+    }
     root.classList.remove("is-out");
     root.removeAttribute("data-visible");
     nameEl.textContent = "";
@@ -202,11 +197,11 @@ async function pumpQueue(): Promise<void> {
       if (!donation) {
         return;
       }
-      await Promise.race([
-        showDonation(donation),
-        sleep(STREAM_ALERT_COMPLETE_TIMEOUT_MS),
-      ]);
-      await completeDonation(donation.id);
+      await settleDonationPlayback({
+        play: (playSignal) => showDonation(donation, playSignal),
+        complete: () => completeDonation(donation.id),
+        sleep,
+      });
     }
   } catch {
     await sleep(2000);
