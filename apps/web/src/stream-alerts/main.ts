@@ -84,9 +84,9 @@ function playHtmlAudio(
     src,
     volume,
     maxMs,
-    signal,
     sleep,
     createAudio: createBrowserAudio,
+    ...(signal ? { signal } : {}),
   });
 }
 
@@ -100,7 +100,7 @@ function waitForSpeechUrl(
     timeoutMs,
     fetch: (url, init) => fetch(url, init),
     sleep,
-    signal,
+    ...(signal ? { signal } : {}),
   });
 }
 
