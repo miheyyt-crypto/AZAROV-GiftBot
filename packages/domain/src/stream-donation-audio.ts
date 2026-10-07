@@ -18,7 +18,7 @@ export const STREAM_ALERT_TTS_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 export const STREAM_ALERT_DING_GAP_MS = 400;
 /** Ceiling of applepay.mp3 duration (~1.41s); lease must cover the full ding. */
 export const STREAM_ALERT_DING_MS = 1_500;
-/** Overlay poll after ding+400ms. Cold load ~10.4s + 300-char synth ~1.3–3s. */
+/** Overlay poll + preload before the card is shown. Cold load may delay the card, not silence after it. */
 export const STREAM_ALERT_TTS_WAIT_MS = 20_000;
 export const STREAM_ALERT_TTS_PLAY_MAX_MS = 90_000;
 export const STREAM_ALERT_COMPLETE_TIMEOUT_MS = 120_000;
@@ -148,16 +148,17 @@ export function streamDonationPlayingHoldMs(input: {
   const dingAndGap = STREAM_ALERT_DING_MS + STREAM_ALERT_DING_GAP_MS;
   const fade = 900;
   const buffer = 20_000;
+  const preshowWait = STREAM_ALERT_TTS_WAIT_MS;
   if (input.ttsStatus === "ready" && (input.ttsDurationMs ?? 0) > 0) {
     return Math.min(
-      dingAndGap + (input.ttsDurationMs ?? 0) + fade + buffer,
+      preshowWait + dingAndGap + (input.ttsDurationMs ?? 0) + fade + buffer,
       STREAM_ALERT_PLAYING_MAX_MS,
     );
   }
   if (input.ttsStatus === "pending") {
     return Math.min(
-      dingAndGap +
-        STREAM_ALERT_TTS_WAIT_MS +
+      preshowWait +
+        dingAndGap +
         STREAM_ALERT_TTS_PLAY_MAX_MS +
         fade +
         buffer,

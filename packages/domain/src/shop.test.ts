@@ -273,6 +273,7 @@ test("donat purchase is fulfilled and enqueues one stream alert", async () => {
     .where(eq(streamDonations.shopPurchaseId, created.orderId));
   assert.equal(alerts.length, 1);
   assert.equal(alerts[0]?.message, "on stream");
+  assert.equal(alerts[0]?.displayName, "FormNick");
 });
 
 test("insufficient balance becomes SHOP_INSUFFICIENT_BALANCE", async () => {

@@ -13,6 +13,7 @@ import {
   pollSpeechUrl,
   settleDonationPlayback,
   STREAM_ALERT_DING_PLAY_MAX_MS,
+  type OverlayAudioHandle,
   type OverlayPlaybackDonation,
   type OverlayTtsStatus,
 } from "./overlay-player.js";
@@ -79,6 +80,7 @@ function playHtmlAudio(
   volume: number,
   maxMs: number,
   signal?: AbortSignal,
+  playingDeadlineMs?: number,
 ): Promise<void> {
   return playBoundedAudio({
     src,
@@ -87,6 +89,7 @@ function playHtmlAudio(
     sleep,
     createAudio: createBrowserAudio,
     ...(signal ? { signal } : {}),
+    ...(playingDeadlineMs !== undefined ? { playingDeadlineMs } : {}),
   });
 }
 
@@ -112,28 +115,91 @@ async function showDonation(
     return;
   }
   fillAlertTexts(nameEl, messageEl, donation);
-  root.classList.remove("is-out");
-  root.classList.add("is-in");
-  root.setAttribute("data-visible", "true");
+  const preparedDing: { current: OverlayAudioHandle | null } = { current: null };
+  const preparedSpeech: { current: OverlayAudioHandle | null } = {
+    current: null,
+  };
   try {
     await playDonationAlert(donation, volumes, {
       signal,
       sleep,
-      playDing: (volume, playSignal) =>
-        playHtmlAudio(
+      onShowCard: () => {
+        root.classList.remove("is-out");
+        root.classList.add("is-in");
+        root.setAttribute("data-visible", "true");
+      },
+      prepareDing: async (timeoutMs, playSignal) => {
+        preparedDing.current?.stop();
+        const audio = createBrowserAudio(DONATION_ALERT_AUDIO_SRC);
+        preparedDing.current = audio;
+        const ready = await audio.waitReady?.(timeoutMs, sleep, playSignal);
+        if (!ready) {
+          audio.stop();
+          preparedDing.current = null;
+          return false;
+        }
+        return true;
+      },
+      playDing: (volume, playSignal) => {
+        const audio = preparedDing.current;
+        preparedDing.current = null;
+        if (audio) {
+          return playBoundedAudio({
+            src: DONATION_ALERT_AUDIO_SRC,
+            volume,
+            maxMs: STREAM_ALERT_DING_PLAY_MAX_MS,
+            sleep,
+            createAudio: () => audio,
+            audio,
+            ...(playSignal ? { signal: playSignal } : {}),
+          });
+        }
+        return playHtmlAudio(
           DONATION_ALERT_AUDIO_SRC,
           volume,
           STREAM_ALERT_DING_PLAY_MAX_MS,
           playSignal,
-        ),
+        );
+      },
       waitForSpeechUrl,
-      playSpeech: (url, volume, maxMs, playSignal) =>
-        playHtmlAudio(url, volume, maxMs, playSignal),
+      prepareSpeech: async (url, timeoutMs, playSignal) => {
+        preparedSpeech.current?.stop();
+        const audio = createBrowserAudio(url);
+        preparedSpeech.current = audio;
+        const ready = await audio.waitReady?.(timeoutMs, sleep, playSignal);
+        if (!ready) {
+          audio.stop();
+          preparedSpeech.current = null;
+          return false;
+        }
+        return true;
+      },
+      playSpeech: (url, volume, maxMs, playSignal, playingDeadlineMs) => {
+        const audio = preparedSpeech.current;
+        preparedSpeech.current = null;
+        if (audio) {
+          return playBoundedAudio({
+            src: url,
+            volume,
+            maxMs,
+            sleep,
+            createAudio: () => audio,
+            audio,
+            ...(playSignal ? { signal: playSignal } : {}),
+            ...(playingDeadlineMs !== undefined ? { playingDeadlineMs } : {}),
+          });
+        }
+        return playHtmlAudio(url, volume, maxMs, playSignal, playingDeadlineMs);
+      },
       heartbeat: async (donationId) => {
         await postJson("/stream-alerts/heartbeat", { sessionId, donationId });
       },
     });
   } finally {
+    preparedDing.current?.stop();
+    preparedDing.current = null;
+    preparedSpeech.current?.stop();
+    preparedSpeech.current = null;
     root.classList.remove("is-in");
     root.classList.add("is-out");
     if (!signal.aborted) {

@@ -21,6 +21,7 @@ store.json
 .local-dev-db-url
 .local-piper/
 .tts-samples/
+apps/web/public/assets/ru_roman-bench.wav
 
 # Local loadtest / preprod artifacts
 tools/loadtest/*.out

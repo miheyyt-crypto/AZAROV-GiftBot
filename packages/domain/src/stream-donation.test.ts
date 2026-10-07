@@ -26,6 +26,7 @@ import {
   claimNextStreamDonation,
   completeStreamDonation,
   heartbeatStreamDonationPlaying,
+  streamDonationAlertName,
   streamDonationDisplayName,
   streamDonationPlayingHoldMs,
 } from "./stream-donation.js";
@@ -93,6 +94,26 @@ async function buyDonat(
 
 test("display name prefers Telegram username then first name", () => {
   assert.equal(
+    streamDonationAlertName({
+      formNickname: "FormNick",
+      username: "azarov",
+      firstName: "Mikhail",
+      displayName: "Other",
+      telegramUserId: 99n,
+    }),
+    "FormNick",
+  );
+  assert.equal(
+    streamDonationAlertName({
+      formNickname: "  ",
+      username: "azarov",
+      firstName: "Mikhail",
+      displayName: "Other",
+      telegramUserId: 99n,
+    }),
+    "@azarov",
+  );
+  assert.equal(
     streamDonationDisplayName({
       username: "azarov",
       firstName: "Mikhail",
@@ -138,7 +159,7 @@ test("shop donat purchase debits 1000 once and creates one stream donation", asy
   assert.ok(donation);
   assert.equal(donation.status, "queued");
   assert.equal(donation.message, "hello stream");
-  assert.equal(donation.displayName, "@donor");
+  assert.equal(donation.displayName, "FormNick");
   assert.equal(asBigInt(donation.amountAzc), 1000n);
   assert.equal(donation.shopPurchaseId, order.orderId);
   assert.equal(donation.ttsStatus, "pending");

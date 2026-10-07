@@ -4,7 +4,10 @@ export const STREAM_ALERT_DING_GAP_MS = 400;
 /** Watchdog only; applepay.mp3 is ~1.41s and must play to completion. */
 export const STREAM_ALERT_DING_PLAY_MAX_MS = 10_000;
 export const STREAM_ALERT_TTS_ENABLED = true;
+/** Poll + preload budget before the card is shown. */
 export const STREAM_ALERT_TTS_WAIT_MS = 20_000;
+/** From card appearance to HTMLAudioElement "playing". Late speech is aborted. */
+export const STREAM_ALERT_SPEECH_START_MAX_MS = 2_000;
 export const STREAM_ALERT_TTS_PLAY_MAX_MS = 90_000;
 export const STREAM_ALERT_COMPLETE_TIMEOUT_MS = 120_000;
 export const STREAM_ALERT_HEARTBEAT_MS = 8_000;
@@ -53,6 +56,16 @@ export type OverlayAudioHandle = {
   play: () => Promise<void>;
   stop: () => void;
   waitEnded: () => Promise<void>;
+  waitReady?: (
+    timeoutMs: number,
+    sleep: (ms: number) => Promise<void>,
+    signal?: AbortSignal,
+  ) => Promise<boolean>;
+  waitPlaying?: (
+    timeoutMs: number,
+    sleep: (ms: number) => Promise<void>,
+    signal?: AbortSignal,
+  ) => Promise<boolean>;
 };
 
 export type OverlayPlaybackDeps = {
@@ -63,13 +76,25 @@ export type OverlayPlaybackDeps = {
     timeoutMs: number,
     signal?: AbortSignal,
   ) => Promise<string | null>;
+  prepareDing?: (
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ) => Promise<boolean>;
+  prepareSpeech?: (
+    url: string,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ) => Promise<boolean>;
   playSpeech: (
     url: string,
     volume: number,
     maxMs: number,
     signal?: AbortSignal,
+    playingDeadlineMs?: number,
   ) => Promise<void>;
   heartbeat: (donationId: string) => Promise<void>;
+  onShowCard?: () => void;
+  now?: () => number;
   signal?: AbortSignal;
   ttsEnabled?: boolean;
 };
@@ -147,19 +172,32 @@ export async function playBoundedAudio(input: {
   createAudio: (src: string) => OverlayAudioHandle;
   sleep: (ms: number) => Promise<void>;
   signal?: AbortSignal;
+  audio?: OverlayAudioHandle;
+  playingDeadlineMs?: number;
 }): Promise<void> {
   if (aborted(input.signal) || input.maxMs <= 0) {
     return;
   }
-  const audio = input.createAudio(input.src);
+  if (input.playingDeadlineMs !== undefined && input.playingDeadlineMs <= 0) {
+    return;
+  }
+  const audio = input.audio ?? input.createAudio(input.src);
   audio.setVolume(input.volume);
   const onAbort = (): void => {
     audio.stop();
   };
   input.signal?.addEventListener("abort", onAbort);
   try {
+    const playingWait =
+      input.playingDeadlineMs !== undefined && audio.waitPlaying
+        ? audio.waitPlaying(input.playingDeadlineMs, input.sleep, input.signal)
+        : Promise.resolve(true);
     await audio.play().catch(() => undefined);
     if (aborted(input.signal)) {
+      return;
+    }
+    const started = await playingWait;
+    if (!started || aborted(input.signal)) {
       return;
     }
     await Promise.race([
@@ -175,8 +213,21 @@ export async function playBoundedAudio(input: {
 
 export function createBrowserAudio(src: string): OverlayAudioHandle {
   const el = new Audio(src);
+  el.preload = "auto";
   let ended = false;
+  let stopped = false;
   const endedWaiters: Array<() => void> = [];
+  const cleanups: Array<() => void> = [];
+  const listen = (
+    type: string,
+    handler: EventListener,
+    options?: AddEventListenerOptions,
+  ): void => {
+    el.addEventListener(type, handler, options);
+    cleanups.push(() => {
+      el.removeEventListener(type, handler);
+    });
+  };
   const finishWaiters = (): void => {
     if (ended) {
       return;
@@ -187,17 +238,61 @@ export function createBrowserAudio(src: string): OverlayAudioHandle {
     }
     endedWaiters.length = 0;
   };
-  el.addEventListener("ended", finishWaiters);
-  el.addEventListener("error", finishWaiters);
+  listen("ended", finishWaiters);
+  listen("error", finishWaiters);
+  const waitEvent = (
+    type: "canplaythrough" | "playing",
+    timeoutMs: number,
+    sleep: (ms: number) => Promise<void>,
+    signal?: AbortSignal,
+  ): Promise<boolean> => {
+    if (stopped || aborted(signal) || timeoutMs <= 0) {
+      return Promise.resolve(false);
+    }
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (ok: boolean): void => {
+        if (done) {
+          return;
+        }
+        done = true;
+        el.removeEventListener(type, onOk);
+        el.removeEventListener("error", onErr);
+        resolve(ok);
+      };
+      const onOk = (): void => {
+        finish(!stopped);
+      };
+      const onErr = (): void => {
+        finish(false);
+      };
+      el.addEventListener(type, onOk, { once: true });
+      el.addEventListener("error", onErr, { once: true });
+      void sleep(timeoutMs).then(() => {
+        finish(false);
+      });
+      void waitAbort(signal).then(() => {
+        finish(false);
+      });
+    });
+  };
   return {
     setVolume(volume) {
       el.volume = volume;
     },
     play() {
+      if (stopped) {
+        return Promise.resolve();
+      }
       return el.play().then(() => undefined);
     },
     stop() {
+      stopped = true;
       el.pause();
+      for (const cleanup of cleanups) {
+        cleanup();
+      }
+      cleanups.length = 0;
       el.removeAttribute("src");
       el.load();
       finishWaiters();
@@ -210,6 +305,18 @@ export function createBrowserAudio(src: string): OverlayAudioHandle {
         endedWaiters.push(resolve);
       });
     },
+    async waitReady(timeoutMs, sleep, signal) {
+      if (stopped || aborted(signal) || timeoutMs <= 0) {
+        return false;
+      }
+      if (el.readyState >= 4) {
+        return true;
+      }
+      return waitEvent("canplaythrough", timeoutMs, sleep, signal);
+    },
+    async waitPlaying(timeoutMs, sleep, signal) {
+      return waitEvent("playing", timeoutMs, sleep, signal);
+    },
   };
 }
 
@@ -219,21 +326,16 @@ export async function playDonationAlert(
   deps: OverlayPlaybackDeps,
 ): Promise<"speech" | "text-only"> {
   const signal = deps.signal;
-  const heartbeat = windowSetIntervalSafe(() => {
+  const now = deps.now ?? Date.now;
+  const beat = (): void => {
     if (aborted(signal)) {
       return;
     }
     void deps.heartbeat(donation.id).catch(() => undefined);
-  }, STREAM_ALERT_HEARTBEAT_MS);
+  };
+  beat();
+  const heartbeat = windowSetIntervalSafe(beat, STREAM_ALERT_HEARTBEAT_MS);
   try {
-    if (aborted(signal)) {
-      return "text-only";
-    }
-    try {
-      await deps.playDing(volumes.ding, signal);
-    } catch {
-      // Ding load/play failure must not block the overlay queue.
-    }
     if (aborted(signal)) {
       return "text-only";
     }
@@ -242,23 +344,59 @@ export async function playDonationAlert(
       !ttsEnabled ||
       donation.ttsStatus === "failed" ||
       donation.ttsStatus === "skipped";
-    if (!skipWait) {
-      await deps.sleep(STREAM_ALERT_DING_GAP_MS);
-      if (aborted(signal)) {
-        return "text-only";
-      }
-    }
-    const url = skipWait
+    const waitStarted = now();
+    const dingPrep = deps.prepareDing?.(STREAM_ALERT_TTS_WAIT_MS, signal);
+    let url = skipWait
       ? null
       : await deps.waitForSpeechUrl(
           donation.id,
           STREAM_ALERT_TTS_WAIT_MS,
           signal,
         );
-    if (aborted(signal) || !url) {
-      if (!aborted(signal)) {
-        await deps.sleep(STREAM_DONATION_VISIBLE_MS);
+    const remaining = STREAM_ALERT_TTS_WAIT_MS - (now() - waitStarted);
+    const speechPrep = ((): Promise<boolean> => {
+      if (skipWait || !url || aborted(signal)) {
+        return Promise.resolve(false);
       }
+      if (!deps.prepareSpeech) {
+        return Promise.resolve(true);
+      }
+      if (remaining <= 0) {
+        return Promise.resolve(false);
+      }
+      return deps.prepareSpeech(url, remaining, signal);
+    })();
+    const [speechReady] = await Promise.all([
+      speechPrep,
+      dingPrep ?? Promise.resolve(true),
+    ]);
+    if (deps.prepareSpeech && !speechReady) {
+      url = null;
+    }
+    if (aborted(signal)) {
+      return "text-only";
+    }
+    const shownAt = now();
+    deps.onShowCard?.();
+    try {
+      await deps.playDing(volumes.ding, signal);
+    } catch {
+      // Ding load/play failure must not block the overlay queue.
+    }
+    if (aborted(signal)) {
+      return "text-only";
+    }
+    if (!url) {
+      await deps.sleep(STREAM_DONATION_VISIBLE_MS);
+      return "text-only";
+    }
+    await deps.sleep(STREAM_ALERT_DING_GAP_MS);
+    if (aborted(signal)) {
+      return "text-only";
+    }
+    const playingDeadlineMs =
+      STREAM_ALERT_SPEECH_START_MAX_MS - (now() - shownAt);
+    if (playingDeadlineMs <= 0) {
       return "text-only";
     }
     const duration = donation.ttsDurationMs ?? 0;
@@ -266,7 +404,17 @@ export async function playDonationAlert(
       duration > 0
         ? Math.min(STREAM_ALERT_TTS_PLAY_MAX_MS, duration + 2_000)
         : STREAM_ALERT_TTS_PLAY_MAX_MS;
-    await deps.playSpeech(url, volumes.speech, maxMs, signal);
+    try {
+      await deps.playSpeech(
+        url,
+        volumes.speech,
+        maxMs,
+        signal,
+        playingDeadlineMs,
+      );
+    } catch {
+      return "text-only";
+    }
     return aborted(signal) ? "text-only" : "speech";
   } finally {
     heartbeat();

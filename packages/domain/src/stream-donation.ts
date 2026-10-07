@@ -133,6 +133,21 @@ export function streamDonationDisplayName(input: {
   return `Игрок ${tail || "00000"}`;
 }
 
+/** Form nickname from donat checkout; Telegram identity is fallback for older rows. */
+export function streamDonationAlertName(input: {
+  formNickname?: string | null | undefined;
+  username: string | null;
+  firstName: string | null;
+  displayName: string | null;
+  telegramUserId: bigint;
+}): string {
+  const form = input.formNickname?.trim();
+  if (form) {
+    return form;
+  }
+  return streamDonationDisplayName(input);
+}
+
 function toView(
   row: typeof streamDonations.$inferSelect,
 ): StreamDonationView {
@@ -205,6 +220,7 @@ export async function enqueueStreamDonationIn(
     walletTransactionId: string;
     message: unknown;
     amountAzc: bigint;
+    displayNickname?: string | null | undefined;
   },
 ): Promise<StreamDonationEnqueueResult> {
   const message = normalizeStreamDonationMessage(input.message);
@@ -228,7 +244,13 @@ export async function enqueueStreamDonationIn(
       .values({
         userId: input.userId,
         telegramUserId: identity.telegramUserId,
-        displayName: identity.displayName,
+        displayName: streamDonationAlertName({
+          formNickname: input.displayNickname,
+          username: null,
+          firstName: null,
+          displayName: identity.displayName,
+          telegramUserId: identity.telegramUserId,
+        }),
         message,
         amountAzc: input.amountAzc,
         status: "queued",

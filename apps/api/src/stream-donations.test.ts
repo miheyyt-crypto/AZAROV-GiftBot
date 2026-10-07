@@ -195,7 +195,8 @@ test("shop donat purchase leaves 500 and uses session identity", async () => {
   assert.equal(body.priceAzc, "1000");
   const donation = await streamRowForOrder(body.orderId);
   assert.ok(donation);
-  assert.equal(donation.displayName, "@realnick");
+  assert.equal(donation.displayName, "FormNick");
+  assert.notEqual(donation.displayName, "@realnick");
   assert.equal(donation.message, "hello");
   assert.equal(donation.amountAzc.toString(), "1000");
   await app.close();

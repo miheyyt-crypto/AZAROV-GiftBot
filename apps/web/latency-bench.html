@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>GiftBot alert latency bench</title>
+    <style>
+      body { font-family: sans-serif; background: #111; color: #eee; padding: 16px; }
+      #alert { display: none; font-size: 24px; margin: 24px 0; }
+      #alert[data-visible="true"] { display: block; }
+      #log { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <div id="alert">
+      <div id="alert-name"></div>
+      <div id="alert-message"></div>
+    </div>
+    <pre id="log">starting…</pre>
+    <script type="module" src="/src/stream-alerts/latency-bench.ts"></script>
+  </body>
+</html>

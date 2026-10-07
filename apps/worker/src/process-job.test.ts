@@ -635,6 +635,7 @@ test("stream alert tts writes wav once and reuses it", async () => {
     synthesizeTts: async ({ text, outputFile }) => {
       synthCalls += 1;
       assert.equal(text, "только текст сообщения.");
+      assert.equal(text.includes("N"), false);
       assert.match(outputFile, /\.dmitri\.wav$/);
       assert.doesNotMatch(outputFile, /;|&|\|/);
       await writeFile(outputFile, wav);

@@ -19,6 +19,19 @@ test("overlay ding uses the applepay asset", () => {
   assert.equal(bytes.subarray(0, 3).toString("ascii"), "ID3");
 });
 
+test("form nickname is shown as plain text, not a Telegram handle", () => {
+  const nameEl = { textContent: "", innerHTML: "" };
+  const messageEl = { textContent: "", innerHTML: "" };
+  fillAlertTexts(
+    nameEl as HTMLElement,
+    messageEl as HTMLElement,
+    { displayName: "FormNick", message: "привет" },
+  );
+  assert.equal(nameEl.textContent, "FormNick");
+  assert.notEqual(nameEl.textContent, "@realnick");
+  assert.equal(nameEl.innerHTML, "");
+});
+
 test("XSS payload is assigned as textContent only", () => {
   const nameEl = { textContent: "", innerHTML: "<b>stale</b>" };
   const messageEl = { textContent: "", innerHTML: "<i>stale</i>" };

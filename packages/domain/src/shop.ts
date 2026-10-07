@@ -752,6 +752,9 @@ export async function createShopOrder(
         walletTransactionId: paid.transaction.id,
         message: submitted.donationText,
         amountAzc: catalog.priceAzc,
+        ...(submitted.displayNickname
+          ? { displayNickname: submitted.displayNickname }
+          : {}),
       });
     }
     const updated = await tx

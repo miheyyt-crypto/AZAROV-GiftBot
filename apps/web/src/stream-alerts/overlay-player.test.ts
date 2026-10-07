@@ -7,6 +7,7 @@ import {
   pollSpeechUrl,
   settleDonationPlayback,
   STREAM_ALERT_DING_GAP_MS,
+  STREAM_ALERT_SPEECH_START_MAX_MS,
   STREAM_ALERT_TTS_ENABLED,
   type OverlayAudioHandle,
 } from "./overlay-player.js";
@@ -53,12 +54,15 @@ test("card sequence is ding, gap, then speech only", async () => {
     },
   );
   assert.equal(mode, "speech");
-  assert.deepEqual(events.slice(0, 4), [
-    "ding:0.4",
-    `sleep:${STREAM_ALERT_DING_GAP_MS}`,
-    "wait",
-    "speech:/audio/d1:0.7",
-  ]);
+  assert.deepEqual(
+    events.filter((row) => row !== "hb").slice(0, 4),
+    [
+      "wait",
+      "ding:0.4",
+      `sleep:${STREAM_ALERT_DING_GAP_MS}`,
+      "speech:/audio/d1:0.7",
+    ],
+  );
 });
 
 test("ding plays once and speech waits 400ms after ding ends", async () => {
@@ -88,9 +92,9 @@ test("ding plays once and speech waits 400ms after ding ends", async () => {
   );
   assert.equal(dingCount, 1);
   assert.deepEqual(events, [
+    "wait",
     "ding-end",
     `sleep:${STREAM_ALERT_DING_GAP_MS}`,
-    "wait",
     "speech",
   ]);
 });
@@ -121,6 +125,7 @@ test("TTS skipped still plays ding and does not wait for speech", async () => {
   assert.equal(events.includes(`sleep:${STREAM_ALERT_DING_GAP_MS}`), false);
   assert.ok(events.some((row) => row.startsWith("sleep:")));
 });
+
 
 test("ding play failure does not block speech", async () => {
   const events: string[] = [];
@@ -274,6 +279,7 @@ test("stale first-donation speech does not play after timeout abort", async () =
     events.includes("first-speech:/audio/first-late"),
     false,
   );
+  assert.equal(events.includes("first-ding"), false);
   assert.ok(events.includes("first-stale-ignored"));
   assert.ok(events.includes("second-speech:/audio/second"));
 });
@@ -365,4 +371,343 @@ test("complete runs once after TTS timeout and late speech is dropped", async ()
   await wait(100);
   assert.equal(completes, 1);
   assert.equal(speech, 0);
+});
+
+test("speech wait and preload finish before the card, then ding gap to playing", async () => {
+  let t = 0;
+  let shownAt = -1;
+  let playingAt = -1;
+  let waitBeforeCard = -1;
+  const mode = await playDonationAlert(
+    { id: "d-time", displayName: "FormNick", message: "длинное сообщение", ttsStatus: "pending" },
+    { ding: 0.8, speech: 1 },
+    {
+      now: () => t,
+      sleep: async (ms) => {
+        t += ms;
+      },
+      onShowCard: () => {
+        shownAt = t;
+      },
+      playDing: async () => {
+        t += 1410;
+      },
+      waitForSpeechUrl: async () => {
+        t += 5200;
+        waitBeforeCard = t;
+        return "/audio/d-time";
+      },
+      prepareSpeech: async () => {
+        t += 80;
+        return true;
+      },
+      playSpeech: async () => {
+        playingAt = t;
+      },
+      heartbeat: async () => undefined,
+      ttsEnabled: true,
+    },
+  );
+  assert.equal(mode, "speech");
+  assert.equal(waitBeforeCard, 5200);
+  assert.equal(shownAt, 5280);
+  assert.equal(playingAt - shownAt, 1410 + STREAM_ALERT_DING_GAP_MS);
+  assert.ok(playingAt - shownAt <= 2000);
+});
+
+test("warm TTS still waits for preload before showing the card", async () => {
+  let t = 0;
+  let shownAt = -1;
+  let playingAt = -1;
+  await playDonationAlert(
+    { id: "d-warm", displayName: "FormNick", message: "ok", ttsStatus: "ready" },
+    { ding: 0.8, speech: 1 },
+    {
+      now: () => t,
+      sleep: async (ms) => {
+        t += ms;
+      },
+      onShowCard: () => {
+        shownAt = t;
+      },
+      playDing: async () => {
+        t += 1410;
+      },
+      waitForSpeechUrl: async () => "/audio/warm",
+      prepareSpeech: async () => {
+        t += 40;
+        return true;
+      },
+      playSpeech: async () => {
+        playingAt = t;
+      },
+      heartbeat: async () => undefined,
+      ttsEnabled: true,
+    },
+  );
+  assert.equal(shownAt, 40);
+  assert.equal(playingAt - shownAt, 1810);
+});
+
+test("slow audio load keeps the card hidden until timeout then plays ding without speech", async () => {
+  const events: string[] = [];
+  const mode = await playDonationAlert(
+    { id: "d-slow", displayName: "FormNick", message: "ok", ttsStatus: "ready" },
+    { ding: 1, speech: 1 },
+    {
+      sleep: async (ms) => {
+        events.push(`sleep:${ms}`);
+      },
+      onShowCard: () => {
+        events.push("show");
+      },
+      playDing: async () => {
+        events.push("ding");
+      },
+      waitForSpeechUrl: async () => "/audio/slow",
+      prepareSpeech: async () => false,
+      playSpeech: async () => {
+        events.push("speech");
+      },
+      heartbeat: async () => undefined,
+      ttsEnabled: true,
+    },
+  );
+  assert.equal(mode, "text-only");
+  assert.deepEqual(
+    events.filter((row) => row === "show" || row === "ding" || row === "speech"),
+    ["show", "ding"],
+  );
+});
+
+test("TTS error shows the card with ding and never starts late speech", async () => {
+  const events: string[] = [];
+  const mode = await playDonationAlert(
+    { id: "d-fail", displayName: "FormNick", message: "ok", ttsStatus: "failed" },
+    { ding: 1, speech: 1 },
+    {
+      sleep: async () => undefined,
+      onShowCard: () => {
+        events.push("show");
+      },
+      playDing: async () => {
+        events.push("ding");
+      },
+      waitForSpeechUrl: async () => {
+        events.push("wait");
+        return "/audio/late";
+      },
+      playSpeech: async () => {
+        events.push("speech");
+      },
+      heartbeat: async () => undefined,
+      ttsEnabled: true,
+    },
+  );
+  assert.equal(mode, "text-only");
+  assert.deepEqual(events, ["show", "ding"]);
+});
+
+test("ready second donation does not show before the first finishes waiting", async () => {
+  const events: string[] = [];
+  await playDonationAlert(
+    { id: "first", displayName: "A", message: "one", ttsStatus: "pending" },
+    { ding: 1, speech: 1 },
+    {
+      sleep: async () => undefined,
+      onShowCard: () => {
+        events.push("show-first");
+      },
+      playDing: async () => {
+        events.push("ding-first");
+      },
+      waitForSpeechUrl: async () => {
+        events.push("wait-first");
+        return "/audio/first";
+      },
+      playSpeech: async () => {
+        events.push("speech-first");
+      },
+      heartbeat: async () => undefined,
+      ttsEnabled: true,
+    },
+  );
+  await playDonationAlert(
+    { id: "second", displayName: "B", message: "two", ttsStatus: "ready" },
+    { ding: 1, speech: 1 },
+    {
+      sleep: async () => undefined,
+      onShowCard: () => {
+        events.push("show-second");
+      },
+      playDing: async () => {
+        events.push("ding-second");
+      },
+      waitForSpeechUrl: async () => {
+        events.push("wait-second");
+        return "/audio/second";
+      },
+      playSpeech: async () => {
+        events.push("speech-second");
+      },
+      heartbeat: async () => undefined,
+      ttsEnabled: true,
+    },
+  );
+  assert.deepEqual(events, [
+    "wait-first",
+    "show-first",
+    "ding-first",
+    "speech-first",
+    "wait-second",
+    "show-second",
+    "ding-second",
+    "speech-second",
+  ]);
+});
+
+test("ding and speech are prepared before the card is shown", async () => {
+  const events: string[] = [];
+  await playDonationAlert(
+    { id: "d-prep", displayName: "FormNick", message: "ok", ttsStatus: "ready" },
+    { ding: 1, speech: 1 },
+    {
+      sleep: async () => undefined,
+      onShowCard: () => {
+        events.push("show");
+      },
+      prepareDing: async () => {
+        events.push("prep-ding");
+        return true;
+      },
+      playDing: async () => {
+        events.push("ding");
+      },
+      waitForSpeechUrl: async () => {
+        events.push("wait");
+        return "/audio/prep";
+      },
+      prepareSpeech: async () => {
+        events.push("prep-speech");
+        return true;
+      },
+      playSpeech: async () => {
+        events.push("speech");
+      },
+      heartbeat: async () => undefined,
+      ttsEnabled: true,
+    },
+  );
+  const showAt = events.indexOf("show");
+  assert.ok(events.indexOf("prep-ding") < showAt);
+  assert.ok(events.indexOf("prep-speech") < showAt);
+  assert.ok(events.indexOf("wait") < showAt);
+  assert.equal(events[showAt + 1], "ding");
+});
+
+test("speech is skipped if it cannot start within 2000ms of the card", async () => {
+  const events: string[] = [];
+  let t = 0;
+  const mode = await playDonationAlert(
+    { id: "d-late", displayName: "FormNick", message: "ok", ttsStatus: "ready" },
+    { ding: 1, speech: 1 },
+    {
+      now: () => t,
+      sleep: async (ms) => {
+        t += ms;
+      },
+      onShowCard: () => {
+        events.push("show");
+      },
+      playDing: async () => {
+        t += 1700;
+        events.push("ding");
+      },
+      waitForSpeechUrl: async () => "/audio/late-start",
+      playSpeech: async () => {
+        events.push("speech");
+      },
+      heartbeat: async () => undefined,
+      ttsEnabled: true,
+    },
+  );
+  assert.equal(mode, "text-only");
+  assert.equal(STREAM_ALERT_SPEECH_START_MAX_MS, 2000);
+  assert.deepEqual(events, ["show", "ding"]);
+});
+
+test("late playing after the deadline stops audio and drops handlers", async () => {
+  const log: string[] = [];
+  let playingHandler: (() => void) | undefined;
+  const handle: OverlayAudioHandle = {
+    setVolume() {},
+    async play() {
+      log.push("play");
+    },
+    stop() {
+      playingHandler = undefined;
+      log.push("stop");
+    },
+    waitEnded() {
+      return new Promise(() => undefined);
+    },
+    waitPlaying(timeoutMs, sleep) {
+      return new Promise((resolve) => {
+        playingHandler = () => {
+          log.push("playing-late");
+          resolve(true);
+        };
+        void sleep(timeoutMs).then(() => {
+          if (playingHandler) {
+            log.push("playing-timeout");
+            playingHandler = undefined;
+            resolve(false);
+          }
+        });
+      });
+    },
+  };
+  await playBoundedAudio({
+    src: "speech.wav",
+    volume: 1,
+    maxMs: 5000,
+    playingDeadlineMs: 20,
+    sleep: wait,
+    createAudio: () => handle,
+    audio: handle,
+  });
+  playingHandler?.();
+  await wait(40);
+  assert.ok(log.includes("play"));
+  assert.ok(log.includes("playing-timeout"));
+  assert.ok(log.includes("stop"));
+  assert.equal(log.includes("playing-late"), false);
+  assert.equal(playingHandler, undefined);
+});
+
+test("ding failure still continues the queue without speech wait hang", async () => {
+  const events: string[] = [];
+  const mode = await playDonationAlert(
+    { id: "d-ding-err", displayName: "FormNick", message: "ok", ttsStatus: "failed" },
+    { ding: 1, speech: 1 },
+    {
+      sleep: async () => undefined,
+      onShowCard: () => {
+        events.push("show");
+      },
+      playDing: async () => {
+        throw new Error("ding failed");
+      },
+      waitForSpeechUrl: async () => {
+        throw new Error("must not wait");
+      },
+      playSpeech: async () => {
+        events.push("speech");
+      },
+      heartbeat: async () => undefined,
+      ttsEnabled: true,
+    },
+  );
+  assert.equal(mode, "text-only");
+  assert.deepEqual(events, ["show"]);
 });
