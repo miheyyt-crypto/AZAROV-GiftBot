@@ -8,7 +8,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { streamDonationStatus } from "./enums.js";
+import { streamDonationStatus, streamDonationTtsStatus } from "./enums.js";
 import { purchases } from "./growth.js";
 import { users } from "./identity.js";
 import { walletTransactions } from "./wallet.js";
@@ -34,6 +34,12 @@ export const streamDonations = pgTable(
       { onDelete: "restrict" },
     ),
     overlaySessionId: uuid("overlay_session_id"),
+    ttsStatus: streamDonationTtsStatus("tts_status").notNull().default("skipped"),
+    ttsVoice: text("tts_voice"),
+    ttsDurationMs: integer("tts_duration_ms"),
+    ttsError: text("tts_error"),
+    ttsGeneratedAt: timestamp("tts_generated_at", { withTimezone: true }),
+    playingExpiresAt: timestamp("playing_expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

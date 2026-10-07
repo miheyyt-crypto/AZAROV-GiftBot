@@ -14,6 +14,7 @@ export const JOB_TYPES = {
   rollsFinishSpin: "rolls.finish_spin",
   giveawayDraw: "giveaway.draw",
   referralContestFinalize: "referral_contest.finalize",
+  streamAlertSynthesizeTts: "stream_alert.synthesize_tts",
 } as const;
 
 /** Higher numbers are claimed first. Broadcast traffic stays below default bot jobs. */

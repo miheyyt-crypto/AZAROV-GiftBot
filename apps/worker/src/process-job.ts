@@ -3,21 +3,32 @@ import {
   apply,
   applyKickInboundEvent,
   asBigInt,
+  cleanupOldStreamAlertTtsFiles,
   decryptSecret,
   encryptSecret,
+  ensureStreamAlertsTtsDir,
   finalizeKickStreamSession,
   drawGiveaway,
   finalizeReferralContest,
   finishRollsSpin,
+  loadStreamDonationForTts,
   lockAndSettleRollsRound,
+  markStreamDonationTtsReady,
+  markStreamDonationTtsTerminal,
   reconcileAllWallets,
   reconcileWallet,
+  STREAM_ALERT_TTS_JOB_TIMEOUT_MS,
   settleAsyncRound,
   settleFromCatalog,
+  streamDonationAudioPath,
+  wavDurationMs,
   type GiftbotDb,
   type KickOAuthClient,
   type WalletTransactionType,
 } from "@giftbot/domain";
+import { access, readFile } from "node:fs/promises";
+import { DEFAULT_PIPER_VOICE } from "./piper-voices.js";
+import { runPiper, withOneTtsAtATime } from "./piper-tts.js";
 import {
   completeJob,
   JOB_TYPES,
@@ -80,6 +91,96 @@ function contestIdOf(payload: unknown): string {
   return id;
 }
 
+function donationIdOf(payload: unknown): string {
+  const id = asRecord(payload)?.donation_id;
+  if (typeof id !== "string" || id.length === 0) {
+    throw new Error("donation_id is required");
+  }
+  return id;
+}
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function processStreamAlertTts(
+  db: GiftbotDb,
+  job: ClaimedJob,
+  deps: WorkerJobDeps,
+): Promise<void> {
+  const donationId = donationIdOf(job.payload);
+  const row = await loadStreamDonationForTts(db, donationId);
+  if (!row) {
+    return;
+  }
+  if (row.ttsStatus === "ready" || row.ttsStatus === "skipped") {
+    return;
+  }
+  const ttsDir = deps.ttsDir;
+  const model = deps.piperModel;
+  const bin = deps.piperBin;
+  if (!ttsDir || !model || !bin) {
+    await markStreamDonationTtsTerminal(db, {
+      donationId,
+      status: "skipped",
+      error: "piper is not configured",
+    });
+    return;
+  }
+  await ensureStreamAlertsTtsDir(ttsDir);
+  const outputFile = streamDonationAudioPath(ttsDir, donationId);
+  if (await fileExists(outputFile)) {
+    const durationMs = wavDurationMs(await readFile(outputFile));
+    await markStreamDonationTtsReady(db, {
+      donationId,
+      voice: deps.piperVoice ?? DEFAULT_PIPER_VOICE,
+      durationMs,
+    });
+    await cleanupOldStreamAlertTtsFiles(ttsDir);
+    return;
+  }
+  try {
+    const durationMs = await withOneTtsAtATime(async () => {
+      if (deps.synthesizeTts) {
+        return deps.synthesizeTts({
+          text: row.message,
+          outputFile,
+          model,
+          timeoutMs: deps.piperTimeoutMs ?? STREAM_ALERT_TTS_JOB_TIMEOUT_MS,
+        });
+      }
+      return runPiper({
+        bin,
+        model,
+        text: row.message,
+        outputFile,
+        timeoutMs: deps.piperTimeoutMs ?? STREAM_ALERT_TTS_JOB_TIMEOUT_MS,
+      });
+    });
+    await markStreamDonationTtsReady(db, {
+      donationId,
+      voice: deps.piperVoice ?? DEFAULT_PIPER_VOICE,
+      durationMs,
+    });
+  } catch (error) {
+    await markStreamDonationTtsTerminal(db, {
+      donationId,
+      status: "failed",
+      error: error instanceof Error ? error.message : "piper failed",
+    });
+    deps.logger?.warn("stream alert tts failed", {
+      donation_id: donationId,
+      error: error instanceof Error ? error.message : "unknown",
+    });
+  }
+  await cleanupOldStreamAlertTtsFiles(ttsDir);
+}
+
 function userIdOf(payload: unknown): string {
   const id = asRecord(payload)?.user_id;
   if (typeof id !== "string" || id.length === 0) {
@@ -110,11 +211,24 @@ function readWalletApply(payload: unknown): {
   };
 }
 
+export type StreamAlertTtsSynthesizer = (input: {
+  text: string;
+  outputFile: string;
+  model: string;
+  timeoutMs: number;
+}) => Promise<number>;
+
 export type WorkerJobDeps = {
   kickOAuth?: KickOAuthClient;
   tokenKey?: Buffer;
   metrics?: Metrics;
   logger?: StructuredLogger;
+  ttsDir?: string;
+  piperBin?: string;
+  piperModel?: string;
+  piperVoice?: string;
+  piperTimeoutMs?: number;
+  synthesizeTts?: StreamAlertTtsSynthesizer;
 };
 
 async function processKickInbound(
@@ -313,6 +427,10 @@ export async function executeWorkerJob(
   }
   if (job.type === JOB_TYPES.referralContestFinalize) {
     await finalizeReferralContest(db, contestIdOf(job.payload));
+    return;
+  }
+  if (job.type === JOB_TYPES.streamAlertSynthesizeTts) {
+    await processStreamAlertTts(db, job, deps);
     return;
   }
 

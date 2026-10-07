@@ -224,3 +224,10 @@ export const streamDonationStatus = pgEnum("stream_donation_status", [
   "finished",
 ]);
 
+export const streamDonationTtsStatus = pgEnum("stream_donation_tts_status", [
+  "pending",
+  "ready",
+  "failed",
+  "skipped",
+]);
+

@@ -337,9 +337,9 @@ test("shop catalog seed has the approved product prices", async () => {
     select column_name
     from information_schema.columns
     where table_name = 'stream_donations'
-      and column_name = 'shop_purchase_id'
+      and column_name in ('shop_purchase_id', 'tts_status', 'playing_expires_at')
   `;
-  assert.equal(streamCols.length, 1);
+  assert.equal(streamCols.length, 3);
   const streamIndexes = await sql<{ indexname: string }[]>`
     select indexname
     from pg_indexes

@@ -3,6 +3,7 @@ import type { Metrics, StructuredLogger } from "@giftbot/observability";
 import {
   createGiveawayImageStorage,
   createBroadcastImageStorage,
+  resolveStreamAlertsTtsDir,
   type SubmissionFileStorage,
 } from "@giftbot/domain";
 import {
@@ -73,6 +74,8 @@ export type ApiAppOptions = {
   corsOrigins?: string[];
   /** OBS overlay secret. Never sent to Mini App. */
   overlayAlertsToken?: string;
+  /** Piper WAV cache for overlay speech. */
+  overlayTtsDir?: string;
 };
 
 export function createApiApp(options: ApiAppOptions = {}) {
@@ -180,6 +183,17 @@ export function createApiApp(options: ApiAppOptions = {}) {
       options.db,
       userRateLimiter,
       options.overlayAlertsToken ?? process.env.STREAM_ALERTS_TOKEN,
+      options.overlayTtsDir ??
+        resolveStreamAlertsTtsDir({
+          ...(process.env.STREAM_ALERTS_TTS_DIR
+            ? { ttsDir: process.env.STREAM_ALERTS_TTS_DIR }
+            : {}),
+          ...(options.uploadDir
+            ? { uploadDir: options.uploadDir }
+            : process.env.UPLOAD_DIR
+              ? { uploadDir: process.env.UPLOAD_DIR }
+              : {}),
+        }),
     );
     registerGiveawayRoutes(
       app,

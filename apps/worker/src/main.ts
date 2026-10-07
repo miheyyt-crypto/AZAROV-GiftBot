@@ -9,11 +9,13 @@ import {
   createHttpKickOAuthClient,
   ensureDefaultReferralContest,
   parseTokenEncryptionKey,
+  resolveStreamAlertsTtsDir,
 } from "@giftbot/domain";
 import { createLogger, createMetrics } from "@giftbot/observability";
 import { sql } from "drizzle-orm";
 import { runWorkerConsumer } from "./consume.js";
 import { close, createWorkerHealthServer, listen } from "./health.js";
+import { DEFAULT_PIPER_VOICE } from "./piper-voices.js";
 import type { WorkerJobDeps } from "./process-job.js";
 
 const env = loadEnv();
@@ -82,7 +84,21 @@ async function main(): Promise<void> {
 
   if (dbHandle) {
     await ensureDefaultReferralContest(dbHandle.db);
-    const deps: WorkerJobDeps = {};
+    const ttsDir = resolveStreamAlertsTtsDir({
+      ...(env.STREAM_ALERTS_TTS_DIR
+        ? { ttsDir: env.STREAM_ALERTS_TTS_DIR }
+        : {}),
+      ...(env.UPLOAD_DIR ? { uploadDir: env.UPLOAD_DIR } : {}),
+    });
+    const deps: WorkerJobDeps = {
+      ...(ttsDir ? { ttsDir } : {}),
+      ...(env.PIPER_BIN ? { piperBin: env.PIPER_BIN } : {}),
+      ...(env.PIPER_MODEL ? { piperModel: env.PIPER_MODEL } : {}),
+      piperVoice: env.PIPER_VOICE ?? DEFAULT_PIPER_VOICE,
+      ...(env.PIPER_TIMEOUT_MS !== undefined
+        ? { piperTimeoutMs: env.PIPER_TIMEOUT_MS }
+        : {}),
+    };
     if (
       env.KICK_CLIENT_ID &&
       env.KICK_CLIENT_SECRET &&

@@ -3,20 +3,28 @@ import {
   inboundEvents,
   jobs,
   kickAccounts,
+  streamDonations,
   telegramAccounts,
   walletTransactions,
   wallets,
 } from "@giftbot/db/schema";
 import {
   apply,
+  createShopOrder,
   decryptSecret,
+  encodePcmWav,
   encryptSecret,
+  ensureShopCatalog,
   linkKickAccount,
   parseTokenEncryptionKey,
   playCatalogGame,
   provisionUser,
   readGameRound,
+  wavDurationMs,
 } from "@giftbot/domain";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   claimNextJob,
   enqueueJob,
@@ -534,6 +542,136 @@ test("wallet.reconcile mismatch does not rewrite the balance", async () => {
     .from(walletTransactions)
     .where(eq(walletTransactions.userId, user.userId));
   assert.equal(ledger.length, 0);
+});
+
+test("stream alert tts skips when piper is not configured", async () => {
+  await ensureShopCatalog(harness.db);
+  const user = await provisionUser(harness.db);
+  await harness.db.insert(telegramAccounts).values({
+    userId: user.userId,
+    telegramUserId: 771001n,
+    username: "tts",
+    isActive: true,
+  });
+  await apply(harness.db, {
+    userId: user.userId,
+    type: "deposit",
+    amountMinor: 2000n,
+    idempotencyKey: `dep:${user.userId}:tts-skip`,
+    actorType: "system",
+  });
+  const order = await createShopOrder(harness.db, {
+    userId: user.userId,
+    productCode: "donat",
+    submittedData: { displayNickname: "N", donationText: "привет стрим" },
+    idempotencyKey: `shop:${user.userId}:tts-skip`,
+  });
+  const donation = (
+    await harness.db
+      .select()
+      .from(streamDonations)
+      .where(eq(streamDonations.shopPurchaseId, order.orderId))
+  )[0];
+  assert.ok(donation);
+  const jobRows = await harness.db
+    .select()
+    .from(jobs)
+    .where(eq(jobs.idempotencyKey, `stream_alert.tts:${donation.id}`));
+  assert.equal(jobRows[0]?.owner, "worker");
+  await processWorkerJob(harness.db, await loadJob(jobRows[0]!.id));
+  const after = (
+    await harness.db
+      .select()
+      .from(streamDonations)
+      .where(eq(streamDonations.id, donation.id))
+  )[0];
+  assert.equal(after?.ttsStatus, "skipped");
+});
+
+test("stream alert tts writes wav once and reuses it", async () => {
+  await ensureShopCatalog(harness.db);
+  const user = await provisionUser(harness.db);
+  await harness.db.insert(telegramAccounts).values({
+    userId: user.userId,
+    telegramUserId: 771002n,
+    username: "reuse",
+    isActive: true,
+  });
+  await apply(harness.db, {
+    userId: user.userId,
+    type: "deposit",
+    amountMinor: 2000n,
+    idempotencyKey: `dep:${user.userId}:tts-reuse`,
+    actorType: "system",
+  });
+  const order = await createShopOrder(harness.db, {
+    userId: user.userId,
+    productCode: "donat",
+    submittedData: { displayNickname: "N", donationText: "только текст сообщения" },
+    idempotencyKey: `shop:${user.userId}:tts-reuse`,
+  });
+  const donation = (
+    await harness.db
+      .select()
+      .from(streamDonations)
+      .where(eq(streamDonations.shopPurchaseId, order.orderId))
+  )[0];
+  assert.ok(donation);
+  const ttsDir = await mkdtemp(join(tmpdir(), "giftbot-worker-tts-"));
+  const wav = encodePcmWav(new Int16Array(11_025), 22_050);
+  let synthCalls = 0;
+  const job = (
+    await harness.db
+      .select()
+      .from(jobs)
+      .where(eq(jobs.idempotencyKey, `stream_alert.tts:${donation.id}`))
+  )[0];
+  assert.ok(job);
+  await processWorkerJob(harness.db, await loadJob(job.id), {
+    ttsDir,
+    piperBin: "piper",
+    piperModel: join(ttsDir, "model.onnx"),
+    piperVoice: "dmitri",
+    synthesizeTts: async ({ text, outputFile }) => {
+      synthCalls += 1;
+      assert.equal(text, "только текст сообщения");
+      assert.doesNotMatch(outputFile, /;|&|\|/);
+      await writeFile(outputFile, wav);
+      return wavDurationMs(wav);
+    },
+  });
+  const ready = (
+    await harness.db
+      .select()
+      .from(streamDonations)
+      .where(eq(streamDonations.id, donation.id))
+  )[0];
+  assert.equal(ready?.ttsStatus, "ready");
+  assert.equal(ready?.ttsVoice, "dmitri");
+  const written = await readFile(join(ttsDir, `${donation.id}.wav`));
+  assert.equal(written.equals(wav), true);
+  await harness.db
+    .update(streamDonations)
+    .set({ ttsStatus: "pending" })
+    .where(eq(streamDonations.id, donation.id));
+  await executeWorkerJob(harness.db, await loadJob(job.id), {
+    ttsDir,
+    piperBin: "piper",
+    piperModel: join(ttsDir, "model.onnx"),
+    piperVoice: "dmitri",
+    synthesizeTts: async () => {
+      synthCalls += 1;
+      throw new Error("must reuse existing wav");
+    },
+  });
+  assert.equal(synthCalls, 1);
+  const reused = (
+    await harness.db
+      .select()
+      .from(streamDonations)
+      .where(eq(streamDonations.id, donation.id))
+  )[0];
+  assert.equal(reused?.ttsStatus, "ready");
 });
 
 test("referral_contest.finalize job requires contest_id", async () => {

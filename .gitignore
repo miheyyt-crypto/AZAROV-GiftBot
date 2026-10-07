@@ -19,6 +19,8 @@ store.json
 .data/
 .local-uploads/
 .local-dev-db-url
+.local-piper/
+.tts-samples/
 
 # Local loadtest / preprod artifacts
 tools/loadtest/*.out

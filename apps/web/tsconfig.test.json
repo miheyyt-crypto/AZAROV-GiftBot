@@ -205,6 +205,8 @@
     "src/lib/support.ts",
     "src/stream-alerts/overlay-dom.ts",
     "src/stream-alerts/overlay-dom.test.ts",
+    "src/stream-alerts/overlay-player.ts",
+    "src/stream-alerts/overlay-player.test.ts",
     "src/pages/AdminDonationsPage.tsx"
   ]
 }

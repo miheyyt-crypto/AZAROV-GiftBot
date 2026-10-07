@@ -2,19 +2,20 @@ import {
   DONATION_ALERT_AUDIO_SRC,
   DONATION_ALERT_ICON_SRC,
   STREAM_DONATION_FADE_MS,
-  STREAM_DONATION_VISIBLE_MS,
   fillAlertTexts,
   overlaySessionId,
 } from "./overlay-dom.js";
+import {
+  parseOverlayVolumes,
+  playDonationAlert,
+  STREAM_ALERT_COMPLETE_TIMEOUT_MS,
+  type OverlayPlaybackDonation,
+  type OverlayTtsStatus,
+} from "./overlay-player.js";
 import "./overlay.css";
 
-type OverlayDonation = {
-  id: string;
-  displayName: string;
-  message: string;
-};
-
 const token = new URLSearchParams(window.location.search).get("token") ?? "";
+const volumes = parseOverlayVolumes(window.location.search);
 const sessionId = overlaySessionId(window.sessionStorage);
 
 const root = document.getElementById("alert");
@@ -69,13 +70,59 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-function playAlertSound(): void {
-  const audio = new Audio(DONATION_ALERT_AUDIO_SRC);
-  audio.volume = 1;
-  void audio.play().catch(() => undefined);
+function playHtmlAudio(
+  src: string,
+  volume: number,
+  maxMs: number,
+): Promise<void> {
+  return new Promise((resolve) => {
+    const audio = new Audio(src);
+    audio.volume = volume;
+    const finish = (): void => {
+      audio.pause();
+      audio.removeAttribute("src");
+      resolve();
+    };
+    const timer = window.setTimeout(finish, maxMs);
+    audio.addEventListener("ended", () => {
+      window.clearTimeout(timer);
+      finish();
+    });
+    audio.addEventListener("error", () => {
+      window.clearTimeout(timer);
+      finish();
+    });
+    void audio.play().catch(() => {
+      window.clearTimeout(timer);
+      finish();
+    });
+  });
 }
 
-async function showDonation(donation: OverlayDonation): Promise<void> {
+async function waitForSpeechUrl(
+  donationId: string,
+  timeoutMs: number,
+): Promise<string | null> {
+  const started = Date.now();
+  const path = overlayUrl(`/stream-alerts/audio/${donationId}`);
+  while (Date.now() - started < timeoutMs) {
+    try {
+      const response = await fetch(path, { method: "GET" });
+      if (response.status === 200) {
+        return path;
+      }
+      if (response.status !== 202) {
+        return null;
+      }
+    } catch {
+      return null;
+    }
+    await sleep(400);
+  }
+  return null;
+}
+
+async function showDonation(donation: OverlayPlaybackDonation): Promise<void> {
   if (!root || !nameEl || !messageEl) {
     return;
   }
@@ -83,20 +130,65 @@ async function showDonation(donation: OverlayDonation): Promise<void> {
   root.classList.remove("is-out");
   root.classList.add("is-in");
   root.setAttribute("data-visible", "true");
-  playAlertSound();
-  await sleep(STREAM_DONATION_VISIBLE_MS);
-  root.classList.remove("is-in");
-  root.classList.add("is-out");
-  await sleep(STREAM_DONATION_FADE_MS);
-  root.classList.remove("is-out");
-  root.removeAttribute("data-visible");
-  nameEl.textContent = "";
-  messageEl.textContent = "";
+  try {
+    await playDonationAlert(donation, volumes, {
+      sleep,
+      playDing: (volume) => playHtmlAudio(DONATION_ALERT_AUDIO_SRC, volume, 2_000),
+      waitForSpeechUrl,
+      playSpeech: (url, volume, maxMs) => playHtmlAudio(url, volume, maxMs),
+      heartbeat: async (donationId) => {
+        await postJson("/stream-alerts/heartbeat", { sessionId, donationId });
+      },
+    });
+  } finally {
+    root.classList.remove("is-in");
+    root.classList.add("is-out");
+    await sleep(STREAM_DONATION_FADE_MS);
+    root.classList.remove("is-out");
+    root.removeAttribute("data-visible");
+    nameEl.textContent = "";
+    messageEl.textContent = "";
+  }
+}
+
+function readClaimedDonation(raw: unknown): OverlayPlaybackDonation | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const row = raw as Record<string, unknown>;
+  if (typeof row.id !== "string") {
+    return null;
+  }
+  const ttsStatus = row.ttsStatus;
+  return {
+    id: row.id,
+    displayName: typeof row.displayName === "string" ? row.displayName : "",
+    message: typeof row.message === "string" ? row.message : "",
+    ...(ttsStatus === "pending" ||
+    ttsStatus === "ready" ||
+    ttsStatus === "failed" ||
+    ttsStatus === "skipped"
+      ? { ttsStatus: ttsStatus as OverlayTtsStatus }
+      : {}),
+    ttsDurationMs:
+      typeof row.ttsDurationMs === "number" ? row.ttsDurationMs : null,
+  };
 }
 
 let pumping = false;
 let eventsSource: EventSource | null = null;
 let eventsReconnectTimer = 0;
+
+async function completeDonation(donationId: string): Promise<void> {
+  try {
+    await postJson("/stream-alerts/complete", {
+      sessionId,
+      donationId,
+    });
+  } catch {
+    // Queue recovery via playing lease if complete cannot be delivered.
+  }
+}
 
 async function pumpQueue(): Promise<void> {
   if (pumping) {
@@ -106,23 +198,15 @@ async function pumpQueue(): Promise<void> {
   try {
     for (;;) {
       const claimed = await postJson("/stream-alerts/claim", { sessionId });
-      const donation = claimed.donation;
-      if (!donation || typeof donation !== "object") {
+      const donation = readClaimedDonation(claimed.donation);
+      if (!donation) {
         return;
       }
-      const row = donation as Record<string, unknown>;
-      if (typeof row.id !== "string") {
-        return;
-      }
-      await showDonation({
-        id: row.id,
-        displayName: typeof row.displayName === "string" ? row.displayName : "",
-        message: typeof row.message === "string" ? row.message : "",
-      });
-      await postJson("/stream-alerts/complete", {
-        sessionId,
-        donationId: row.id,
-      });
+      await Promise.race([
+        showDonation(donation),
+        sleep(STREAM_ALERT_COMPLETE_TIMEOUT_MS),
+      ]);
+      await completeDonation(donation.id);
     }
   } catch {
     await sleep(2000);

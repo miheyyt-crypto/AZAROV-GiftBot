@@ -1,4 +1,5 @@
 import {
+  jobs,
   streamAlertConsumers,
   streamDonations,
   telegramAccounts,
@@ -21,11 +22,12 @@ import { startDomainHarness } from "./harness.js";
 import { asBigInt } from "./money.js";
 import { createShopOrder, ensureShopCatalog } from "./shop.js";
 import {
-  STREAM_DONATION_PLAYING_LEASE_MS,
   attachStreamAlertConsumer,
   claimNextStreamDonation,
   completeStreamDonation,
+  heartbeatStreamDonationPlaying,
   streamDonationDisplayName,
+  streamDonationPlayingHoldMs,
 } from "./stream-donation.js";
 import { provisionUser } from "./user.js";
 import { apply, reconcileWallet } from "./wallet.js";
@@ -139,6 +141,13 @@ test("shop donat purchase debits 1000 once and creates one stream donation", asy
   assert.equal(donation.displayName, "@donor");
   assert.equal(asBigInt(donation.amountAzc), 1000n);
   assert.equal(donation.shopPurchaseId, order.orderId);
+  assert.equal(donation.ttsStatus, "pending");
+  const ttsJobs = await harness.db
+    .select()
+    .from(jobs)
+    .where(eq(jobs.idempotencyKey, `stream_alert.tts:${donation.id}`));
+  assert.equal(ttsJobs.length, 1);
+  assert.equal(ttsJobs[0]?.owner, "worker");
   const report = await reconcileWallet(harness.db, user.userId);
   assert.equal(report.consistent, true);
   assert.equal(report.balanceMinor, 500n);
@@ -294,7 +303,11 @@ test("expired playing donation is recovered to the queue", async () => {
     clock,
   });
   assert.equal(claimed.donation?.id, created.donation?.id);
-  now += STREAM_DONATION_PLAYING_LEASE_MS + 1_000;
+  now +=
+    streamDonationPlayingHoldMs({
+      ttsStatus: claimed.donation!.ttsStatus,
+      ttsDurationMs: claimed.donation!.ttsDurationMs,
+    }) + 1_000;
   const laterSession = randomUUID();
   const attached = await attachStreamAlertConsumer(harness.db, {
     sessionId: laterSession,
@@ -307,6 +320,49 @@ test("expired playing donation is recovered to the queue", async () => {
   assert.equal(attached.recovered + recovered.recovered, 1);
   assert.equal(recovered.donation?.id, created.donation?.id);
   assert.equal(recovered.donation?.status, "playing");
+});
+
+test("playing lease covers speech and heartbeat extends it", async () => {
+  const user = await provisionUser(harness.db);
+  await withTelegram(user.userId, 893011n, { username: "speech" });
+  await fund(user.userId, 1000n, `dep:${user.userId}:speech`);
+  const created = await buyDonat(
+    user.userId,
+    "long message",
+    `shop:${user.userId}:speech`,
+  );
+  await harness.db
+    .update(streamDonations)
+    .set({ ttsStatus: "ready", ttsDurationMs: 60_000 })
+    .where(eq(streamDonations.id, created.donation!.id));
+  const session = randomUUID();
+  let now = Date.parse("2026-10-07T10:00:00.000Z");
+  const clock = { now: () => new Date(now) };
+  await attachStreamAlertConsumer(harness.db, { sessionId: session, clock });
+  const claimed = await claimNextStreamDonation(harness.db, {
+    sessionId: session,
+    clock,
+  });
+  const hold = streamDonationPlayingHoldMs({
+    ttsStatus: "ready",
+    ttsDurationMs: 60_000,
+  });
+  assert.ok(hold > 45_000);
+  for (let elapsed = 0; elapsed < 60_000; elapsed += 20_000) {
+    await heartbeatStreamDonationPlaying(harness.db, {
+      sessionId: session,
+      donationId: created.donation!.id,
+      clock,
+    });
+    now += 20_000;
+  }
+  const recoveredEarly = await claimNextStreamDonation(harness.db, {
+    sessionId: session,
+    clock,
+  });
+  assert.equal(recoveredEarly.recovered, 0);
+  assert.equal(recoveredEarly.donation?.id, created.donation?.id);
+  assert.equal(recoveredEarly.donation?.status, "playing");
 });
 
 test("second overlay cannot steal the live queue", async () => {

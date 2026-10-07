@@ -18,6 +18,7 @@ process.stdout.write(
     kickFinalizeOwner: ownerForJobType(JOB_TYPES.kickFinalizeStream),
     gameSettleOwner: ownerForJobType(JOB_TYPES.gameSettleAsync),
     contestFinalizeOwner: ownerForJobType(JOB_TYPES.referralContestFinalize),
+    streamAlertTtsOwner: ownerForJobType(JOB_TYPES.streamAlertSynthesizeTts),
     reconcileSweepKey: reconcileSweepIdempotencyKey(new Date(0)),
   })}\n`,
 );

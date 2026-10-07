@@ -69,6 +69,15 @@ export const envSchema = z.object({
   UPLOAD_DIR: z.string().min(1).optional(),
   /** OBS overlay token for /stream/alerts. Never send to Mini App. */
   STREAM_ALERTS_TOKEN: z.string().min(16).optional(),
+  /** Piper TTS audio cache (outside release tree). Defaults to UPLOAD_DIR/stream-alerts-tts. */
+  STREAM_ALERTS_TTS_DIR: z.string().min(1).optional(),
+  /** Local Piper binary. Worker-only; unset skips speech and keeps text alerts. */
+  PIPER_BIN: z.string().min(1).optional(),
+  /** Path to a ru_RU Piper .onnx model. */
+  PIPER_MODEL: z.string().min(1).optional(),
+  /** Voice id recorded on the donation row (default dmitri). */
+  PIPER_VOICE: z.string().min(1).optional(),
+  PIPER_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).optional(),
   /** postgres.js pool max per process (defaults differ by role). */
   DB_POOL_MAX: z.coerce.number().int().positive().max(200).optional(),
   DB_CONNECT_TIMEOUT_SECONDS: z.coerce

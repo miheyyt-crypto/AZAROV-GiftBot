@@ -12,9 +12,13 @@ import {
 } from "@giftbot/db/schema";
 import {
   apply,
+  encodePcmWav,
   ensureShopCatalog,
   STREAM_DONATION_PLAYING_LEASE_MS,
 } from "@giftbot/domain";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -382,7 +386,7 @@ test("expired playing donation is recovered", async () => {
   );
   await db
     .update(streamDonations)
-    .set({ startedAt })
+    .set({ startedAt, playingExpiresAt: startedAt })
     .where(eq(streamDonations.id, donation.id));
   await db.delete(streamAlertConsumers);
   const later = randomUUID();
@@ -403,6 +407,48 @@ test("expired playing donation is recovered", async () => {
   };
   assert.equal(body.donation?.id, donation.id);
   assert.ok(attachedBody.recovered + body.recovered >= 1);
+  await app.close();
+});
+
+test("overlay audio is token-gated and stays GET-only", async () => {
+  const mini = await miniToken(982021, "voice");
+  await credit(mini.userId, 1000n, `dep:${mini.userId}:voice`);
+  const ttsDir = await mkdtemp(join(tmpdir(), "giftbot-api-tts-"));
+  const app = createApiApp({
+    db,
+    authPolicy: policy,
+    overlayAlertsToken: OVERLAY_TOKEN,
+    overlayTtsDir: ttsDir,
+  });
+  const bought = await buyDonat(app, mini.token, "озвучка", randomUUID());
+  const donation = await streamRowForOrder(
+    (bought.json() as { orderId: string }).orderId,
+  );
+  assert.ok(donation);
+  const pending = await app.inject({
+    method: "GET",
+    url: `/stream-alerts/audio/${donation.id}?token=${OVERLAY_TOKEN}`,
+  });
+  assert.equal(pending.statusCode, 202);
+  const denied = await app.inject({
+    method: "GET",
+    url: `/stream-alerts/audio/${donation.id}`,
+  });
+  assert.equal(denied.statusCode, 401);
+  await writeFile(
+    join(ttsDir, `${donation.id}.wav`),
+    encodePcmWav(new Int16Array(2_205), 22_050),
+  );
+  await db
+    .update(streamDonations)
+    .set({ ttsStatus: "ready", ttsDurationMs: 100 })
+    .where(eq(streamDonations.id, donation.id));
+  const ready = await app.inject({
+    method: "GET",
+    url: `/stream-alerts/audio/${donation.id}?token=${OVERLAY_TOKEN}`,
+  });
+  assert.equal(ready.statusCode, 200);
+  assert.equal(ready.headers["content-type"], "audio/wav");
   await app.close();
 });
 
