@@ -438,6 +438,16 @@ export function HomePage({
 
       <StreamStreakCard streak={streak} />
 
+      <button
+        type="button"
+        className="card card--btn stream-support-home"
+        onClick={() => navigate("#/support")}
+      >
+        <p className="stream-support-home__kicker">AZAROV Alerts</p>
+        <p className="stream-support-home__title">Поддержать стрим</p>
+        <p className="muted">Донат 1000 монет появится на эфире.</p>
+      </button>
+
       <GameBanners className="home-games" />
 
       <section className="card stack giveaways-home">

@@ -46,7 +46,8 @@ export type WalletTransactionType =
   | "rolls_win"
   | "giveaway_reward"
   | "achievement_reward"
-  | "referral_contest_reward";
+  | "referral_contest_reward"
+  | "stream_donation";
 
 export type WalletApplyInput = {
   userId: string;

@@ -42,6 +42,8 @@ const AdminCashWithdrawalsPage = lazy(
 );
 const AdminWelvuraPage = lazy(async () => import("../pages/AdminWelvuraPage.js"));
 const AdminBroadcastPage = lazy(async () => import("../pages/AdminBroadcastPage.js"));
+const SupportPage = lazy(async () => import("../pages/SupportPage.js"));
+const AdminDonationsPage = lazy(async () => import("../pages/AdminDonationsPage.js"));
 
 function RouteView({
   route,
@@ -68,6 +70,8 @@ function RouteView({
           bootstrap={bootstrap}
         />
       );
+    case "support":
+      return <SupportPage token={token} skipRemote={skipRemote} />;
     case "tasks":
       return <TasksPage token={token} skipRemote={skipRemote} />;
     case "welvura":
@@ -163,6 +167,13 @@ function RouteView({
     case "admin-broadcast":
       return (
         <AdminBroadcastPage
+          skipRemote={skipRemote}
+          isSuperAdmin={isSuperAdmin}
+        />
+      );
+    case "admin-donations":
+      return (
+        <AdminDonationsPage
           skipRemote={skipRemote}
           isSuperAdmin={isSuperAdmin}
         />

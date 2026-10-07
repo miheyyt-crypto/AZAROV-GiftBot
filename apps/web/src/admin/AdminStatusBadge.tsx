@@ -5,7 +5,13 @@ export function adminStatusTone(
   if (value === "pending" || value === "draft" || value === "queued") {
     return value === "draft" ? "draft" : "pending";
   }
-  if (value === "processing" || value === "open" || value === "drawing" || value === "closed") {
+  if (
+    value === "processing" ||
+    value === "open" ||
+    value === "drawing" ||
+    value === "closed" ||
+    value === "playing"
+  ) {
     return "processing";
   }
   if (
@@ -19,7 +25,12 @@ export function adminStatusTone(
   if (value === "rejected" || value === "cancelled" || value === "error" || value === "failed" || value === "completed_with_errors") {
     return "danger";
   }
-  if (value === "completed" || value === "settled" || value === "inactive") {
+  if (
+    value === "completed" ||
+    value === "settled" ||
+    value === "inactive" ||
+    value === "finished"
+  ) {
     return "done";
   }
   return "draft";

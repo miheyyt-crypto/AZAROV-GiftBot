@@ -202,6 +202,10 @@
     "src/components/SegmentedTabs.tsx",
     "src/ui/Skeleton.tsx",
     "src/lib/format.ts",
-    "src/lib/support.ts"
+    "src/lib/support.ts",
+    "src/stream-alerts/overlay-dom.ts",
+    "src/stream-alerts/overlay-dom.test.ts",
+    "src/pages/AdminDonationsPage.tsx",
+    "src/pages/SupportPage.tsx"
   ]
 }

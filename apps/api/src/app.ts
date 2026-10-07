@@ -39,6 +39,7 @@ import { registerSectionRoutes } from "./sections.js";
 import { registerShopRoutes } from "./shop-routes.js";
 import { registerMinesDiceRoutes } from "./mines-dice-routes.js";
 import { registerRollsRoutes, type RollsSqlListener } from "./rolls-routes.js";
+import { registerStreamDonationRoutes } from "./stream-donation-routes.js";
 import { registerStreamStreakRoutes } from "./stream-streak-routes.js";
 import { registerTaskRoutes } from "./task-routes.js";
 import {
@@ -70,6 +71,8 @@ export type ApiAppOptions = {
   trustProxy?: boolean | string;
   /** Allowed browser origins; empty means no CORS headers (same-origin nginx). */
   corsOrigins?: string[];
+  /** OBS overlay secret. Never sent to Mini App. */
+  overlayAlertsToken?: string;
 };
 
 export function createApiApp(options: ApiAppOptions = {}) {
@@ -172,6 +175,12 @@ export function createApiApp(options: ApiAppOptions = {}) {
     });
     registerLeaderboardRoutes(app, options.db, userRateLimiter);
     registerShopRoutes(app, options.db, userRateLimiter);
+    registerStreamDonationRoutes(
+      app,
+      options.db,
+      userRateLimiter,
+      options.overlayAlertsToken ?? process.env.STREAM_ALERTS_TOKEN,
+    );
     registerGiveawayRoutes(
       app,
       options.db,

@@ -20,4 +20,5 @@ export * from "./rolls.js";
 export * from "./achievements.js";
 export * from "./broadcasts.js";
 export * from "./referral-contest.js";
+export * from "./stream-donations.js";
 

@@ -41,6 +41,7 @@ export const walletTransactionType = pgEnum("wallet_transaction_type", [
   "giveaway_reward",
   "achievement_reward",
   "referral_contest_reward",
+  "stream_donation",
 ]);
 
 export const promoCodeStatus = pgEnum("promo_code_status", [
@@ -215,5 +216,11 @@ export const referralContestStatus = pgEnum("referral_contest_status", [
   "scheduled",
   "active",
   "finalized",
+]);
+
+export const streamDonationStatus = pgEnum("stream_donation_status", [
+  "queued",
+  "playing",
+  "finished",
 ]);
 

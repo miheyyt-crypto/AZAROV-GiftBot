@@ -1434,3 +1434,48 @@ export async function uploadAdminBroadcastImage(
   }
   return { photoKey, imageUrl };
 }
+
+export type StreamDonationItem = {
+  id: string;
+  displayName: string;
+  message: string;
+  amountAzc: string;
+  status: "queued" | "playing" | "finished";
+  createdAt: string;
+  queuedAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+};
+
+export type StreamDonationPurchase = StreamDonationItem & {
+  newBalanceAzc: string;
+  replayed?: boolean;
+};
+
+export async function createStreamDonation(
+  token: string,
+  message: string,
+  idempotencyKey: string,
+): Promise<StreamDonationPurchase> {
+  const response = await apiFetch("/stream-donations", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+      "idempotency-key": idempotencyKey,
+    },
+    body: JSON.stringify({ message }),
+  });
+  return readJson(response) as Promise<StreamDonationPurchase>;
+}
+
+export async function loadAdminStreamDonations(
+  token: string,
+): Promise<{ items: StreamDonationItem[] }> {
+  const response = await apiFetch("/admin/stream-donations", {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const body = await readJson(response);
+  const items = (body as { items?: unknown }).items;
+  return { items: Array.isArray(items) ? (items as StreamDonationItem[]) : [] };
+}

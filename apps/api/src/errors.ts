@@ -5,6 +5,7 @@ import {
   InsufficientFundsError,
   InvalidAmountError,
   NotFoundError,
+  OverlayUnauthorizedError,
   TaskVerificationUnavailableError,
   WalletFrozenError,
 } from "@giftbot/domain";
@@ -66,6 +67,12 @@ export function sendHttpError(reply: FastifyReply, error: unknown): FastifyReply
     error instanceof WalletFrozenError
   ) {
     return reply.code(409).send({
+      error: error.code,
+      message: error.message,
+    });
+  }
+  if (error instanceof OverlayUnauthorizedError) {
+    return reply.code(401).send({
       error: error.code,
       message: error.message,
     });

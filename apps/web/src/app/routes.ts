@@ -22,7 +22,9 @@ export type AppRoute =
   | { name: "admin-shop-orders" }
   | { name: "admin-cash-withdrawals" }
   | { name: "admin-welvura" }
-  | { name: "admin-broadcast" };
+  | { name: "admin-broadcast" }
+  | { name: "support" }
+  | { name: "admin-donations" };
 
 export type TabId = "home" | "tasks" | "shop" | "friends" | "profile";
 
@@ -84,6 +86,9 @@ export function parseHash(hash: string): AppRoute {
   if (parts[0] === "profile") {
     return { name: "profile" };
   }
+  if (parts[0] === "support") {
+    return { name: "support" };
+  }
   if (parts[0] === "giveaways") {
     return { name: "giveaways" };
   }
@@ -117,6 +122,9 @@ export function parseHash(hash: string): AppRoute {
   if (parts[0] === "admin" && parts[1] === "broadcast") {
     return { name: "admin-broadcast" };
   }
+  if (parts[0] === "admin" && parts[1] === "donations") {
+    return { name: "admin-donations" };
+  }
   if (parts[0] === "leaderboard") {
     return { name: "leaderboard" };
   }
@@ -127,6 +135,8 @@ export function hrefFor(route: AppRoute): string {
   switch (route.name) {
     case "home":
       return "#/";
+    case "support":
+      return "#/support";
     case "tasks":
       return "#/tasks";
     case "welvura":
@@ -173,12 +183,15 @@ export function hrefFor(route: AppRoute): string {
       return "#/admin/welvura";
     case "admin-broadcast":
       return "#/admin/broadcast";
+    case "admin-donations":
+      return "#/admin/donations";
   }
 }
 
 export function tabFor(route: AppRoute): TabId | undefined {
   switch (route.name) {
     case "home":
+    case "support":
     case "leaderboard":
     case "giveaways":
     case "game":
@@ -208,6 +221,7 @@ export function tabFor(route: AppRoute): TabId | undefined {
     case "admin-cash-withdrawals":
     case "admin-welvura":
     case "admin-broadcast":
+    case "admin-donations":
       return undefined;
   }
 }
@@ -235,6 +249,7 @@ export function isProfileSheet(route: AppRoute): boolean {
 export function showsBottomNav(route: AppRoute): boolean {
   return (
     isMainTab(route) ||
+    route.name === "support" ||
     route.name === "leaderboard" ||
     route.name === "giveaways" ||
     route.name === "game" ||

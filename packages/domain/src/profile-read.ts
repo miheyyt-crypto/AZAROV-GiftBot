@@ -70,6 +70,7 @@ const LEDGER_LABELS: Record<string, string> = {
   reward: "Награда за задание",
   promo_code_reward: "Промокод",
   shop_purchase: "Покупка в магазине",
+  stream_donation: "Донат на стрим",
   shop_refund: "Возврат заказа",
   free_case_reward: "Выигрыш из бесплатного кейса",
   paid_case_purchase: "Открытие кейса",

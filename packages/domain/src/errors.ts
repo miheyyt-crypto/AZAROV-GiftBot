@@ -379,3 +379,27 @@ export class WelvuraRejectionReasonRequiredError extends DomainError {
     super("WELVURA_REJECTION_REASON_REQUIRED", "rejection reason is required");
   }
 }
+
+export class StreamDonationInvalidMessageError extends DomainError {
+  constructor() {
+    super("STREAM_DONATION_INVALID_MESSAGE", "donation message is invalid");
+  }
+}
+
+export class StreamDonationInvalidRequestError extends DomainError {
+  constructor() {
+    super("STREAM_DONATION_INVALID_REQUEST", "donation request is invalid");
+  }
+}
+
+export class OverlayBusyError extends ConflictError {
+  constructor() {
+    super("another overlay already holds the alert queue", "OVERLAY_BUSY");
+  }
+}
+
+export class OverlayUnauthorizedError extends DomainError {
+  constructor() {
+    super("OVERLAY_UNAUTHORIZED", "overlay token is invalid");
+  }
+}

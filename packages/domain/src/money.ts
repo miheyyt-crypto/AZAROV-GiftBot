@@ -12,6 +12,7 @@ export const DEBIT_TYPES = new Set([
   "mines_bet",
   "dice_bet",
   "rolls_bet",
+  "stream_donation",
 ]);
 export const CREDIT_TYPES = new Set([
   "deposit",

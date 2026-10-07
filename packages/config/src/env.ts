@@ -67,6 +67,8 @@ export const envSchema = z.object({
   TRUST_PROXY: z.string().optional(),
   /** Persistent Welvura screenshot directory (outside release tree). */
   UPLOAD_DIR: z.string().min(1).optional(),
+  /** OBS overlay token for /stream/alerts. Never send to Mini App. */
+  STREAM_ALERTS_TOKEN: z.string().min(16).optional(),
   /** postgres.js pool max per process (defaults differ by role). */
   DB_POOL_MAX: z.coerce.number().int().positive().max(200).optional(),
   DB_CONNECT_TIMEOUT_SECONDS: z.coerce

@@ -119,6 +119,9 @@ async function main(): Promise<void> {
             ? { telegramBotUsername: env.TELEGRAM_BOT_USERNAME }
             : {}),
           ...(env.UPLOAD_DIR ? { uploadDir: env.UPLOAD_DIR } : {}),
+          ...(env.STREAM_ALERTS_TOKEN
+            ? { overlayAlertsToken: env.STREAM_ALERTS_TOKEN }
+            : {}),
           rateLimitPolicy: createRateLimitPolicy({
             ...(env.RATE_LIMIT_WINDOW_SECONDS !== undefined
               ? { windowSeconds: env.RATE_LIMIT_WINDOW_SECONDS }

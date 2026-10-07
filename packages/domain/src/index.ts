@@ -44,6 +44,7 @@ export * from "./shop.js";
 export * from "./referral.js";
 export * from "./referral-manual.js";
 export * from "./referral-contest.js";
+export * from "./stream-donation.js";
 export * from "./rng.js";
 export * from "./states.js";
 export * from "./telegram-identity.js";

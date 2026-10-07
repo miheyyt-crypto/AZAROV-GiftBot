@@ -5,6 +5,7 @@ import { createShopOrder } from "./shop.js";
 import { readProfileSummary } from "./profile-read.js";
 import { redeemPromoCode } from "./promo.js";
 import { parsePrizeDistribution } from "./referral-contest.js";
+import { createStreamDonation } from "./stream-donation.js";
 import { adjustWallet } from "./admin.js";
 import { settleFromCatalog } from "./catalog.js";
 import { payoutReferralReward } from "./economy.js";
@@ -32,5 +33,6 @@ process.stdout.write(
     readProfileSummary: typeof readProfileSummary,
     redeemPromoCode: typeof redeemPromoCode,
     parsePrizeDistribution: typeof parsePrizeDistribution,
+    createStreamDonation: typeof createStreamDonation,
   })}\n`,
 );

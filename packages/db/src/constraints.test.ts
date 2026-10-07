@@ -331,6 +331,7 @@ test("shop catalog seed has the approved product prices", async () => {
   assert.ok(names.includes("shop_purchase"));
   assert.ok(names.includes("shop_refund"));
   assert.ok(names.includes("referral_contest_reward"));
+  assert.ok(names.includes("stream_donation"));
 });
 
 test("super_admin role exists and no admin identities are seeded", async () => {
