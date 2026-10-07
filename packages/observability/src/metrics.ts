@@ -24,12 +24,37 @@ export function createMetrics(): Metrics {
   };
 }
 
+export type ProcessMemoryUsage = {
+  rss: number;
+  heapTotal: number;
+  heapUsed: number;
+  external: number;
+  arrayBuffers: number;
+};
+
+/** process.memoryUsage() bytes. GET /metrics only — not a heap snapshot. */
+export function processMemoryUsage(): ProcessMemoryUsage {
+  const usage = process.memoryUsage();
+  return {
+    rss: usage.rss,
+    heapTotal: usage.heapTotal,
+    heapUsed: usage.heapUsed,
+    external: usage.external,
+    arrayBuffers: usage.arrayBuffers,
+  };
+}
+
 export function metricsBody(
   processName: string,
   metrics: Metrics,
-): { process: string; counters: Record<string, number> } {
+): {
+  process: string;
+  counters: Record<string, number>;
+  memory: ProcessMemoryUsage;
+} {
   return {
     process: processName,
     counters: metrics.snapshot(),
+    memory: processMemoryUsage(),
   };
 }

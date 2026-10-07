@@ -14,7 +14,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check": "node dist/check.js",
-    "test": "node --test --test-concurrency=1 dist/*.test.js"
+    "test": "node --test --test-concurrency=1 dist/*.test.js",
+    "mem-soak": "node dist/claim-mem-soak.js"
   },
   "dependencies": {
     "@giftbot/db": "workspace:*",

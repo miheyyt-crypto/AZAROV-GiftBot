@@ -85,7 +85,20 @@ test("live is not ready and health writes nothing to metrics storage only", asyn
     assert.equal(ready.status, 503);
     assert.equal(JSON.parse(ready.body).status, "not_ready");
     assert.equal(scraped.status, 200);
-    assert.equal(JSON.parse(scraped.body).counters.http_requests, 1);
+    const metricsJson = JSON.parse(scraped.body) as {
+      counters: { http_requests: number };
+      memory: {
+        rss: number;
+        heapTotal: number;
+        heapUsed: number;
+        external: number;
+        arrayBuffers: number;
+      };
+    };
+    assert.equal(metricsJson.counters.http_requests, 1);
+    assert.ok(metricsJson.memory.rss >= metricsJson.memory.heapUsed);
+    assert.ok(metricsJson.memory.heapTotal >= metricsJson.memory.heapUsed);
+    assert.ok(metricsJson.memory.heapUsed > 0);
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {
