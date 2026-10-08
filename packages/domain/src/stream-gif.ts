@@ -160,7 +160,14 @@ export async function stageStreamGifUpload(
   needsPrepare: boolean;
 }> {
   const inspected = inspectStreamMedia(input.bytes);
-  await storage.cleanupStaging();
+  const liveStaging = await db
+    .select({ key: streamGifSubmissions.stagingStorageKey })
+    .from(streamGifSubmissions);
+  await storage.cleanupStaging(
+    Date.now(),
+    STREAM_GIF_STAGING_TTL_MS,
+    new Set(liveStaging.map((row) => row.key)),
+  );
   const stored = await storage.putStaging({
     userId: input.userId,
     bytes: input.bytes,
@@ -731,6 +738,13 @@ export async function cleanupStaleStreamGifUploads(
       .delete(streamGifSubmissions)
       .where(eq(streamGifSubmissions.id, row.id));
   }
-  await storage.cleanupStaging(now.getTime());
+  const liveStaging = await db
+    .select({ key: streamGifSubmissions.stagingStorageKey })
+    .from(streamGifSubmissions);
+  await storage.cleanupStaging(
+    now.getTime(),
+    STREAM_GIF_STAGING_TTL_MS,
+    new Set(liveStaging.map((row) => row.key)),
+  );
   return stale.length;
 }

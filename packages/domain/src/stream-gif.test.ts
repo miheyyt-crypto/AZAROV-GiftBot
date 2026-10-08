@@ -10,7 +10,7 @@ import {
 } from "@giftbot/db/schema";
 import { eq } from "drizzle-orm";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, afterEach, before, test } from "node:test";
@@ -22,7 +22,7 @@ import {
   StreamMediaNotReadyError,
   StreamMediaUnsupportedFormatError,
 } from "./errors.js";
-import { minimalTestGif } from "./gif-inspect.js";
+import { minimalTestGif, STREAM_GIF_STAGING_TTL_MS } from "./gif-inspect.js";
 import { minimalTestJpeg } from "./media-inspect.js";
 import type { DomainHarness } from "./harness.js";
 import { startDomainHarness } from "./harness.js";
@@ -142,6 +142,28 @@ test("unsupported bytes are rejected before a shop debit; JPEG stages", async ()
   assert.equal(staged.contentType, "image/jpeg");
   const report = await reconcileWallet(harness.db, user.userId);
   assert.equal(report.balanceMinor, 1000n);
+});
+
+test("a later upload does not delete pending_moderation staging still referenced in DB", async () => {
+  const user = await provisionUser(harness.db);
+  const first = await stageStreamGifUpload(harness.db, storage, {
+    userId: user.userId,
+    bytes: minimalTestJpeg(),
+  });
+  const rows = await harness.db
+    .select()
+    .from(streamGifSubmissions)
+    .where(eq(streamGifSubmissions.id, first.uploadId));
+  const key = rows[0]?.stagingStorageKey;
+  assert.ok(key);
+  const abs = storage.resolvePath(key);
+  const old = new Date(Date.now() - STREAM_GIF_STAGING_TTL_MS - 60_000);
+  await utimes(abs, old, old);
+  await stageStreamGifUpload(harness.db, storage, {
+    userId: user.userId,
+    bytes: minimalTestGif(),
+  });
+  await access(abs);
 });
 
 test("shop fulfill cannot skip gif-stream moderation; delivered order still approves once", async () => {

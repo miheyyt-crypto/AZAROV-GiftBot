@@ -43,7 +43,11 @@ export type StreamGifFileStorage = {
   }>;
   resolvePath(storageKey: string): string;
   delete(storageKey: string): Promise<void>;
-  cleanupStaging(nowMs?: number, maxAgeMs?: number): Promise<number>;
+  cleanupStaging(
+    nowMs?: number,
+    maxAgeMs?: number,
+    keepKeys?: ReadonlySet<string>,
+  ): Promise<number>;
 };
 
 function assertInsideRoot(root: string, absolutePath: string): void {
@@ -115,7 +119,11 @@ export function createStreamGifFileStorage(rootDir: string): StreamGifFileStorag
         // best-effort
       }
     },
-    async cleanupStaging(nowMs = Date.now(), maxAgeMs = STREAM_GIF_STAGING_TTL_MS) {
+    async cleanupStaging(
+      nowMs = Date.now(),
+      maxAgeMs = STREAM_GIF_STAGING_TTL_MS,
+      keepKeys: ReadonlySet<string> = new Set(),
+    ) {
       const stagingRoot = join(root, "stream-gifs", "staging");
       let removed = 0;
       let users: string[] = [];
@@ -134,6 +142,10 @@ export function createStreamGifFileStorage(rootDir: string): StreamGifFileStorag
         }
         for (const name of names) {
           const file = join(dir, name);
+          const key = `stream-gifs/staging/${user}/${name}`;
+          if (keepKeys.has(key)) {
+            continue;
+          }
           try {
             const info = await stat(file);
             if (nowMs - info.mtimeMs >= maxAgeMs) {

@@ -105,7 +105,11 @@ export function registerStreamGifRoutes(
       }
       const key = row.acceptedStorageKey ?? row.stagingStorageKey;
       const absolutePath = storage.resolvePath(key);
-      await access(absolutePath);
+      try {
+        await access(absolutePath);
+      } catch {
+        throw new ApiError("NOT_FOUND", "Файл модерации не найден на диске", 404);
+      }
       reply.header("content-type", row.contentType);
       reply.header("cache-control", "private, no-store");
       return reply.send(createReadStream(absolutePath));
