@@ -42,6 +42,13 @@ import {
   type ShopRequiredField,
 } from "./shop-messages.js";
 import {
+  canApproveStreamOrder,
+  streamGifPlaybackLabel,
+  streamOrderBinding,
+  type StreamGifModerationSnapshot,
+  type StreamOrderBinding,
+} from "./shop-stream-order.js";
+import {
   SHOP_SHEET_FIELD_LABEL,
   canAffordAzc,
   caseCashBadge,
@@ -611,12 +618,17 @@ function StreamOrderPreview({
     };
   }, [submissionId, skipRemote, adminToken]);
   if (!src) {
-    return <p className="muted">превью медиа</p>;
+    return (
+      <p className="muted" data-preview-submission-id={submissionId}>
+        превью медиа
+      </p>
+    );
   }
   return (
     <img
       src={src}
       alt=""
+      data-preview-submission-id={submissionId}
       style={{
         width: 96,
         height: 72,
@@ -632,6 +644,8 @@ export function AdminShopOrdersView({
   status,
   reason,
   note,
+  noteItemId,
+  streamMedia,
   submitting = false,
   skipRemote = true,
   adminToken,
@@ -657,6 +671,8 @@ export function AdminShopOrdersView({
   status: ShopOrderStatus | "all";
   reason: string;
   note?: string;
+  noteItemId?: string;
+  streamMedia?: Record<string, StreamGifModerationSnapshot>;
   submitting?: boolean;
   skipRemote?: boolean;
   adminToken?: string;
@@ -664,7 +680,7 @@ export function AdminShopOrdersView({
   onReasonChange: (value: string) => void;
   onProcess: (id: string) => void;
   onFulfill: (id: string) => void;
-  onApproveStream?: (submissionId: string) => void;
+  onApproveStream?: (binding: StreamOrderBinding) => void;
   onReject: (id: string) => void;
 }) {
   const filters: Array<{ id: ShopOrderStatus | "all"; label: string }> = [
@@ -695,33 +711,55 @@ export function AdminShopOrdersView({
         Причина отклонения
         <input value={reason} onChange={(event) => onReasonChange(event.target.value)} />
       </label>
-      {note ? <p className="muted">{note}</p> : null}
+      {note && !noteItemId ? <p className="muted">{note}</p> : null}
       {items.length === 0 ? (
         <p className="muted">Заказов нет.</p>
       ) : (
         items.map((item) => {
-          const isStreamMedia = item.productCode === "gif-stream";
-          const submissionId = item.submittedPayload.gifUploadId;
+          const binding = streamOrderBinding(item);
+          const isStreamMedia = binding !== null;
           const canAct =
             item.fulfillmentType !== "instant" &&
             (item.status === "pending" || item.status === "processing");
+          const submission = binding
+            ? streamMedia?.[binding.submissionId]
+            : undefined;
+          const playbackLabel = streamGifPlaybackLabel(submission?.status);
           const canApproveStream =
-            isStreamMedia &&
-            Boolean(submissionId) &&
-            item.status !== "rejected" &&
-            onApproveStream;
+            Boolean(onApproveStream) &&
+            canApproveStreamOrder({
+              orderStatus: item.status,
+              binding,
+              ...(submission ? { submission } : {}),
+            });
           return (
-            <article key={item.id} className="card stack">
+            <article
+              key={item.id}
+              className="card stack"
+              data-order-id={item.id}
+              {...(binding
+                ? { "data-submission-id": binding.submissionId }
+                : {})}
+            >
               <p className="mini-row__title">{item.productName}</p>
               <p>{item.user ?? item.id}</p>
+              {binding ? (
+                <p className="muted">Заказ {binding.orderId.slice(0, 8)}</p>
+              ) : null}
+              {note && noteItemId === item.id ? (
+                <p className="muted" data-order-note={item.id}>
+                  {note}
+                </p>
+              ) : null}
               <p>
                 <CoinAmount amount={item.priceAzc} />
               </p>
               <p>{friendlyShopStatus(item.status)}</p>
+              {playbackLabel ? <p className="muted">{playbackLabel}</p> : null}
               <p className="muted">{new Date(item.createdAt).toLocaleString("ru-RU")}</p>
-              {isStreamMedia && submissionId ? (
+              {binding ? (
                 <StreamOrderPreview
-                  submissionId={submissionId}
+                  submissionId={binding.submissionId}
                   skipRemote={skipRemote}
                   {...(adminToken ? { adminToken } : {})}
                 />
@@ -743,13 +781,15 @@ export function AdminShopOrdersView({
                 </div>
               ) : null}
               {item.rejectionReason ? <p className="muted">{item.rejectionReason}</p> : null}
-              {canApproveStream && submissionId ? (
+              {canApproveStream && binding && onApproveStream ? (
                 <div className="stack">
                   <a href="#/admin/stream-gifs">Открыть модерацию медиа</a>
                   <button
                     type="button"
                     disabled={submitting}
-                    onClick={() => onApproveStream(submissionId)}
+                    data-order-id={binding.orderId}
+                    data-submission-id={binding.submissionId}
+                    onClick={() => onApproveStream(binding)}
                   >
                     Одобрить и отправить на стрим
                   </button>

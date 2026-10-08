@@ -15,8 +15,13 @@ import {
   friendlyAdminShopActionError,
   friendlyShopError,
   friendlyShopStatus,
+  streamGifApproveSuccessNote,
   type ShopCatalogProduct,
 } from "./shop-messages.js";
+import {
+  canApproveStreamOrder,
+  streamOrderBinding,
+} from "./shop-stream-order.js";
 
 const SAMPLE_CATALOG: ShopCatalogProduct[] = [
   {
@@ -583,6 +588,50 @@ test("client shop validation and friendly errors", () => {
     }),
     "Файл ещё готовится для показа. Подождите несколько секунд",
   );
+  assert.equal(
+    friendlyAdminShopActionError({
+      status: 200,
+      code: "STREAM_GIF_NOT_ENQUEUED",
+      message: "approve did not enqueue",
+    }),
+    "Сервер не поставил файл в очередь стрима",
+  );
+  assert.equal(
+    streamGifApproveSuccessNote({
+      enqueued: true,
+      replayed: false,
+      status: "queued",
+      orderId: "b37f0b66-df6a-4771-a9e3-12f61588b8c8",
+    }),
+    "В очереди · заказ b37f0b66",
+  );
+  assert.equal(
+    streamGifApproveSuccessNote({
+      enqueued: false,
+      replayed: true,
+      status: "queued",
+      orderId: "b37f0b66-df6a-4771-a9e3-12f61588b8c8",
+    }),
+    "В очереди · заказ b37f0b66",
+  );
+  assert.equal(
+    streamGifApproveSuccessNote({
+      enqueued: false,
+      replayed: true,
+      status: "playing",
+      orderId: "b1aee399-6460-4f44-a014-8ec23d94f2bd",
+    }),
+    "Показывается · заказ b1aee399",
+  );
+  assert.equal(
+    streamGifApproveSuccessNote({
+      enqueued: false,
+      replayed: true,
+      status: "shown",
+      orderId: "b1aee399-6460-4f44-a014-8ec23d94f2bd",
+    }),
+    "Уже показано · заказ b1aee399",
+  );
 });
 
 test("orders view shows friendly statuses and rejection reason", () => {
@@ -747,7 +796,7 @@ test("admin gif-stream orders send to moderation instead of fulfill", () => {
           productName: "Медиа на стрим",
           productCode: "gif-stream",
           priceAzc: "1000",
-          status: "fulfilled",
+          status: "pending",
           submittedPayload: { gifUploadId: "666b71b2-44ba-45e2-a2a0-4dc9883afba8" },
           createdAt: "2026-10-08T10:34:47.000Z",
           rejectionReason: null,
@@ -766,18 +815,253 @@ test("admin gif-stream orders send to moderation instead of fulfill", () => {
   );
   assert.match(html, /Одобрить и отправить на стрим/);
   assert.match(html, /#\/admin\/stream-gifs/);
+  assert.match(html, /Заказ gif-orde/);
   assert.doesNotMatch(html, />Выполнено</);
-  assert.doesNotMatch(html, /666b71b2/);
+  assert.doesNotMatch(html, /Файл: 666b71b2/);
   const shopViewSrc = readFileSync(join(process.cwd(), "src/shop/ShopView.tsx"), "utf8");
+  assert.match(shopViewSrc, /const binding = streamOrderBinding\(item\);/);
   assert.match(
     shopViewSrc,
-    /const submissionId = item\.submittedPayload\.gifUploadId;/,
-  );
-  assert.match(
-    shopViewSrc,
-    /onClick=\{\(\) => onApproveStream\(submissionId\)\}/,
+    /onClick=\{\(\) => onApproveStream\(binding\)\}/,
   );
   assert.doesNotMatch(shopViewSrc, /onApproveStream\(item\.id\)/);
+  assert.doesNotMatch(shopViewSrc, /onApproveStream\(submissionId\)/);
+});
+
+test("admin gif-stream success note stays on the approved order card", () => {
+  const html = renderToStaticMarkup(
+    createElement(AdminShopOrdersView, {
+      items: [
+        {
+          id: "b37f0b66-df6a-4771-a9e3-12f61588b8c8",
+          user: "user-g",
+          productName: "Медиа на стрим",
+          productCode: "gif-stream",
+          priceAzc: "1000",
+          status: "pending",
+          submittedPayload: { gifUploadId: "1eb65597-fa26-4488-a2c4-a193c8a872c5" },
+          createdAt: "2026-10-08T16:28:30.000Z",
+          rejectionReason: null,
+          fulfillmentType: "manual",
+        },
+        {
+          id: "b1aee399-6460-4f44-a014-8ec23d94f2bd",
+          user: "user-g",
+          productName: "Медиа на стрим",
+          productCode: "gif-stream",
+          priceAzc: "1000",
+          status: "fulfilled",
+          submittedPayload: { gifUploadId: "511242b6-b963-41cd-aa53-0eed5aa45a21" },
+          createdAt: "2026-10-08T17:29:31.000Z",
+          rejectionReason: null,
+          fulfillmentType: "manual",
+        },
+      ],
+      status: "all",
+      reason: "",
+      note: "Уже показано · заказ b1aee399",
+      noteItemId: "b1aee399-6460-4f44-a014-8ec23d94f2bd",
+      streamMedia: {
+        "1eb65597-fa26-4488-a2c4-a193c8a872c5": {
+          id: "1eb65597-fa26-4488-a2c4-a193c8a872c5",
+          orderId: "b37f0b66-df6a-4771-a9e3-12f61588b8c8",
+          donationId: null,
+          status: "pending_moderation",
+          playbackReady: true,
+        },
+        "511242b6-b963-41cd-aa53-0eed5aa45a21": {
+          id: "511242b6-b963-41cd-aa53-0eed5aa45a21",
+          orderId: "b1aee399-6460-4f44-a014-8ec23d94f2bd",
+          donationId: "db388520-90cd-444a-a02d-299326ec5f86",
+          status: "shown",
+          playbackReady: true,
+        },
+      },
+      onStatusChange: () => undefined,
+      onReasonChange: () => undefined,
+      onProcess: () => undefined,
+      onFulfill: () => undefined,
+      onApproveStream: () => undefined,
+      onReject: () => undefined,
+    }),
+  );
+  assert.match(html, /Заказ b37f0b66/);
+  assert.match(html, /Заказ b1aee399/);
+  assert.match(html, /Одобрить и отправить на стрим/);
+  assert.equal((html.match(/Одобрить и отправить на стрим/g) ?? []).length, 1);
+  const pendingIdx = html.indexOf("Заказ b37f0b66");
+  const sentIdx = html.indexOf("Заказ b1aee399");
+  const noteIdx = html.indexOf("Уже показано · заказ b1aee399");
+  assert.ok(noteIdx > sentIdx);
+  assert.ok(pendingIdx < sentIdx);
+  assert.ok(noteIdx > pendingIdx);
+  assert.match(html, /data-order-note="b1aee399-6460-4f44-a014-8ec23d94f2bd"/);
+});
+
+test("similar gif-stream cards keep preview and approve bound to their own submission", () => {
+  const pendingA = {
+    id: "1eb65597-fa26-4488-a2c4-a193c8a872c5",
+    orderId: "b37f0b66-df6a-4771-a9e3-12f61588b8c8",
+    donationId: null as string | null,
+    status: "pending_moderation" as const,
+    playbackReady: true,
+  };
+  const pendingB = {
+    id: "511242b6-b963-41cd-aa53-0eed5aa45a21",
+    orderId: "b1aee399-6460-4f44-a014-8ec23d94f2bd",
+    donationId: null as string | null,
+    status: "pending_moderation" as const,
+    playbackReady: true,
+  };
+  const cardA = {
+    id: pendingA.orderId,
+    user: "user-g",
+    productName: "Медиа на стрим",
+    productCode: "gif-stream",
+    priceAzc: "1000",
+    status: "pending" as const,
+    submittedPayload: { gifUploadId: pendingA.id },
+    createdAt: "2026-10-08T16:28:30.000Z",
+    rejectionReason: null,
+    fulfillmentType: "manual" as const,
+  };
+  const cardB = {
+    id: pendingB.orderId,
+    user: "user-g",
+    productName: "Медиа на стрим",
+    productCode: "gif-stream",
+    priceAzc: "1000",
+    status: "pending" as const,
+    submittedPayload: { gifUploadId: pendingB.id },
+    createdAt: "2026-10-08T17:29:31.000Z",
+    rejectionReason: null,
+    fulfillmentType: "manual" as const,
+  };
+  const recovered = {
+    id: "8e278ee7-24af-4018-89a1-77bf46ee2ff9",
+    user: "user-g",
+    productName: "Медиа на стрим",
+    productCode: "gif-stream",
+    priceAzc: "1000",
+    status: "fulfilled" as const,
+    submittedPayload: { gifUploadId: "666b71b2-44ba-45e2-a2a0-4dc9883afba8" },
+    createdAt: "2026-10-08T10:34:47.000Z",
+    rejectionReason: null,
+    fulfillmentType: "manual" as const,
+  };
+  const streamMedia = {
+    [pendingA.id]: pendingA,
+    [pendingB.id]: pendingB,
+    "666b71b2-44ba-45e2-a2a0-4dc9883afba8": {
+      id: "666b71b2-44ba-45e2-a2a0-4dc9883afba8",
+      orderId: recovered.id,
+      donationId: null,
+      status: "pending_moderation" as const,
+      playbackReady: true,
+    },
+  };
+
+  assert.deepEqual(streamOrderBinding(cardA), {
+    orderId: cardA.id,
+    submissionId: pendingA.id,
+  });
+  assert.deepEqual(streamOrderBinding(cardB), {
+    orderId: cardB.id,
+    submissionId: pendingB.id,
+  });
+  assert.equal(
+    canApproveStreamOrder({
+      orderStatus: "fulfilled",
+      binding: streamOrderBinding(recovered),
+      submission: streamMedia["666b71b2-44ba-45e2-a2a0-4dc9883afba8"],
+    }),
+    true,
+  );
+  assert.equal(
+    canApproveStreamOrder({
+      orderStatus: "fulfilled",
+      binding: streamOrderBinding(cardB),
+      submission: {
+        ...pendingB,
+        donationId: "db388520-90cd-444a-a02d-299326ec5f86",
+        status: "shown",
+      },
+    }),
+    false,
+  );
+  assert.equal(
+    canApproveStreamOrder({
+      orderStatus: "pending",
+      binding: streamOrderBinding(cardA),
+      submission: { ...pendingA, playbackReady: false },
+    }),
+    false,
+  );
+
+  function renderCards(
+    items: Array<typeof cardA | typeof recovered>,
+    media: typeof streamMedia,
+  ): string {
+    return renderToStaticMarkup(
+      createElement(AdminShopOrdersView, {
+        items,
+        status: "all",
+        reason: "",
+        streamMedia: media,
+        onStatusChange: () => undefined,
+        onReasonChange: () => undefined,
+        onProcess: () => undefined,
+        onFulfill: () => undefined,
+        onApproveStream: () => undefined,
+        onReject: () => undefined,
+      }),
+    );
+  }
+
+  function assertCardBound(html: string, orderId: string, submissionId: string) {
+    const article = html.match(
+      new RegExp(
+        `<article[^>]*data-order-id="${orderId}"[^>]*>[\\s\\S]*?</article>`,
+      ),
+    )?.[0];
+    assert.ok(article, `missing article ${orderId}`);
+    assert.match(article, new RegExp(`data-submission-id="${submissionId}"`));
+    assert.match(
+      article,
+      new RegExp(`data-preview-submission-id="${submissionId}"`),
+    );
+    assert.match(
+      article,
+      new RegExp(
+        `<button[^>]*data-order-id="${orderId}"[^>]*data-submission-id="${submissionId}"`,
+      ),
+    );
+    assert.doesNotMatch(
+      article,
+      new RegExp(
+        `data-preview-submission-id="(?!${submissionId})[0-9a-f-]+"`,
+      ),
+    );
+  }
+
+  const first = renderCards([cardA, cardB, recovered], streamMedia);
+  assertCardBound(first, cardA.id, pendingA.id);
+  assertCardBound(first, cardB.id, pendingB.id);
+  assertCardBound(first, recovered.id, "666b71b2-44ba-45e2-a2a0-4dc9883afba8");
+
+  const sorted = renderCards([cardB, recovered, cardA], streamMedia);
+  assertCardBound(sorted, cardA.id, pendingA.id);
+  assertCardBound(sorted, cardB.id, pendingB.id);
+  assertCardBound(sorted, recovered.id, "666b71b2-44ba-45e2-a2a0-4dc9883afba8");
+
+  const refreshed = renderCards([recovered, cardA], {
+    [pendingA.id]: pendingA,
+    "666b71b2-44ba-45e2-a2a0-4dc9883afba8":
+      streamMedia["666b71b2-44ba-45e2-a2a0-4dc9883afba8"],
+  });
+  assertCardBound(refreshed, cardA.id, pendingA.id);
+  assertCardBound(refreshed, recovered.id, "666b71b2-44ba-45e2-a2a0-4dc9883afba8");
+  assert.doesNotMatch(refreshed, new RegExp(cardB.id));
 });
 
 test("shop product input focus uses local ring and does not blur the sheet", () => {

@@ -12,6 +12,7 @@ import { AdminStatusBadge } from "../admin/AdminStatusBadge.js";
 import { resolveAdminBearer } from "../admin/resolve-admin-bearer.js";
 import { formatShortDateTime } from "../lib/format.js";
 import { keyForPost } from "../idempotency.js";
+import { friendlyAdminShopActionError } from "../shop/shop-messages.js";
 
 function GifPreview({
   id,
@@ -219,8 +220,16 @@ export function AdminStreamGifsPage({
                                 token,
                                 item.id,
                                 keyForPost(`POST /admin/stream-gifs/${item.id}/approve`),
-                              ),
-                            ).finally(() => setBusyId(null));
+                              ).then((approved) => {
+                                if (!approved.enqueued && !approved.replayed) {
+                                  throw new Error("approve did not enqueue");
+                                }
+                              }),
+                            )
+                              .catch((err: unknown) => {
+                                setError(friendlyAdminShopActionError(err));
+                              })
+                              .finally(() => setBusyId(null));
                           }}
                         >
                           Одобрить
@@ -242,7 +251,11 @@ export function AdminStreamGifsPage({
                                 reason.trim(),
                                 keyForPost(`POST /admin/stream-gifs/${item.id}/reject`),
                               ),
-                            ).finally(() => setBusyId(null));
+                            )
+                              .catch((err: unknown) => {
+                                setError(friendlyAdminShopActionError(err));
+                              })
+                              .finally(() => setBusyId(null));
                           }}
                         >
                           Отклонить

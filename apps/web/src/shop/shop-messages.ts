@@ -153,12 +153,17 @@ export function friendlyAdminShopActionError(
   if (code === "UNAUTHORIZED") {
     return "Сессия администратора истекла. Обновите страницу.";
   }
+  if (code === "STREAM_GIF_NOT_ENQUEUED") {
+    return "Сервер не поставил файл в очередь стрима";
+  }
   const mapped = friendlyShopError(code, message);
   if (mapped !== "Не удалось оформить заказ") {
     return mapped;
   }
   return usableShopServerMessage(message) ?? fallback;
 }
+
+export { streamGifApproveSuccessNote } from "./shop-stream-order.js";
 
 export function friendlyShopStatus(status: ShopOrderStatus): string {
   switch (status) {

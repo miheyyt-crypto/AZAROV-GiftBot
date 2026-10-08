@@ -3,6 +3,7 @@ import {
   approveAdminStreamGif,
   fulfillAdminShopOrder,
   loadAdminShopOrders,
+  loadAdminStreamGifs,
   processAdminShopOrder,
   rejectAdminShopOrder,
   type AdminShopOrderItem,
@@ -15,6 +16,11 @@ import {
   friendlyAdminShopActionError,
   type ShopOrderStatus,
 } from "../shop/shop-messages.js";
+import {
+  streamGifApproveSuccessNote,
+  type StreamGifModerationSnapshot,
+  type StreamOrderBinding,
+} from "../shop/shop-stream-order.js";
 
 export function AdminShopOrdersPage({
   skipRemote = false,
@@ -25,9 +31,13 @@ export function AdminShopOrdersPage({
 }) {
   const [adminToken, setAdminToken] = useState<string | undefined>();
   const [items, setItems] = useState<AdminShopOrderItem[]>([]);
+  const [streamMedia, setStreamMedia] = useState<
+    Record<string, StreamGifModerationSnapshot>
+  >({});
   const [status, setStatus] = useState<ShopOrderStatus | "all">("all");
   const [reason, setReason] = useState("");
   const [note, setNote] = useState<string | undefined>();
+  const [noteItemId, setNoteItemId] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -39,9 +49,11 @@ export function AdminShopOrdersPage({
     void resolveAdminBearer()
       .then(async (token) => {
         const listed = await loadAdminShopOrders(token, status);
+        const gifs = await loadAdminStreamGifs(token);
         if (!cancelled) {
           setAdminToken(token);
           setItems(listed.items);
+          setStreamMedia(snapshotStreamMedia(gifs.items));
         }
       })
       .catch((err: unknown) => {
@@ -61,21 +73,25 @@ export function AdminShopOrdersPage({
 
   async function refresh(token: string, nextStatus = status): Promise<void> {
     const listed = await loadAdminShopOrders(token, nextStatus);
+    const gifs = await loadAdminStreamGifs(token);
     setItems(listed.items);
+    setStreamMedia(snapshotStreamMedia(gifs.items));
   }
 
   async function runAction(
     action: () => Promise<unknown>,
     success: string,
+    itemId?: string,
   ): Promise<void> {
     if (!adminToken || submitting) {
       return;
     }
     setSubmitting(true);
     setNote(undefined);
+    setNoteItemId(itemId);
     try {
-      await action();
-      setNote(success);
+      const result = await action();
+      setNote(typeof result === "string" && result.length > 0 ? result : success);
       await refresh(adminToken);
     } catch (error) {
       setNote(friendlyAdminShopActionError(error));
@@ -96,6 +112,8 @@ export function AdminShopOrdersPage({
         status={status}
         reason={reason}
         {...(note ? { note } : {})}
+        {...(noteItemId ? { noteItemId } : {})}
+        streamMedia={streamMedia}
         submitting={submitting || skipRemote}
         skipRemote={skipRemote}
         {...(adminToken ? { adminToken } : {})}
@@ -107,27 +125,40 @@ export function AdminShopOrdersPage({
           void runAction(
             () => processAdminShopOrder(adminToken ?? "", id, createIdempotencyKey()),
             "Заказ в обработке",
+            id,
           );
         }}
         onFulfill={(id) => {
           void runAction(
             () => fulfillAdminShopOrder(adminToken ?? "", id, createIdempotencyKey()),
             "Заказ выполнен",
+            id,
           );
         }}
-        onApproveStream={(submissionId) => {
+        onApproveStream={(binding: StreamOrderBinding) => {
           void runAction(
-            () =>
-              approveAdminStreamGif(
+            async () => {
+              const approved = await approveAdminStreamGif(
                 adminToken ?? "",
-                submissionId,
-                keyForPost(`POST /admin/stream-gifs/${submissionId}/approve`),
-              ),
-            "Отправлено в очередь стрима",
+                binding.submissionId,
+                keyForPost(
+                  `POST /admin/stream-gifs/${binding.submissionId}/approve`,
+                ),
+              );
+              return streamGifApproveSuccessNote({
+                enqueued: approved.enqueued,
+                replayed: approved.replayed,
+                status: approved.item.status,
+                orderId: approved.item.orderId ?? binding.orderId,
+              });
+            },
+            `В очереди · заказ ${binding.orderId.slice(0, 8)}`,
+            binding.orderId,
           );
         }}
         onReject={(id) => {
           if (!reason.trim()) {
+            setNoteItemId(id);
             setNote("Укажите причину отклонения");
             return;
           }
@@ -140,11 +171,36 @@ export function AdminShopOrdersPage({
                 createIdempotencyKey(),
               ),
             "Заказ отклонён, AZC возвращены",
+            id,
           );
         }}
       />
     </AdminLayout>
   );
+}
+
+function snapshotStreamMedia(
+  items: Array<{
+    id: string;
+    orderId: string | null;
+    donationId: string | null;
+    status: StreamGifModerationSnapshot["status"];
+    playbackReady?: boolean;
+  }>,
+): Record<string, StreamGifModerationSnapshot> {
+  const next: Record<string, StreamGifModerationSnapshot> = {};
+  for (const item of items) {
+    next[item.id] = {
+      id: item.id,
+      orderId: item.orderId,
+      donationId: item.donationId,
+      status: item.status,
+      ...(item.playbackReady === undefined
+        ? {}
+        : { playbackReady: item.playbackReady }),
+    };
+  }
+  return next;
 }
 
 export default AdminShopOrdersPage;

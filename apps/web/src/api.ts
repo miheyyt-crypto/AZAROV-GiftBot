@@ -1519,6 +1519,7 @@ export type StreamGifAdminItem = {
   frameCount: number;
   durationMs?: number;
   contentType?: string;
+  playbackReady?: boolean;
   createdAt: string;
   rejectionReason: string | null;
 };
@@ -1548,11 +1549,22 @@ export async function loadAdminStreamGifBlob(
   return URL.createObjectURL(blob);
 }
 
+export type ApproveAdminStreamGifResult = {
+  enqueued: boolean;
+  replayed: boolean;
+  item: {
+    id: string;
+    status: StreamGifAdminItem["status"];
+    orderId: string | null;
+    donationId: string | null;
+  };
+};
+
 export async function approveAdminStreamGif(
   token: string,
   id: string,
   idempotencyKey: string,
-): Promise<void> {
+): Promise<ApproveAdminStreamGifResult> {
   const response = await apiFetch(`/admin/stream-gifs/${id}/approve`, {
     method: "POST",
     headers: {
@@ -1562,7 +1574,45 @@ export async function approveAdminStreamGif(
     },
     body: JSON.stringify({}),
   });
-  await readJson(response);
+  const body = await readJson<{
+    enqueued?: unknown;
+    replayed?: unknown;
+    item?: {
+      id?: unknown;
+      status?: unknown;
+      orderId?: unknown;
+      donationId?: unknown;
+    };
+  }>(response);
+  const status = body.item?.status;
+  const playbackStatus =
+    status === "queued" || status === "playing" || status === "shown"
+      ? status
+      : undefined;
+  if (
+    typeof body.enqueued !== "boolean" ||
+    typeof body.replayed !== "boolean" ||
+    typeof body.item?.id !== "string" ||
+    playbackStatus === undefined ||
+    (!body.enqueued && !body.replayed)
+  ) {
+    throw new ApiRequestError(
+      response.status,
+      "approve did not enqueue",
+      "STREAM_GIF_NOT_ENQUEUED",
+    );
+  }
+  return {
+    enqueued: body.enqueued,
+    replayed: body.replayed,
+    item: {
+      id: body.item.id,
+      status: playbackStatus,
+      orderId: typeof body.item.orderId === "string" ? body.item.orderId : null,
+      donationId:
+        typeof body.item.donationId === "string" ? body.item.donationId : null,
+    },
+  };
 }
 
 export async function rejectAdminStreamGif(
