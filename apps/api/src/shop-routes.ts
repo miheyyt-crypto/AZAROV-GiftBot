@@ -19,6 +19,7 @@ import {
   createStreamGifFileStorage,
   getOwnedStreamGifUpload,
   stageStreamGifUpload,
+  DomainError,
   type ShopOrderRecord,
   type ShopOrderStatus,
 } from "@giftbot/domain";
@@ -243,6 +244,12 @@ export function registerShopRoutes(
         }
         return staged;
       } catch (error) {
+        if (error instanceof DomainError) {
+          request.log.warn(
+            { error: error.code, message: error.message },
+            "gif upload rejected",
+          );
+        }
         return sendHttpError(reply, error);
       }
     },

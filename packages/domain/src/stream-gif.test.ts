@@ -1,6 +1,7 @@
 import {
   jobs,
   notifications,
+  purchases,
   streamAlertConsumers,
   streamDonations,
   streamGifSubmissions,
@@ -15,6 +16,7 @@ import { join } from "node:path";
 import { after, afterEach, before, test } from "node:test";
 import { randomUUID } from "node:crypto";
 import {
+  ShopStreamMediaNeedsModerationError,
   StreamGifAlreadyDecidedError,
   StreamGifNotPlayingError,
   StreamMediaNotReadyError,
@@ -25,7 +27,7 @@ import { minimalTestJpeg } from "./media-inspect.js";
 import type { DomainHarness } from "./harness.js";
 import { startDomainHarness } from "./harness.js";
 import { asBigInt } from "./money.js";
-import { createShopOrder, ensureShopCatalog } from "./shop.js";
+import { createShopOrder, ensureShopCatalog, fulfillShopOrder } from "./shop.js";
 import {
   approveStreamGif,
   dismissPlayingStreamGif,
@@ -140,6 +142,44 @@ test("unsupported bytes are rejected before a shop debit; JPEG stages", async ()
   assert.equal(staged.contentType, "image/jpeg");
   const report = await reconcileWallet(harness.db, user.userId);
   assert.equal(report.balanceMinor, 1000n);
+});
+
+test("shop fulfill cannot skip gif-stream moderation; delivered order still approves once", async () => {
+  const admin = await provisionUser(harness.db);
+  const user = await provisionUser(harness.db);
+  await withTelegram(user.userId, 910011n);
+  await fund(user.userId, 1000n, `dep:${user.userId}:ful-bypass`);
+  const bought = await buyGif(user.userId, `shop:${user.userId}:ful-bypass`);
+  await assert.rejects(
+    () =>
+      fulfillShopOrder(harness.db, {
+        orderId: bought.order.orderId,
+        adminUserId: admin.userId,
+        idempotencyKey: `shop.fulfill:${bought.order.orderId}`,
+      }),
+    ShopStreamMediaNeedsModerationError,
+  );
+  await harness.db
+    .update(purchases)
+    .set({ status: "delivered", fulfilledAt: new Date(), updatedAt: new Date() })
+    .where(eq(purchases.id, bought.order.orderId));
+  const first = await approveStreamGif(harness.db, storage, {
+    submissionId: bought.staged.uploadId,
+    adminUserId: admin.userId,
+    idempotencyKey: `gif.approve:${bought.staged.uploadId}:ful`,
+  });
+  assert.equal(first.enqueued, true);
+  const second = await approveStreamGif(harness.db, storage, {
+    submissionId: bought.staged.uploadId,
+    adminUserId: admin.userId,
+    idempotencyKey: `gif.approve:${bought.staged.uploadId}:ful-2`,
+  });
+  assert.equal(second.replayed, true);
+  assert.equal(second.enqueued, false);
+  const donations = await harness.db.select().from(streamDonations);
+  assert.equal(donations.length, 1);
+  const report = await reconcileWallet(harness.db, user.userId);
+  assert.equal(report.balanceMinor, 0n);
 });
 
 test("approve enqueues GIF once without a second debit; reject after approve is blocked", async () => {

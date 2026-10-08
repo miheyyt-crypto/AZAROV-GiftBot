@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  approveAdminStreamGif,
   fulfillAdminShopOrder,
   loadAdminShopOrders,
   processAdminShopOrder,
@@ -8,7 +9,7 @@ import {
 } from "../api.js";
 import { resolveAdminBearer } from "../admin/resolve-admin-bearer.js";
 import { AdminLayout } from "../admin/AdminShell.js";
-import { createIdempotencyKey } from "../idempotency.js";
+import { createIdempotencyKey, keyForPost } from "../idempotency.js";
 import { AdminShopOrdersView } from "../shop/ShopView.js";
 import type { ShopOrderStatus } from "../shop/shop-messages.js";
 
@@ -93,6 +94,7 @@ export function AdminShopOrdersPage({
         reason={reason}
         {...(note ? { note } : {})}
         submitting={submitting || skipRemote}
+        skipRemote={skipRemote}
         onStatusChange={(next) => {
           setStatus(next);
         }}
@@ -107,6 +109,17 @@ export function AdminShopOrdersPage({
           void runAction(
             () => fulfillAdminShopOrder(adminToken ?? "", id, createIdempotencyKey()),
             "Заказ выполнен",
+          );
+        }}
+        onApproveStream={(submissionId) => {
+          void runAction(
+            () =>
+              approveAdminStreamGif(
+                adminToken ?? "",
+                submissionId,
+                keyForPost(`POST /admin/stream-gifs/${submissionId}/approve`),
+              ),
+            "Отправлено в очередь стрима",
           );
         }}
         onReject={(id) => {

@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+import { loadAdminStreamGifBlob } from "../api.js";
+import { resolveAdminBearer } from "../admin/resolve-admin-bearer.js";
 import { BottomSheet } from "../components/BottomSheet.js";
 import { GameBanners } from "../components/GameBanners.js";
 import { BalanceBadge } from "../components/BalanceBadge.js";
@@ -570,16 +573,67 @@ export function OrdersEmpty({ onShop }: { onShop: () => void }) {
   );
 }
 
+function StreamOrderPreview({
+  submissionId,
+  skipRemote,
+}: {
+  submissionId: string;
+  skipRemote: boolean;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (skipRemote) {
+      return;
+    }
+    let revoked: string | null = null;
+    let cancelled = false;
+    void resolveAdminBearer()
+      .then((token) => loadAdminStreamGifBlob(token, submissionId))
+      .then((url) => {
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        revoked = url;
+        setSrc(url);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      if (revoked) {
+        URL.revokeObjectURL(revoked);
+      }
+    };
+  }, [submissionId, skipRemote]);
+  if (!src) {
+    return <p className="muted">превью медиа</p>;
+  }
+  return (
+    <img
+      src={src}
+      alt=""
+      style={{
+        width: 96,
+        height: 72,
+        objectFit: "contain",
+        background: "transparent",
+      }}
+    />
+  );
+}
+
 export function AdminShopOrdersView({
   items,
   status,
   reason,
   note,
   submitting = false,
+  skipRemote = true,
   onStatusChange,
   onReasonChange,
   onProcess,
   onFulfill,
+  onApproveStream,
   onReject,
 }: {
   items: Array<{
@@ -598,10 +652,12 @@ export function AdminShopOrdersView({
   reason: string;
   note?: string;
   submitting?: boolean;
+  skipRemote?: boolean;
   onStatusChange: (status: ShopOrderStatus | "all") => void;
   onReasonChange: (value: string) => void;
   onProcess: (id: string) => void;
   onFulfill: (id: string) => void;
+  onApproveStream?: (submissionId: string) => void;
   onReject: (id: string) => void;
 }) {
   const filters: Array<{ id: ShopOrderStatus | "all"; label: string }> = [
@@ -637,9 +693,16 @@ export function AdminShopOrdersView({
         <p className="muted">Заказов нет.</p>
       ) : (
         items.map((item) => {
+          const isStreamMedia = item.productCode === "gif-stream";
+          const submissionId = item.submittedPayload.gifUploadId;
           const canAct =
             item.fulfillmentType !== "instant" &&
             (item.status === "pending" || item.status === "processing");
+          const canApproveStream =
+            isStreamMedia &&
+            Boolean(submissionId) &&
+            item.status !== "rejected" &&
+            onApproveStream;
           return (
             <article key={item.id} className="card stack">
               <p className="mini-row__title">{item.productName}</p>
@@ -649,9 +712,22 @@ export function AdminShopOrdersView({
               </p>
               <p>{friendlyShopStatus(item.status)}</p>
               <p className="muted">{new Date(item.createdAt).toLocaleString("ru-RU")}</p>
+              {isStreamMedia && submissionId ? (
+                <StreamOrderPreview
+                  submissionId={submissionId}
+                  skipRemote={skipRemote}
+                />
+              ) : null}
+              {isStreamMedia ? (
+                <p className="muted">
+                  Показ в OBS только после модерации. «Выполнено» очередь не ставит.
+                </p>
+              ) : null}
               {Object.keys(item.submittedPayload).length > 0 ? (
                 <div className="shop-order-details">
-                  {Object.entries(item.submittedPayload).map(([key, value]) => (
+                  {Object.entries(item.submittedPayload)
+                    .filter(([key]) => key !== "gifUploadId")
+                    .map(([key, value]) => (
                     <p key={key}>
                       {shopPayloadDetailLabel(key)}: {value}
                     </p>
@@ -659,7 +735,19 @@ export function AdminShopOrdersView({
                 </div>
               ) : null}
               {item.rejectionReason ? <p className="muted">{item.rejectionReason}</p> : null}
-              {canAct ? (
+              {canApproveStream && submissionId ? (
+                <div className="stack">
+                  <a href="#/admin/stream-gifs">Открыть модерацию медиа</a>
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => onApproveStream(submissionId)}
+                  >
+                    Одобрить и отправить на стрим
+                  </button>
+                </div>
+              ) : null}
+              {canAct && !isStreamMedia ? (
                 <div className="stack">
                   {item.status === "pending" ? (
                     <button
@@ -685,6 +773,15 @@ export function AdminShopOrdersView({
                     Отклонить
                   </button>
                 </div>
+              ) : null}
+              {canAct && isStreamMedia ? (
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => onReject(item.id)}
+                >
+                  Отклонить
+                </button>
               ) : null}
             </article>
           );

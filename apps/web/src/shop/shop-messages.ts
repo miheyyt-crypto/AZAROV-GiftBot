@@ -81,6 +81,13 @@ export function shopPayloadDetailLabel(key: string): string {
   return key;
 }
 
+function usableShopServerMessage(message?: string): string | undefined {
+  if (!message || message.startsWith("request failed:")) {
+    return undefined;
+  }
+  return message;
+}
+
 export function friendlyShopError(code?: string, message?: string): string {
   switch (code) {
     case "SHOP_INSUFFICIENT_BALANCE":
@@ -101,6 +108,8 @@ export function friendlyShopError(code?: string, message?: string): string {
       return "Введите название слота";
     case "SHOP_INVALID_GIF_UPLOAD":
       return "Загрузите файл заново";
+    case "SHOP_STREAM_MEDIA_NEEDS_MODERATION":
+      return "Это медиа на стрим: откройте модерацию и нажмите «Одобрить и отправить на стрим»";
     case "STREAM_GIF_INVALID_FILE":
     case "STREAM_MEDIA_CORRUPT":
       return "Не удалось прочитать файл";
@@ -109,13 +118,11 @@ export function friendlyShopError(code?: string, message?: string): string {
     case "STREAM_MEDIA_UNSUPPORTED_FORMAT":
       return "Формат не поддерживается. Нужны JPG, PNG, WebP, GIF, MP4, MOV или WebM";
     case "STREAM_MEDIA_LIMIT":
-      return message && message.length > 0
-        ? message
-        : "Файл слишком тяжёлый для обработки";
+      return usableShopServerMessage(message) ??
+        "Файл слишком тяжёлый или слишком большого разрешения";
     case "STREAM_MEDIA_CODEC_UNSUPPORTED":
-      return message && message.length > 0
-        ? message
-        : "Этот кодек OBS не воспроизведёт. Нужен H.264, VP8, VP9 или AV1";
+      return usableShopServerMessage(message) ??
+        "Этот кодек OBS не воспроизведёт. Нужен H.264, VP8, VP9 или AV1";
     case "STREAM_GIF_UPLOAD_NOT_FOUND":
       return "Загрузите файл заново";
     case "STREAM_MEDIA_NOT_READY":

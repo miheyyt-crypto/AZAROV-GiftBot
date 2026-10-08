@@ -137,6 +137,7 @@ async function apiFetch(path: string, init: RequestInit = {}): Promise<Response>
 async function readJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let code: string | undefined;
+    let message = `request failed: ${response.status}`;
     let nextAvailableAt: string | undefined;
     try {
       const body: unknown = await response.json();
@@ -146,6 +147,13 @@ async function readJson<T>(response: Response): Promise<T> {
           typeof (body as { error: unknown }).error === "string"
         ) {
           code = (body as { error: string }).error;
+        }
+        if (
+          "message" in body &&
+          typeof (body as { message: unknown }).message === "string" &&
+          (body as { message: string }).message.length > 0
+        ) {
+          message = (body as { message: string }).message;
         }
         if (
           "nextAvailableAt" in body &&
@@ -161,7 +169,7 @@ async function readJson<T>(response: Response): Promise<T> {
     }
     throw new ApiRequestError(
       response.status,
-      `request failed: ${response.status}`,
+      message,
       code,
       nextAvailableAt ? { nextAvailableAt } : undefined,
     );

@@ -18,6 +18,7 @@ import {
   ShopInvalidKickUsernameError,
   ShopInvalidMediaUrlError,
   ShopInvalidGifUploadError,
+  ShopStreamMediaNeedsModerationError,
   ShopInvalidSlotNameError,
   ShopInvalidTelegramUsernameError,
   ShopInvalidWelvuraIdError,
@@ -924,6 +925,9 @@ export async function fulfillShopOrder(
   return db.transaction(async (tx) => {
     const current = await lockOrder(tx, input.orderId);
     const from = publicStatus(current.status);
+    if (current.productCode === STREAM_GIF_SHOP_PRODUCT_CODE) {
+      throw new ShopStreamMediaNeedsModerationError();
+    }
     if (from === "fulfilled") {
       return {
         order: serializeOrder(current, {

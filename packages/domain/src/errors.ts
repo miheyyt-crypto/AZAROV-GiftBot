@@ -410,6 +410,15 @@ export class ShopInvalidGifUploadError extends DomainError {
   }
 }
 
+export class ShopStreamMediaNeedsModerationError extends DomainError {
+  constructor() {
+    super(
+      "SHOP_STREAM_MEDIA_NEEDS_MODERATION",
+      "Медиа на стрим одобряется в модерации, не через «Выполнено»",
+    );
+  }
+}
+
 export class StreamGifInvalidFileError extends DomainError {
   constructor(message = "GIF file is invalid") {
     super("STREAM_GIF_INVALID_FILE", message);

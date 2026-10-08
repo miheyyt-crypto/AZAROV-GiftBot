@@ -5,7 +5,7 @@ import {
   StreamMediaTooLargeError,
   StreamMediaUnsupportedFormatError,
 } from "./errors.js";
-import { minimalTestGif } from "./gif-inspect.js";
+import { minimalTestGif, testGifWithScreenAndFrame } from "./gif-inspect.js";
 import {
   inspectStreamMedia,
   minimalTestJpeg,
@@ -38,6 +38,20 @@ function hevcMp4(): Buffer {
   const ftyp = box("ftyp", Buffer.from("isom"));
   return Buffer.concat([ftyp, moov]);
 }
+
+test("inspectStreamMedia reads a 480x480 GIF without STREAM_MEDIA_LIMIT", () => {
+  const media = inspectStreamMedia(testGifWithScreenAndFrame(480, 480, 480, 480));
+  assert.equal(media.kind, "gif");
+  assert.equal(media.width, 480);
+  assert.equal(media.height, 480);
+  assert.equal(media.needsPrepare, false);
+});
+
+test("inspectStreamMedia sends oversized GIF frames to prepare instead of 1920 reject", () => {
+  const inspected = inspectStreamMedia(testGifWithScreenAndFrame(480, 480, 2000, 1080));
+  assert.equal(inspected.kind, "gif");
+  assert.equal(inspected.needsPrepare, true);
+});
 
 test("inspectStreamMedia accepts JPEG PNG GIF by content not name", () => {
   const jpeg = inspectStreamMedia(minimalTestJpeg());

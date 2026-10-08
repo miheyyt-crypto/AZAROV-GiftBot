@@ -6,7 +6,13 @@ import {
   StreamMediaTooLargeError,
   StreamMediaUnsupportedFormatError,
 } from "./errors.js";
-import { inspectGif, minimalTestGif, STREAM_GIF_MAX_BYTES } from "./gif-inspect.js";
+import {
+  inspectGif,
+  minimalTestGif,
+  STREAM_GIF_MAX_BYTES,
+  testGifWithScreenAndFrame,
+} from "./gif-inspect.js";
+import { inspectStreamMedia } from "./media-inspect.js";
 
 test("inspectGif accepts a decodable 1x1 GIF89a", () => {
   const gif = minimalTestGif();
@@ -43,7 +49,7 @@ test("inspectGif rejects truncated as corrupt and oversized as too large", () =>
 
 test("inspectGif caps decoded pixel volume independent of frame count", () => {
   assert.throws(
-    () => inspectGif(minimalTestGif(), { maxDecodedPixels: 0 }),
+    () => inspectGif(minimalTestGif(), { decodePixels: true, maxDecodedPixels: 0 }),
     StreamMediaLimitError,
   );
 });
@@ -52,6 +58,7 @@ test("inspectGif caps LZW wall time independent of resolution", () => {
   assert.throws(
     () =>
       inspectGif(minimalTestGif(), {
+        decodePixels: true,
         lzwMaxMs: 0,
         now: (() => {
           let n = 0;
@@ -61,6 +68,38 @@ test("inspectGif caps LZW wall time independent of resolution", () => {
           };
         })(),
       }),
+    StreamMediaLimitError,
+  );
+});
+
+test("inspectGif reads image descriptor width at spec offset, not left/top", () => {
+  const gif = testGifWithScreenAndFrame(480, 270, 480, 270);
+  const inspected = inspectGif(gif);
+  assert.equal(inspected.needsDownscale, false);
+  assert.equal(inspected.frameCount, 1);
+});
+
+test("a normal 480x480 GIF is accepted with real sizes, not STREAM_MEDIA_LIMIT", () => {
+  const gif = testGifWithScreenAndFrame(480, 480, 480, 480);
+  const inspected = inspectGif(gif);
+  assert.equal(inspected.width, 480);
+  assert.equal(inspected.height, 480);
+  assert.equal(inspected.needsDownscale, false);
+  const media = inspectStreamMedia(gif);
+  assert.equal(media.kind, "gif");
+  assert.equal(media.width, 480);
+  assert.equal(media.height, 480);
+  assert.equal(media.needsPrepare, false);
+});
+
+test("inspectGif stages frames over 1920 for prepare instead of rejecting", () => {
+  const gif = testGifWithScreenAndFrame(480, 480, 2000, 1080);
+  const inspected = inspectGif(gif);
+  assert.equal(inspected.needsDownscale, true);
+  assert.equal(inspected.width, 480);
+  assert.equal(inspected.height, 480);
+  assert.throws(
+    () => inspectGif(gif, { decodePixels: true }),
     StreamMediaLimitError,
   );
 });

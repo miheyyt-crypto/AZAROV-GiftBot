@@ -38,6 +38,8 @@ export type InspectGifLimits = {
   lzwMaxMs?: number;
   maxDecodedPixels?: number;
   maxPixelsPerFrame?: number;
+  /** Full LZW decode. Upload inspect is structure-only so prepare can downscale. */
+  decodePixels?: boolean;
 };
 
 function readU16(bytes: Buffer, offset: number): number {
@@ -204,10 +206,11 @@ export function inspectGif(bytes: Buffer, limits: InspectGifLimits = {}): Inspec
   if (width > STREAM_GIF_SOURCE_MAX || height > STREAM_GIF_SOURCE_MAX) {
     throw new StreamMediaLimitError("Разрешение больше 8192×8192");
   }
-  const needsDownscale =
+  let needsDownscale =
     width > STREAM_GIF_DISPLAY_MAX || height > STREAM_GIF_DISPLAY_MAX;
   let loopCount: number | null = null;
-  if (needsDownscale) {
+  const decodePixels = limits.decodePixels === true;
+  if (needsDownscale && !decodePixels) {
     return {
       width,
       height,
@@ -225,7 +228,7 @@ export function inspectGif(bytes: Buffer, limits: InspectGifLimits = {}): Inspec
   let frames = 0;
   const totalDecoded = { value: 0 };
   while (offset < bytes.length) {
-    if (now() - startedMs > lzwMaxMs) {
+    if (decodePixels && now() - startedMs > lzwMaxMs) {
       throw new StreamMediaLimitError("Обработка GIF превысила лимит времени");
     }
     const marker = bytes[offset]!;
@@ -249,20 +252,21 @@ export function inspectGif(bytes: Buffer, limits: InspectGifLimits = {}): Inspec
     if (offset + 10 > bytes.length) {
       throw new StreamMediaCorruptError("Не удалось прочитать файл");
     }
-    const frameWidth = readU16(bytes, offset + 4);
-    const frameHeight = readU16(bytes, offset + 6);
-    if (
-      frameWidth < 1 ||
-      frameHeight < 1 ||
-      frameWidth > STREAM_GIF_DISPLAY_MAX ||
-      frameHeight > STREAM_GIF_DISPLAY_MAX
-    ) {
-      throw new StreamMediaLimitError("Разрешение больше 1920×1920");
+    const frameWidth = readU16(bytes, offset + 5);
+    const frameHeight = readU16(bytes, offset + 7);
+    if (frameWidth < 1 || frameHeight < 1) {
+      throw new StreamMediaCorruptError("Не удалось прочитать файл");
+    }
+    if (frameWidth > STREAM_GIF_SOURCE_MAX || frameHeight > STREAM_GIF_SOURCE_MAX) {
+      throw new StreamMediaLimitError("Разрешение больше 8192×8192");
+    }
+    if (frameWidth > STREAM_GIF_DISPLAY_MAX || frameHeight > STREAM_GIF_DISPLAY_MAX) {
+      needsDownscale = true;
+      if (decodePixels) {
+        throw new StreamMediaLimitError("Разрешение больше 1920×1920");
+      }
     }
     const framePixels = frameWidth * frameHeight;
-    if (framePixels > maxPixelsPerFrame) {
-      throw new StreamMediaLimitError("GIF слишком тяжёлый для обработки");
-    }
     const localPacked = bytes[offset + 9]!;
     offset += 10;
     if ((localPacked & 0x80) !== 0) {
@@ -270,24 +274,29 @@ export function inspectGif(bytes: Buffer, limits: InspectGifLimits = {}): Inspec
       offset += lctSize;
     }
     const image = collectImageData(bytes, offset);
-    decodeLzw(bytes[offset]!, image.data, {
-      startedMs,
-      now,
-      lzwMaxMs,
-      maxPerFrame: Math.min(framePixels, maxPixelsPerFrame),
-      totalDecoded,
-      maxDecodedPixels,
-    });
+    if (decodePixels) {
+      if (framePixels > maxPixelsPerFrame) {
+        throw new StreamMediaLimitError("GIF слишком тяжёлый для обработки");
+      }
+      decodeLzw(bytes[offset]!, image.data, {
+        startedMs,
+        now,
+        lzwMaxMs,
+        maxPerFrame: Math.min(framePixels, maxPixelsPerFrame),
+        totalDecoded,
+        maxDecodedPixels,
+      });
+    }
     offset = image.next;
     frames += 1;
-    if (frames > STREAM_GIF_MAX_FRAMES) {
+    if (decodePixels && frames > STREAM_GIF_MAX_FRAMES) {
       throw new StreamMediaLimitError("GIF слишком тяжёлый для обработки");
     }
   }
   if (frames < 1) {
     throw new StreamMediaCorruptError("Не удалось прочитать файл");
   }
-  return { width, height, frameCount: frames, loopCount, needsDownscale: false };
+  return { width, height, frameCount: frames, loopCount, needsDownscale };
 }
 
 /** 1×1 GIF89a used in isolated tests. */
@@ -296,4 +305,20 @@ export function minimalTestGif(): Buffer {
     "47494638396101000100800000000000ffffff21f90401000000002c00000000010001000002024401003b",
     "hex",
   );
+}
+
+/** Same 1×1 raster with spoofed logical/frame sizes for inspect tests. */
+export function testGifWithScreenAndFrame(
+  screenWidth: number,
+  screenHeight: number,
+  frameWidth: number,
+  frameHeight: number,
+): Buffer {
+  const gif = Buffer.from(minimalTestGif());
+  gif.writeUInt16LE(screenWidth, 6);
+  gif.writeUInt16LE(screenHeight, 8);
+  const image = gif.indexOf(0x2c);
+  gif.writeUInt16LE(frameWidth, image + 5);
+  gif.writeUInt16LE(frameHeight, image + 7);
+  return gif;
 }

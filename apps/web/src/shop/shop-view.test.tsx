@@ -557,6 +557,14 @@ test("client shop validation and friendly errors", () => {
     friendlyShopError("STREAM_MEDIA_UNSUPPORTED_FORMAT"),
     "Формат не поддерживается. Нужны JPG, PNG, WebP, GIF, MP4, MOV или WebM",
   );
+  assert.equal(
+    friendlyShopError("STREAM_MEDIA_LIMIT", "Разрешение больше 1920×1920"),
+    "Разрешение больше 1920×1920",
+  );
+  assert.equal(
+    friendlyShopError("STREAM_MEDIA_LIMIT", "request failed: 400"),
+    "Файл слишком тяжёлый или слишком большого разрешения",
+  );
   assert.doesNotMatch(friendlyShopError("SQLSTATE_23505"), /SQL|23505/);
 });
 
@@ -710,6 +718,39 @@ test("admin shop orders view has process fulfill reject actions", () => {
   assert.doesNotMatch(html, /AZC|payload|JSON/);
   // Instant freeze has no admin action buttons after the first card's actions.
   assert.equal((html.match(/В обработку/g) ?? []).length, 3);
+});
+
+test("admin gif-stream orders send to moderation instead of fulfill", () => {
+  const html = renderToStaticMarkup(
+    createElement(AdminShopOrdersView, {
+      items: [
+        {
+          id: "gif-order",
+          user: "user-g",
+          productName: "Медиа на стрим",
+          productCode: "gif-stream",
+          priceAzc: "1000",
+          status: "fulfilled",
+          submittedPayload: { gifUploadId: "666b71b2-44ba-45e2-a2a0-4dc9883afba8" },
+          createdAt: "2026-10-08T10:34:47.000Z",
+          rejectionReason: null,
+          fulfillmentType: "manual",
+        },
+      ],
+      status: "all",
+      reason: "",
+      onStatusChange: () => undefined,
+      onReasonChange: () => undefined,
+      onProcess: () => undefined,
+      onFulfill: () => undefined,
+      onApproveStream: () => undefined,
+      onReject: () => undefined,
+    }),
+  );
+  assert.match(html, /Одобрить и отправить на стрим/);
+  assert.match(html, /#\/admin\/stream-gifs/);
+  assert.doesNotMatch(html, />Выполнено</);
+  assert.doesNotMatch(html, /666b71b2/);
 });
 
 test("shop product input focus uses local ring and does not blur the sheet", () => {

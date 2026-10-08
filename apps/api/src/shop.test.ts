@@ -18,6 +18,7 @@ import {
   ensureShopCatalog,
   minimalTestJpeg,
   STREAM_GIF_MAX_BYTES,
+  testGifWithScreenAndFrame,
 } from "@giftbot/domain";
 import { eq } from "drizzle-orm";
 import assert from "node:assert/strict";
@@ -771,6 +772,71 @@ test("gif-stream upload accepts 10 MiB and rejects one byte over", async () => {
       (over.json() as { error: string }).error,
       "STREAM_MEDIA_TOO_LARGE",
     );
+  } finally {
+    await app.close();
+    await rm(uploadDir, { recursive: true, force: true });
+  }
+});
+
+test("gif-stream upload accepts a normal 480x480 GIF", async () => {
+  const mini = await miniToken(96993);
+  const uploadDir = await mkdtemp(join(tmpdir(), "giftbot-shop-gif-480-"));
+  const app = createApiApp({ db, authPolicy: policy, uploadDir });
+  try {
+    const gif = testGifWithScreenAndFrame(480, 480, 480, 480);
+    const uploaded = await app.inject({
+      method: "POST",
+      url: "/shop/gif-uploads",
+      headers: {
+        authorization: `Bearer ${mini.token}`,
+        "content-type": "application/octet-stream",
+        "x-content-type": "image/gif",
+      },
+      payload: gif,
+    });
+    assert.equal(uploaded.statusCode, 200);
+    const body = uploaded.json() as {
+      width: number;
+      height: number;
+      needsPrepare: boolean;
+      playbackReady: boolean;
+      error?: string;
+    };
+    assert.equal(body.error, undefined);
+    assert.equal(body.width, 480);
+    assert.equal(body.height, 480);
+    assert.equal(body.needsPrepare, false);
+    assert.equal(body.playbackReady, true);
+  } finally {
+    await app.close();
+    await rm(uploadDir, { recursive: true, force: true });
+  }
+});
+
+test("gif-stream upload stages GIF frames over 1920 for prepare", async () => {
+  const mini = await miniToken(96992);
+  const uploadDir = await mkdtemp(join(tmpdir(), "giftbot-shop-gif-frame-"));
+  const app = createApiApp({ db, authPolicy: policy, uploadDir });
+  try {
+    const gif = testGifWithScreenAndFrame(480, 480, 2000, 1080);
+    const uploaded = await app.inject({
+      method: "POST",
+      url: "/shop/gif-uploads",
+      headers: {
+        authorization: `Bearer ${mini.token}`,
+        "content-type": "application/octet-stream",
+        "x-content-type": "image/gif",
+      },
+      payload: gif,
+    });
+    assert.equal(uploaded.statusCode, 200);
+    const body = uploaded.json() as {
+      uploadId: string;
+      needsPrepare: boolean;
+      playbackReady: boolean;
+    };
+    assert.equal(body.needsPrepare, true);
+    assert.equal(body.playbackReady, false);
   } finally {
     await app.close();
     await rm(uploadDir, { recursive: true, force: true });
