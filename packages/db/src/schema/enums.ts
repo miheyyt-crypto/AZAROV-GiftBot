@@ -231,3 +231,15 @@ export const streamDonationTtsStatus = pgEnum("stream_donation_tts_status", [
   "skipped",
 ]);
 
+export const streamDonationKind = pgEnum("stream_donation_kind", [
+  "donation",
+  "gif",
+]);
+
+export const streamGifSubmissionStatus = pgEnum("stream_gif_submission_status", [
+  "staging",
+  "pending_moderation",
+  "queued",
+  "rejected",
+]);
+

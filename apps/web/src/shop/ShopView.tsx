@@ -87,6 +87,8 @@ export function ShopView({
   onSelect,
   onClose,
   onFieldChange,
+  gifPreviewUrl,
+  onGifFile,
   onBuy,
   onOrders,
   onDismissSuccess,
@@ -128,6 +130,8 @@ export function ShopView({
   onSelect: (product: ShopCatalogProduct) => void;
   onClose: () => void;
   onFieldChange: (field: string, value: string) => void;
+  gifPreviewUrl?: string | null;
+  onGifFile?: (file: File | null) => void;
   onBuy: () => void;
   onOrders: () => void;
   onDismissSuccess?: () => void;
@@ -364,20 +368,31 @@ export function ShopView({
               <p>
                 {selected.code === "donat"
                   ? "Сообщение появится на стриме автоматически."
+                  : selected.code === "gif-stream"
+                    ? "GIF появится на стриме после одобрения модератором."
                   : selected.fulfillmentType === "instant"
                     ? "Награда сразу попадёт в инвентарь."
                     : "Заявку обработает администратор — статус увидишь в «Моих заказах»."}
               </p>
             </div>
-            {selected.requiredFields.map((field) => (
-              <ShopField
-                key={field}
-                field={field}
-                productCode={selected.code}
-                value={fields[field] ?? ""}
-                onChange={(value) => onFieldChange(field, value)}
-              />
-            ))}
+            {selected.requiredFields.map((field) =>
+              field === "gifUploadId" ? (
+                <ShopGifField
+                  key={field}
+                  previewUrl={gifPreviewUrl ?? null}
+                  disabled={submitting}
+                  onFile={(file) => onGifFile?.(file)}
+                />
+              ) : (
+                <ShopField
+                  key={field}
+                  field={field}
+                  productCode={selected.code}
+                  value={fields[field] ?? ""}
+                  onChange={(value) => onFieldChange(field, value)}
+                />
+              ),
+            )}
             <button
               type="submit"
               className={
@@ -404,6 +419,48 @@ export function ShopView({
         />
       ) : null}
     </div>
+  );
+}
+
+function ShopGifField({
+  previewUrl,
+  disabled,
+  onFile,
+}: {
+  previewUrl: string | null;
+  disabled: boolean;
+  onFile: (file: File | null) => void;
+}) {
+  return (
+    <label className="shop-field">
+      <span className="shop-field__row">
+        <span>GIF</span>
+      </span>
+      <input
+        type="file"
+        accept="image/gif,.gif"
+        disabled={disabled}
+        onChange={(event) => {
+          const file = event.target.files?.[0] ?? null;
+          onFile(file);
+        }}
+      />
+      {previewUrl ? (
+        <img
+          src={previewUrl}
+          alt="Превью GIF"
+          style={{
+            marginTop: "0.6rem",
+            maxWidth: "100%",
+            maxHeight: "180px",
+            objectFit: "contain",
+            background: "transparent",
+          }}
+        />
+      ) : (
+        <p className="muted">Выбери GIF, чтобы увидеть превью до покупки.</p>
+      )}
+    </label>
   );
 }
 

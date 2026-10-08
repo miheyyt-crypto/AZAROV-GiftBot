@@ -14,7 +14,12 @@ export function shopProductTone(
   if (key.includes("welvura") || category === "money") {
     return "gold";
   }
-  if (key.includes("donat") || key.includes("music") || key.includes("музык")) {
+  if (
+    key.includes("donat") ||
+    key.includes("gif") ||
+    key.includes("music") ||
+    key.includes("музык")
+  ) {
     return "pink";
   }
   return "violet";
@@ -47,7 +52,7 @@ export function shopProductKind(code: string, title: string): string {
   if (key.includes("welvura")) {
     return "welvura-200";
   }
-  if (key.includes("donat")) {
+  if (key.includes("donat") || key.includes("gif")) {
     return "donation";
   }
   if (key.includes("music") || key.includes("музык") || key.includes("трек")) {

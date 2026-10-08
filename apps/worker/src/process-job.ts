@@ -123,6 +123,13 @@ async function processStreamAlertTts(
   if (row.ttsStatus === "ready" || row.ttsStatus === "skipped") {
     return;
   }
+  if (row.kind === "gif") {
+    await markStreamDonationTtsTerminal(db, {
+      donationId,
+      status: "skipped",
+    });
+    return;
+  }
   const ttsDir = deps.ttsDir;
   const sileroModel = deps.sileroModel;
   const piperModel = deps.piperModel;

@@ -5,7 +5,7 @@ import {
   telegramAccounts,
   users,
 } from "@giftbot/db/schema";
-import { and, asc, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, lt, ne, or, sql } from "drizzle-orm";
 import {
   STREAM_ALERT_HEARTBEAT_EXTEND_MS,
   STREAM_ALERT_PLAYING_MAX_MS,
@@ -46,6 +46,8 @@ const OVERLAY_SESSION_RE =
 
 export type StreamDonationStatus = "queued" | "playing" | "finished";
 
+export type StreamDonationKind = "donation" | "gif";
+
 export type StreamDonationView = {
   id: string;
   displayName: string;
@@ -54,6 +56,10 @@ export type StreamDonationView = {
   status: StreamDonationStatus;
   ttsStatus: StreamDonationTtsStatus;
   ttsDurationMs: number | null;
+  kind: StreamDonationKind;
+  mediaWidth: number | null;
+  mediaHeight: number | null;
+  playbackOutcome: string | null;
   createdAt: string;
   queuedAt: string;
   startedAt: string | null;
@@ -159,6 +165,10 @@ function toView(
     status: row.status,
     ttsStatus: row.ttsStatus,
     ttsDurationMs: row.ttsDurationMs,
+    kind: row.kind,
+    mediaWidth: row.mediaWidth,
+    mediaHeight: row.mediaHeight,
+    playbackOutcome: row.playbackOutcome,
     createdAt: row.createdAt.toISOString(),
     queuedAt: row.queuedAt.toISOString(),
     startedAt: row.startedAt ? row.startedAt.toISOString() : null,
@@ -221,6 +231,11 @@ export async function enqueueStreamDonationIn(
     message: unknown;
     amountAzc: bigint;
     displayNickname?: string | null | undefined;
+    kind?: "donation" | "gif";
+    mediaStorageKey?: string;
+    mediaWidth?: number;
+    mediaHeight?: number;
+    mediaFrameCount?: number;
   },
 ): Promise<StreamDonationEnqueueResult> {
   const message = normalizeStreamDonationMessage(input.message);
@@ -256,25 +271,38 @@ export async function enqueueStreamDonationIn(
         status: "queued",
         clientRequestId: purchaseId,
         shopPurchaseId: purchaseId,
-        walletTransactionId: input.walletTransactionId,
-        ttsStatus: "pending",
+        ...(input.walletTransactionId
+          ? { walletTransactionId: input.walletTransactionId }
+          : {}),
+        ttsStatus: input.kind === "gif" ? "skipped" : "pending",
+        kind: input.kind === "gif" ? "gif" : "donation",
+        ...(input.kind === "gif"
+          ? {
+              mediaStorageKey: input.mediaStorageKey,
+              mediaWidth: input.mediaWidth,
+              mediaHeight: input.mediaHeight,
+              mediaFrameCount: input.mediaFrameCount,
+            }
+          : {}),
       })
       .returning();
     const row = inserted[0];
     if (!row) {
       throw new Error("stream donation insert failed");
     }
-    await tx
-      .insert(jobs)
-      .values({
-        type: STREAM_ALERT_TTS_JOB_TYPE,
-        owner: "worker",
-        payload: { donation_id: row.id },
-        idempotencyKey: `stream_alert.tts:${row.id}`,
-      })
-      .onConflictDoNothing({
-        target: [jobs.type, jobs.idempotencyKey],
-      });
+    if (input.kind !== "gif") {
+      await tx
+        .insert(jobs)
+        .values({
+          type: STREAM_ALERT_TTS_JOB_TYPE,
+          owner: "worker",
+          payload: { donation_id: row.id },
+          idempotencyKey: `stream_alert.tts:${row.id}`,
+        })
+        .onConflictDoNothing({
+          target: [jobs.type, jobs.idempotencyKey],
+        });
+    }
     return { ...toView(row), replayed: false };
   } catch (error) {
     if (!isUniqueViolation(error)) {
@@ -403,7 +431,7 @@ async function assertConsumerOwns(
 
 export async function claimNextStreamDonation(
   db: GiftbotDb,
-  input: { sessionId: string; clock?: Clock },
+  input: { sessionId: string; clock?: Clock; supportsGif?: boolean },
 ): Promise<{ donation: StreamDonationView | null; recovered: number }> {
   const sessionId = parseOverlaySessionId(input.sessionId);
   const clock = input.clock ?? systemClock;
@@ -427,12 +455,21 @@ export async function claimNextStreamDonation(
       .limit(1);
     const already = playing[0];
     if (already) {
+      if (already.kind === "gif" && !input.supportsGif) {
+        return { donation: null, recovered };
+      }
       return { donation: toView(already), recovered };
     }
+    const queuedFilter = input.supportsGif
+      ? eq(streamDonations.status, "queued")
+      : and(
+          eq(streamDonations.status, "queued"),
+          ne(streamDonations.kind, "gif"),
+        );
     const queued = await tx
       .select()
       .from(streamDonations)
-      .where(eq(streamDonations.status, "queued"))
+      .where(queuedFilter)
       .orderBy(asc(streamDonations.createdAt), asc(streamDonations.id))
       .limit(1)
       .for("update", { skipLocked: true });
@@ -443,6 +480,7 @@ export async function claimNextStreamDonation(
     const holdMs = streamDonationPlayingHoldMs({
       ttsStatus: next.ttsStatus,
       ttsDurationMs: next.ttsDurationMs,
+      kind: next.kind,
     });
     const updated = await tx
       .update(streamDonations)
@@ -461,7 +499,12 @@ export async function claimNextStreamDonation(
 
 export async function completeStreamDonation(
   db: GiftbotDb,
-  input: { sessionId: string; donationId: string; clock?: Clock },
+  input: {
+    sessionId: string;
+    donationId: string;
+    clock?: Clock;
+    playbackOutcome?: "succeeded" | "failed" | "dismissed";
+  },
 ): Promise<StreamDonationView> {
   const sessionId = parseOverlaySessionId(input.sessionId);
   const donationId = parseStreamDonationId(input.donationId);
@@ -490,6 +533,7 @@ export async function completeStreamDonation(
       .set({
         status: "finished",
         finishedAt: now,
+        playbackOutcome: input.playbackOutcome ?? "succeeded",
       })
       .where(eq(streamDonations.id, row.id))
       .returning();

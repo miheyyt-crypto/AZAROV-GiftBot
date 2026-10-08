@@ -10,6 +10,7 @@ import {
   parseOverlayVolumes,
   playBoundedAudio,
   playDonationAlert,
+  playStreamGif,
   pollSpeechUrl,
   settleDonationPlayback,
   STREAM_ALERT_DING_PLAY_MAX_MS,
@@ -25,8 +26,11 @@ const sessionId = overlaySessionId(window.sessionStorage);
 
 const root = document.getElementById("alert");
 const icon = document.getElementById("alert-icon") as HTMLImageElement | null;
+const gifEl = document.getElementById("alert-gif") as HTMLImageElement | null;
 const nameEl = document.getElementById("alert-name");
 const messageEl = document.getElementById("alert-message");
+let currentPlayingId: string | null = null;
+let playbackAbort: AbortController | null = null;
 
 if (icon) {
   icon.src = DONATION_ALERT_ICON_SRC;
@@ -233,6 +237,7 @@ function readClaimedDonation(raw: unknown): OverlayPlaybackDonation | null {
       : {}),
     ttsDurationMs:
       typeof row.ttsDurationMs === "number" ? row.ttsDurationMs : null,
+    ...(row.kind === "gif" ? { kind: "gif" as const } : { kind: "donation" as const }),
   };
 }
 
@@ -240,15 +245,95 @@ let pumping = false;
 let eventsSource: EventSource | null = null;
 let eventsReconnectTimer = 0;
 
-async function completeDonation(donationId: string): Promise<void> {
+async function completeDonation(
+  donationId: string,
+  outcome?: "succeeded" | "failed",
+): Promise<void> {
   try {
     await postJson("/stream-alerts/complete", {
       sessionId,
       donationId,
+      ...(outcome ? { playbackOutcome: outcome } : {}),
     });
   } catch {
     // Queue recovery via playing lease if complete cannot be delivered.
   }
+}
+
+function loadGifImage(
+  url: string,
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; width: number; height: number }> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    let done = false;
+    const finish = (ok: boolean): void => {
+      if (done) {
+        return;
+      }
+      done = true;
+      image.onload = null;
+      image.onerror = null;
+      resolve({
+        ok,
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      });
+    };
+    image.onload = () => {
+      finish(image.naturalWidth > 0 && image.naturalHeight > 0);
+    };
+    image.onerror = () => {
+      finish(false);
+    };
+    if (signal) {
+      signal.addEventListener(
+        "abort",
+        () => {
+          image.src = "";
+          finish(false);
+        },
+        { once: true },
+      );
+    }
+    image.src = url;
+  });
+}
+
+async function showGif(
+  donation: OverlayPlaybackDonation,
+  signal: AbortSignal,
+): Promise<"shown" | "failed"> {
+  if (!root || !gifEl) {
+    return "failed";
+  }
+  return playStreamGif({
+    url: overlayUrl(`/stream-alerts/gif/${donation.id}`),
+    signal,
+    sleep,
+    heartbeat: () => {
+      void postJson("/stream-alerts/heartbeat", {
+        sessionId,
+        donationId: donation.id,
+      }).catch(() => undefined);
+    },
+    loadImage: loadGifImage,
+    show: () => {
+      root.setAttribute("data-kind", "gif");
+      root.classList.remove("is-out");
+      root.classList.add("is-in");
+      root.setAttribute("data-visible", "true");
+      gifEl.src = overlayUrl(`/stream-alerts/gif/${donation.id}`);
+    },
+    hide: () => {
+      root.classList.remove("is-in");
+      root.classList.add("is-out");
+      gifEl.removeAttribute("src");
+      root.removeAttribute("data-kind");
+      root.classList.remove("is-out");
+      root.removeAttribute("data-visible");
+    },
+  });
 }
 
 async function pumpQueue(): Promise<void> {
@@ -258,16 +343,29 @@ async function pumpQueue(): Promise<void> {
   pumping = true;
   try {
     for (;;) {
-      const claimed = await postJson("/stream-alerts/claim", { sessionId });
+      const claimed = await postJson("/stream-alerts/claim", {
+        sessionId,
+        supportsGif: true,
+        capabilities: ["gif"],
+      });
       const donation = readClaimedDonation(claimed.donation);
       if (!donation) {
         return;
       }
+      currentPlayingId = donation.id;
       await settleDonationPlayback({
-        play: (playSignal) => showDonation(donation, playSignal),
-        complete: () => completeDonation(donation.id),
+        play: (playSignal) =>
+          donation.kind === "gif"
+            ? showGif(donation, playSignal)
+            : showDonation(donation, playSignal),
+        complete: (outcome) => completeDonation(donation.id, outcome),
         sleep,
+        onAbortController: (ac) => {
+          playbackAbort = ac;
+        },
       });
+      currentPlayingId = null;
+      playbackAbort = null;
     }
   } catch {
     await sleep(2000);
@@ -296,6 +394,15 @@ function connectEvents(): void {
   const source = new EventSource(overlayUrl("/stream-alerts/events"));
   eventsSource = source;
   source.addEventListener("queued", () => {
+    void pumpQueue();
+  });
+  source.addEventListener("dismissed", (event) => {
+    const payload = JSON.parse((event as MessageEvent).data || "{}") as {
+      donationId?: string;
+    };
+    if (payload.donationId && payload.donationId === currentPlayingId) {
+      playbackAbort?.abort();
+    }
     void pumpQueue();
   });
   source.addEventListener("ready", () => {

@@ -48,6 +48,28 @@ body,
   filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45));
 }
 
+#alert-gif {
+  display: none;
+  max-width: min(720px, 70vw);
+  max-height: min(420px, 48vh);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  object-position: center;
+  background: transparent;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45));
+}
+
+#alert[data-kind="gif"] #alert-icon,
+#alert[data-kind="gif"] #alert-name,
+#alert[data-kind="gif"] #alert-message {
+  display: none;
+}
+
+#alert[data-kind="gif"] #alert-gif {
+  display: block;
+}
+
 #alert-name {
   margin: 0;
   font-size: clamp(1.4rem, 2.4vw, 2.1rem);

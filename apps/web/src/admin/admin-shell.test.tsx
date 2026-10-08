@@ -12,6 +12,7 @@ import { AdminShopOrdersPage } from "../pages/AdminShopOrdersPage.js";
 import { AdminWelvuraPage } from "../pages/AdminWelvuraPage.js";
 import { AdminBroadcastPage } from "../pages/AdminBroadcastPage.js";
 import { AdminDonationsPage } from "../pages/AdminDonationsPage.js";
+import { AdminStreamGifsPage } from "../pages/AdminStreamGifsPage.js";
 import { AdminShell } from "./AdminShell.js";
 import { ADMIN_NAV, adminRouteFromHref } from "./nav.js";
 
@@ -27,6 +28,7 @@ test("admin nav lists only real sections", () => {
       "admin-promo-codes",
       "admin-broadcast",
       "admin-donations",
+      "admin-stream-gifs",
     ],
   );
 });
@@ -122,6 +124,12 @@ test("each admin page renders its own title", () => {
         createElement(AdminDonationsPage, { skipRemote: true, isSuperAdmin: true }),
       ),
       "Донаты",
+    ],
+    [
+      renderToStaticMarkup(
+        createElement(AdminStreamGifsPage, { skipRemote: true, isSuperAdmin: true }),
+      ),
+      "GIF на стрим",
     ],
   ] as const;
   for (const [html, title] of pages) {

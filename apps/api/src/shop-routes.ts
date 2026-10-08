@@ -15,6 +15,9 @@ import {
   markShopOrderProcessing,
   rejectShopOrder,
   STREAM_ALERT_SHOP_PRODUCT_CODE,
+  STREAM_GIF_UPLOAD_BODY_MAX,
+  createStreamGifFileStorage,
+  stageStreamGifUpload,
   type ShopOrderRecord,
   type ShopOrderStatus,
 } from "@giftbot/domain";
@@ -162,10 +165,13 @@ function readListQuery(query: Record<string, unknown>) {
   };
 }
 
+const GIF_UPLOAD_BODY_LIMIT = STREAM_GIF_UPLOAD_BODY_MAX;
+
 export function registerShopRoutes(
   app: FastifyInstance,
   db: AuthDatabase,
   limiter?: RateLimiter,
+  uploadDir?: string,
 ): void {
   app.get("/shop/catalog", async (request, reply) => {
     try {
@@ -179,6 +185,48 @@ export function registerShopRoutes(
       return sendHttpError(reply, error);
     }
   });
+
+  app.post(
+    "/shop/gif-uploads",
+    { bodyLimit: GIF_UPLOAD_BODY_LIMIT },
+    async (request, reply) => {
+      try {
+        const session = await resolveMiniAppSession(
+          db,
+          readBearer(request.headers.authorization),
+        );
+        await consumeAuthed(limiter, request, reply, "shop", session.userId);
+        if (!uploadDir) {
+          throw new ApiError("UNAVAILABLE", "upload storage is not configured", 503);
+        }
+        const body = asRecord(request.body) ?? {};
+        const gifBase64 = body.gifBase64;
+        if (typeof gifBase64 !== "string" || gifBase64.length === 0) {
+          throw new ApiError("STREAM_GIF_INVALID_FILE", "gifBase64 is required", 400);
+        }
+        let bytes: Buffer;
+        try {
+          bytes = Buffer.from(gifBase64, "base64");
+        } catch {
+          throw new ApiError("STREAM_GIF_INVALID_FILE", "invalid GIF payload", 400);
+        }
+        const staged = await stageStreamGifUpload(
+          db,
+          createStreamGifFileStorage(uploadDir),
+          {
+            userId: session.userId,
+            bytes,
+            ...(typeof body.contentType === "string"
+              ? { contentType: body.contentType }
+              : {}),
+          },
+        );
+        return staged;
+      } catch (error) {
+        return sendHttpError(reply, error);
+      }
+    },
+  );
 
   app.post("/shop/orders", async (request, reply) => {
     try {

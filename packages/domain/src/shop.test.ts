@@ -70,6 +70,7 @@ test("canonical shop catalog has the approved prices", () => {
   assert.equal(byCode["welvura-500"], "22222");
   assert.equal(byCode["welvura-5000"], "199999");
   assert.equal(byCode["donat"], "1000");
+  assert.equal(byCode["gif-stream"], "1000");
   assert.equal(byCode["music"], "4000");
   assert.equal(byCode["streak-freeze"], "1000");
   assert.equal(byCode["vip-kick"], "149999");
@@ -77,7 +78,7 @@ test("canonical shop catalog has the approved prices", () => {
   assert.equal(byCode["custom-slot"], "5555");
   assert.equal(byCode["premium-6"], undefined);
   assert.equal(byCode["premium-12"], undefined);
-  assert.equal(SHOP_CATALOG.length, 9);
+  assert.equal(SHOP_CATALOG.length, 10);
   assert.deepEqual(getShopProduct("welvura-bonus-3000").requiredFields, [
     "welvuraId",
     "slotName",
@@ -91,6 +92,7 @@ test("canonical shop catalog has the approved prices", () => {
       "welvura-5000",
       "welvura-bonus-3000",
       "donat",
+      "gif-stream",
       "music",
       "custom-slot",
       "streak-freeze",
@@ -107,6 +109,7 @@ test("presentShopCatalog keeps SHOP_CATALOG order when slugs arrive scrambled", 
     "music",
     "streak-freeze",
     "donat",
+    "gif-stream",
     "welvura-bonus-3000",
     "welvura-5000",
     "welvura-500",
@@ -565,7 +568,7 @@ test("concurrent reject attempts refund once", async () => {
 
 test("listShopCatalog only returns active canonical products", async () => {
   const listed = await listShopCatalog(harness.db);
-  assert.equal(listed.length, 9);
+  assert.equal(listed.length, 10);
   const byCode = Object.fromEntries(listed.map((item) => [item.code, item.priceAzc]));
   assert.equal(byCode["welvura-bonus-3000"], "77777");
   assert.equal(byCode["custom-slot"], "5555");

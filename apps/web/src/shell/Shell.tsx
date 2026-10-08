@@ -43,6 +43,7 @@ const AdminCashWithdrawalsPage = lazy(
 const AdminWelvuraPage = lazy(async () => import("../pages/AdminWelvuraPage.js"));
 const AdminBroadcastPage = lazy(async () => import("../pages/AdminBroadcastPage.js"));
 const AdminDonationsPage = lazy(async () => import("../pages/AdminDonationsPage.js"));
+const AdminStreamGifsPage = lazy(async () => import("../pages/AdminStreamGifsPage.js"));
 
 function RouteView({
   route,
@@ -171,6 +172,13 @@ function RouteView({
     case "admin-donations":
       return (
         <AdminDonationsPage
+          skipRemote={skipRemote}
+          isSuperAdmin={isSuperAdmin}
+        />
+      );
+    case "admin-stream-gifs":
+      return (
+        <AdminStreamGifsPage
           skipRemote={skipRemote}
           isSuperAdmin={isSuperAdmin}
         />

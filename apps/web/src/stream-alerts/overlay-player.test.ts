@@ -4,6 +4,7 @@ import {
   parseOverlayVolumes,
   playBoundedAudio,
   playDonationAlert,
+  playStreamGif,
   pollSpeechUrl,
   settleDonationPlayback,
   STREAM_ALERT_DING_GAP_MS,
@@ -710,4 +711,53 @@ test("ding failure still continues the queue without speech wait hang", async ()
   );
   assert.equal(mode, "text-only");
   assert.deepEqual(events, ["show"]);
+});
+
+test("GIF overlay waits 15s from appearance and skipping load is not a successful show", async () => {
+  const events: string[] = [];
+  const shown = await playStreamGif({
+    url: "/gif/ok",
+    visibleMs: 15_000,
+    preloadMs: 50,
+    sleep: async (ms) => {
+      events.push(`sleep:${ms}`);
+    },
+    heartbeat: () => {
+      events.push("hb");
+    },
+    loadImage: async () => ({ ok: true, width: 64, height: 32 }),
+    show: () => {
+      events.push("show");
+    },
+    hide: () => {
+      events.push("hide");
+    },
+  });
+  assert.equal(shown, "shown");
+  assert.ok(events.includes("show"));
+  assert.ok(events.includes("sleep:15000"));
+  const failed = await playStreamGif({
+    url: "/gif/bad",
+    sleep: async () => undefined,
+    heartbeat: () => undefined,
+    loadImage: async () => ({ ok: false, width: 0, height: 0 }),
+    show: () => {
+      events.push("must-not-show");
+    },
+    hide: () => undefined,
+  });
+  assert.equal(failed, "failed");
+  assert.equal(events.includes("must-not-show"), false);
+});
+
+test("settleDonationPlayback marks load failure without blocking the next complete", async () => {
+  const outcomes: Array<string | undefined> = [];
+  await settleDonationPlayback({
+    play: async () => "failed",
+    complete: async (outcome) => {
+      outcomes.push(outcome);
+    },
+    sleep: async () => undefined,
+  });
+  assert.deepEqual(outcomes, ["failed"]);
 });

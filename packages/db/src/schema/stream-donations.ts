@@ -8,7 +8,12 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { streamDonationStatus, streamDonationTtsStatus } from "./enums.js";
+import {
+  streamDonationKind,
+  streamDonationStatus,
+  streamDonationTtsStatus,
+  streamGifSubmissionStatus,
+} from "./enums.js";
 import { purchases } from "./growth.js";
 import { users } from "./identity.js";
 import { walletTransactions } from "./wallet.js";
@@ -40,6 +45,12 @@ export const streamDonations = pgTable(
     ttsError: text("tts_error"),
     ttsGeneratedAt: timestamp("tts_generated_at", { withTimezone: true }),
     playingExpiresAt: timestamp("playing_expires_at", { withTimezone: true }),
+    kind: streamDonationKind("kind").notNull().default("donation"),
+    mediaStorageKey: text("media_storage_key"),
+    mediaWidth: integer("media_width"),
+    mediaHeight: integer("media_height"),
+    mediaFrameCount: integer("media_frame_count"),
+    playbackOutcome: text("playback_outcome"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -60,6 +71,55 @@ export const streamDonations = pgTable(
       table.createdAt,
     ),
     index("stream_donations_created_idx").on(table.createdAt),
+    index("stream_donations_kind_status_idx").on(table.kind, table.status),
+  ],
+);
+
+export const streamGifSubmissions = pgTable(
+  "stream_gif_submissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    shopPurchaseId: uuid("shop_purchase_id").references(() => purchases.id, {
+      onDelete: "restrict",
+    }),
+    streamDonationId: uuid("stream_donation_id").references(
+      () => streamDonations.id,
+      { onDelete: "restrict" },
+    ),
+    status: streamGifSubmissionStatus("status").notNull().default("staging"),
+    stagingStorageKey: text("staging_storage_key").notNull(),
+    acceptedStorageKey: text("accepted_storage_key"),
+    contentType: text("content_type").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    frameCount: integer("frame_count").notNull(),
+    rejectionReason: text("rejection_reason"),
+    moderatedByAdminId: uuid("moderated_by_admin_id"),
+    moderatedAt: timestamp("moderated_at", { withTimezone: true }),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("stream_gif_submissions_purchase_unique").on(
+      table.shopPurchaseId,
+    ),
+    uniqueIndex("stream_gif_submissions_donation_unique").on(
+      table.streamDonationId,
+    ),
+    index("stream_gif_submissions_user_created_idx").on(
+      table.userId,
+      table.createdAt,
+    ),
+    index("stream_gif_submissions_status_idx").on(table.status),
   ],
 );
 

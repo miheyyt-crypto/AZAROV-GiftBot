@@ -21,6 +21,7 @@ export type OverlayPlaybackDonation = {
   message: string;
   ttsStatus?: OverlayTtsStatus;
   ttsDurationMs?: number | null;
+  kind?: "donation" | "gif";
 };
 
 export type OverlayVolumes = {
@@ -421,24 +422,71 @@ export async function playDonationAlert(
   }
 }
 
-export async function settleDonationPlayback(input: {
-  play: (signal: AbortSignal) => Promise<void>;
-  complete: () => Promise<void>;
+export const STREAM_GIF_VISIBLE_MS = 15_000;
+export const STREAM_GIF_PRELOAD_MS = 8_000;
+
+export async function playStreamGif(input: {
+  url: string;
+  visibleMs?: number;
+  preloadMs?: number;
   sleep: (ms: number) => Promise<void>;
-  timeoutMs?: number;
-}): Promise<void> {
-  const ac = new AbortController();
+  signal?: AbortSignal;
+  heartbeat: () => void;
+  loadImage: (
+    url: string,
+    signal?: AbortSignal,
+  ) => Promise<{ ok: boolean; width: number; height: number }>;
+  show: (size: { width: number; height: number }) => void;
+  hide: () => void;
+}): Promise<"shown" | "failed"> {
+  const visibleMs = input.visibleMs ?? STREAM_GIF_VISIBLE_MS;
+  const preloadMs = input.preloadMs ?? STREAM_GIF_PRELOAD_MS;
+  input.heartbeat();
+  if (aborted(input.signal)) {
+    return "failed";
+  }
+  const loaded = await Promise.race([
+    input.loadImage(input.url, input.signal),
+    input.sleep(preloadMs).then(() => ({ ok: false, width: 0, height: 0 })),
+  ]);
+  if (!loaded.ok || aborted(input.signal)) {
+    return "failed";
+  }
+  input.show({ width: loaded.width, height: loaded.height });
+  input.heartbeat();
   try {
     await Promise.race([
+      input.sleep(visibleMs),
+      waitAbort(input.signal),
+    ]);
+  } finally {
+    input.hide();
+  }
+  return aborted(input.signal) ? "failed" : "shown";
+}
+
+export async function settleDonationPlayback(input: {
+  play: (signal: AbortSignal) => Promise<void | "failed" | "shown">;
+  complete: (outcome?: "succeeded" | "failed") => Promise<void>;
+  sleep: (ms: number) => Promise<void>;
+  timeoutMs?: number;
+  onAbortController?: (ac: AbortController) => void;
+}): Promise<void> {
+  const ac = new AbortController();
+  input.onAbortController?.(ac);
+  let result: void | "failed" | "shown" | "timeout" = "shown";
+  try {
+    result = await Promise.race([
       input.play(ac.signal),
       input.sleep(input.timeoutMs ?? STREAM_ALERT_COMPLETE_TIMEOUT_MS).then(() => {
         ac.abort();
+        return "timeout" as const;
       }),
     ]);
   } finally {
     ac.abort();
   }
-  await input.complete();
+  await input.complete(result === "failed" ? "failed" : "succeeded");
 }
 
 function waitAbort(signal?: AbortSignal): Promise<void> {

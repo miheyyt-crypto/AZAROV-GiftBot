@@ -140,6 +140,13 @@ export function assertNginxApiOnly(nginx: string): void {
   if (!/client_max_body_size\s+256k/.test(nginx)) {
     throw new Error("nginx client_max_body_size must be 256k");
   }
+  if (
+    !/location\s+=\s+\/shop\/gif-uploads[\s\S]{0,500}client_max_body_size\s+8m/.test(
+      nginx,
+    )
+  ) {
+    throw new Error("nginx must raise body size only on /shop/gif-uploads to 8m");
+  }
 }
 
 export function assertRollbackIsArtifact(rollback: string): void {

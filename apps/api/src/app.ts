@@ -41,6 +41,7 @@ import { registerShopRoutes } from "./shop-routes.js";
 import { registerMinesDiceRoutes } from "./mines-dice-routes.js";
 import { registerRollsRoutes, type RollsSqlListener } from "./rolls-routes.js";
 import { registerStreamDonationRoutes } from "./stream-donation-routes.js";
+import { registerStreamGifRoutes } from "./stream-gif-routes.js";
 import { registerStreamStreakRoutes } from "./stream-streak-routes.js";
 import { registerTaskRoutes } from "./task-routes.js";
 import {
@@ -177,7 +178,12 @@ export function createApiApp(options: ApiAppOptions = {}) {
         : {}),
     });
     registerLeaderboardRoutes(app, options.db, userRateLimiter);
-    registerShopRoutes(app, options.db, userRateLimiter);
+    registerShopRoutes(
+      app,
+      options.db,
+      userRateLimiter,
+      options.uploadDir ?? process.env.UPLOAD_DIR,
+    );
     registerStreamDonationRoutes(
       app,
       options.db,
@@ -194,6 +200,13 @@ export function createApiApp(options: ApiAppOptions = {}) {
               ? { uploadDir: process.env.UPLOAD_DIR }
               : {}),
         }),
+      options.uploadDir ?? process.env.UPLOAD_DIR,
+    );
+    registerStreamGifRoutes(
+      app,
+      options.db,
+      userRateLimiter,
+      options.uploadDir ?? process.env.UPLOAD_DIR,
     );
     registerGiveawayRoutes(
       app,

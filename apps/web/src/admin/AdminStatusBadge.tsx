@@ -2,7 +2,12 @@ export function adminStatusTone(
   status: string,
 ): "pending" | "processing" | "ok" | "danger" | "done" | "draft" {
   const value = status.toLowerCase();
-  if (value === "pending" || value === "draft" || value === "queued") {
+  if (
+    value === "pending" ||
+    value === "draft" ||
+    value === "queued" ||
+    value === "pending_moderation"
+  ) {
     return value === "draft" ? "draft" : "pending";
   }
   if (
@@ -29,7 +34,8 @@ export function adminStatusTone(
     value === "completed" ||
     value === "settled" ||
     value === "inactive" ||
-    value === "finished"
+    value === "finished" ||
+    value === "shown"
   ) {
     return "done";
   }

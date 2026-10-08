@@ -604,6 +604,36 @@ export type ShopOrderResult = {
   inventoryGranted?: { type: "streak_freeze"; quantity: number };
 };
 
+export async function uploadShopGif(
+  token: string,
+  file: File,
+): Promise<{ uploadId: string; width: number; height: number; frameCount: number }> {
+  const gifBase64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => {
+      reject(new Error("gif read failed"));
+    };
+    reader.readAsDataURL(file);
+  });
+  const response = await apiFetch("/shop/gif-uploads", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      contentType: "image/gif",
+      gifBase64,
+    }),
+  });
+  return readJson(response);
+}
+
 export async function createShopOrder(
   token: string,
   productCode: string,
@@ -1446,6 +1476,92 @@ export type StreamDonationItem = {
   startedAt: string | null;
   finishedAt: string | null;
 };
+
+export type StreamGifAdminItem = {
+  id: string;
+  userId: string;
+  publicId: string | null;
+  displayName: string | null;
+  orderId: string | null;
+  donationId: string | null;
+  status:
+    | "pending_moderation"
+    | "queued"
+    | "playing"
+    | "shown"
+    | "rejected";
+  playbackOutcome: string | null;
+  width: number;
+  height: number;
+  frameCount: number;
+  createdAt: string;
+  rejectionReason: string | null;
+};
+
+export async function loadAdminStreamGifs(
+  token: string,
+): Promise<{ items: StreamGifAdminItem[] }> {
+  const response = await apiFetch("/admin/stream-gifs", {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const body = await readJson(response);
+  const items = (body as { items?: unknown }).items;
+  return { items: Array.isArray(items) ? (items as StreamGifAdminItem[]) : [] };
+}
+
+export async function loadAdminStreamGifBlob(
+  token: string,
+  id: string,
+): Promise<string> {
+  const response = await apiFetch(`/admin/stream-gifs/${id}/media`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
+}
+
+export async function approveAdminStreamGif(
+  token: string,
+  id: string,
+  idempotencyKey: string,
+): Promise<void> {
+  await apiFetch(`/admin/stream-gifs/${id}/approve`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "idempotency-key": idempotencyKey,
+    },
+    body: JSON.stringify({}),
+  });
+}
+
+export async function rejectAdminStreamGif(
+  token: string,
+  id: string,
+  reason: string,
+  idempotencyKey: string,
+): Promise<void> {
+  await apiFetch(`/admin/stream-gifs/${id}/reject`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+      "idempotency-key": idempotencyKey,
+    },
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function dismissPlayingStreamGif(token: string): Promise<void> {
+  await apiFetch("/admin/stream-gifs/dismiss-playing", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({}),
+  });
+}
 
 export async function loadAdminStreamDonations(
   token: string,

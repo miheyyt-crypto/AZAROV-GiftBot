@@ -141,6 +141,7 @@ test("GET /shop/catalog returns canonical approved prices", async () => {
   assert.equal(byCode["welvura-500"], "22222");
   assert.equal(byCode["welvura-5000"], "199999");
   assert.equal(byCode["donat"], "1000");
+  assert.equal(byCode["gif-stream"], "1000");
   assert.equal(byCode["music"], "4000");
   assert.equal(byCode["streak-freeze"], "1000");
   assert.equal(byCode["vip-kick"], "149999");
@@ -148,7 +149,7 @@ test("GET /shop/catalog returns canonical approved prices", async () => {
   assert.equal(byCode["custom-slot"], "5555");
   assert.equal(byCode["premium-6"], undefined);
   assert.equal(byCode["premium-12"], undefined);
-  assert.equal(body.items.length, 9);
+  assert.equal(body.items.length, 10);
   assert.deepEqual(
     body.items.map((item) => item.code),
     [
@@ -157,6 +158,7 @@ test("GET /shop/catalog returns canonical approved prices", async () => {
       "welvura-5000",
       "welvura-bonus-3000",
       "donat",
+      "gif-stream",
       "music",
       "custom-slot",
       "streak-freeze",

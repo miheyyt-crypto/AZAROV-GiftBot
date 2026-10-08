@@ -17,7 +17,8 @@ export type ShopRequiredField =
   | "donationText"
   | "mediaUrl"
   | "telegramUsername"
-  | "kickUsername";
+  | "kickUsername"
+  | "gifUploadId";
 
 export type ShopCategory = "money" | "donations" | "subs" | "other";
 export type ShopOrderStatus = "pending" | "processing" | "fulfilled" | "rejected";
@@ -67,6 +68,7 @@ export const SHOP_FIELD_LABEL: Record<ShopRequiredField, string> = {
   mediaUrl: "YouTube или SoundCloud",
   telegramUsername: "Telegram username",
   kickUsername: "Kick username",
+  gifUploadId: "GIF",
 };
 
 export function shopPayloadDetailLabel(key: string): string {
@@ -97,6 +99,11 @@ export function friendlyShopError(code?: string): string {
       return "Разрешены только YouTube или SoundCloud";
     case "SHOP_INVALID_SLOT_NAME":
       return "Введите название слота";
+    case "SHOP_INVALID_GIF_UPLOAD":
+    case "STREAM_GIF_INVALID_FILE":
+      return "Загрузите корректный GIF";
+    case "STREAM_GIF_UPLOAD_NOT_FOUND":
+      return "Загрузите GIF заново";
     case "SHOP_PRODUCT_UNAVAILABLE":
     case "SHOP_PRODUCT_NOT_FOUND":
       return "Товар недоступен";
@@ -171,6 +178,12 @@ export function clientShopValidationError(
     if (field === "slotName") {
       if (value.length === 0 || value.length > 80) {
         return "Введите название слота";
+      }
+      continue;
+    }
+    if (field === "gifUploadId") {
+      if (value.length === 0) {
+        return "Загрузите GIF";
       }
       continue;
     }

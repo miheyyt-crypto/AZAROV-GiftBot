@@ -6,6 +6,7 @@ import {
   loadReferralCaseCatalog,
   openPaidCase,
   openReferralCase,
+  uploadShopGif,
 } from "../api.js";
 import { navigate } from "../app/routes.js";
 import { QueryPanel } from "../components/QueryPanel.js";
@@ -62,6 +63,8 @@ export function ShopPage({
   const [filter, setFilter] = useState<ShopFilter>("all");
   const [selected, setSelected] = useState<ShopCatalogProduct | undefined>();
   const [fields, setFields] = useState<Record<string, string>>({});
+  const [gifFile, setGifFile] = useState<File | null>(null);
+  const [gifPreviewUrl, setGifPreviewUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [note, setNote] = useState<string | undefined>();
   const [success, setSuccess] = useState(false);
@@ -87,6 +90,18 @@ export function ShopPage({
     useState<ReferralCaseOpenResult | null>(null);
   const [showReferralResult, setShowReferralResult] = useState(false);
   const [referralErrorNote, setReferralErrorNote] = useState<string | undefined>();
+
+  useEffect(() => {
+    if (!gifFile) {
+      setGifPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(gifFile);
+    setGifPreviewUrl(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [gifFile]);
 
   useEffect(() => {
     function syncTab(): void {
@@ -198,6 +213,15 @@ export function ShopPage({
       const submittedData: Record<string, string> = {};
       for (const field of selected.requiredFields) {
         submittedData[field] = (fields[field] ?? "").trim();
+      }
+      if (selected.code === "gif-stream") {
+        if (!gifFile) {
+          setNote("Загрузите GIF");
+          setSubmitting(false);
+          return;
+        }
+        const uploaded = await uploadShopGif(token, gifFile);
+        submittedData.gifUploadId = uploaded.uploadId;
       }
       const result = await createShopOrder(
         token,
@@ -363,6 +387,14 @@ export function ShopPage({
             filter={filter}
             {...(selected ? { selected } : {})}
             fields={fields}
+            gifPreviewUrl={gifPreviewUrl}
+            onGifFile={(file) => {
+              setGifFile(file);
+              setFields((current) => ({
+                ...current,
+                gifUploadId: file ? "pending" : "",
+              }));
+            }}
             submitting={submitting}
             {...(note ? { note } : {})}
             success={success}
@@ -382,12 +414,14 @@ export function ShopPage({
             onSelect={(product) => {
               setSelected(product);
               setFields({});
+              setGifFile(null);
               setNote(undefined);
               setSuccess(false);
               setSuccessOrder(undefined);
             }}
             onClose={() => {
               setSelected(undefined);
+              setGifFile(null);
               setNote(undefined);
             }}
             onFieldChange={(field, value) => {

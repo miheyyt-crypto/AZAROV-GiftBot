@@ -45,7 +45,8 @@ function readRequiredField(value: unknown): ShopRequiredField {
     value === "donationText" ||
     value === "mediaUrl" ||
     value === "telegramUsername" ||
-    value === "kickUsername"
+    value === "kickUsername" ||
+    value === "gifUploadId"
   ) {
     return value;
   }

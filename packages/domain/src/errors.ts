@@ -403,3 +403,39 @@ export class OverlayUnauthorizedError extends DomainError {
     super("OVERLAY_UNAUTHORIZED", "overlay token is invalid");
   }
 }
+
+export class ShopInvalidGifUploadError extends DomainError {
+  constructor() {
+    super("SHOP_INVALID_GIF_UPLOAD", "GIF upload is invalid");
+  }
+}
+
+export class StreamGifInvalidFileError extends DomainError {
+  constructor(message = "GIF file is invalid") {
+    super("STREAM_GIF_INVALID_FILE", message);
+  }
+}
+
+export class StreamGifUploadNotFoundError extends NotFoundError {
+  constructor() {
+    super("GIF upload not found", "STREAM_GIF_UPLOAD_NOT_FOUND");
+  }
+}
+
+export class StreamGifNotFoundError extends NotFoundError {
+  constructor() {
+    super("GIF submission not found", "STREAM_GIF_NOT_FOUND");
+  }
+}
+
+export class StreamGifAlreadyDecidedError extends ConflictError {
+  constructor() {
+    super("GIF submission already decided", "STREAM_GIF_ALREADY_DECIDED");
+  }
+}
+
+export class StreamGifNotPlayingError extends ConflictError {
+  constructor() {
+    super("no GIF is currently on screen", "STREAM_GIF_NOT_PLAYING");
+  }
+}

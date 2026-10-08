@@ -23,7 +23,8 @@ export type AppRoute =
   | { name: "admin-cash-withdrawals" }
   | { name: "admin-welvura" }
   | { name: "admin-broadcast" }
-  | { name: "admin-donations" };
+  | { name: "admin-donations" }
+  | { name: "admin-stream-gifs" };
 
 export type TabId = "home" | "tasks" | "shop" | "friends" | "profile";
 
@@ -121,6 +122,9 @@ export function parseHash(hash: string): AppRoute {
   if (parts[0] === "admin" && parts[1] === "donations") {
     return { name: "admin-donations" };
   }
+  if (parts[0] === "admin" && parts[1] === "stream-gifs") {
+    return { name: "admin-stream-gifs" };
+  }
   if (parts[0] === "leaderboard") {
     return { name: "leaderboard" };
   }
@@ -179,6 +183,8 @@ export function hrefFor(route: AppRoute): string {
       return "#/admin/broadcast";
     case "admin-donations":
       return "#/admin/donations";
+    case "admin-stream-gifs":
+      return "#/admin/stream-gifs";
   }
 }
 
@@ -215,6 +221,7 @@ export function tabFor(route: AppRoute): TabId | undefined {
     case "admin-welvura":
     case "admin-broadcast":
     case "admin-donations":
+    case "admin-stream-gifs":
       return undefined;
   }
 }

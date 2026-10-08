@@ -66,6 +66,7 @@ export const SHOP_SHEET_FIELD_LABEL: Record<ShopRequiredField, string> = {
   mediaUrl: "Твоя ссылка на трек",
   telegramUsername: "Telegram username",
   kickUsername: "Kick username",
+  gifUploadId: "GIF",
 };
 
 export function shopFieldMax(field: ShopRequiredField): number | undefined {

@@ -48,6 +48,7 @@ test("parseHash maps nested Mini App screens", () => {
   assert.deepEqual(parseHash("#/admin/broadcast"), { name: "admin-broadcast" });
   assert.deepEqual(parseHash("#/support"), { name: "home" });
   assert.deepEqual(parseHash("#/admin/donations"), { name: "admin-donations" });
+  assert.deepEqual(parseHash("#/admin/stream-gifs"), { name: "admin-stream-gifs" });
 });
 
 test("unknown hashes fall back to home and do not invent extra tabs", () => {
@@ -73,6 +74,7 @@ test("unknown hashes fall back to home and do not invent extra tabs", () => {
   assert.equal(tabFor({ name: "notifications" }), "profile");
   assert.equal(showsBottomNav({ name: "operations" }), true);
   assert.equal(hrefFor({ name: "admin-donations" }), "#/admin/donations");
+  assert.equal(hrefFor({ name: "admin-stream-gifs" }), "#/admin/stream-gifs");
   assert.equal(tabFor({ name: "operations" }), "profile");
   assert.equal(hrefFor({ name: "operations" }), "#/profile/operations");
 });

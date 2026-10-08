@@ -17,6 +17,7 @@ import {
   ShopInvalidDonationTextError,
   ShopInvalidKickUsernameError,
   ShopInvalidMediaUrlError,
+  ShopInvalidGifUploadError,
   ShopInvalidSlotNameError,
   ShopInvalidTelegramUsernameError,
   ShopInvalidWelvuraIdError,
@@ -37,6 +38,11 @@ import {
 import { assertTransition, shopOrderTransitions } from "./states.js";
 import { applyIn } from "./wallet.js";
 import { createTtlCache } from "./read-cache.js";
+import {
+  consumeStreamGifUploadIn,
+  parseShopGifUploadId,
+} from "./stream-gif.js";
+import { STREAM_GIF_SHOP_PRODUCT_CODE } from "./gif-inspect.js";
 import { enqueueStreamDonationIn } from "./stream-donation.js";
 
 export const STREAM_ALERT_SHOP_PRODUCT_CODE = "donat";
@@ -51,7 +57,8 @@ export type ShopRequiredField =
   | "donationText"
   | "mediaUrl"
   | "telegramUsername"
-  | "kickUsername";
+  | "kickUsername"
+  | "gifUploadId";
 
 export type ShopCatalogProduct = {
   code: string;
@@ -108,6 +115,15 @@ export const SHOP_CATALOG: readonly ShopCatalogProduct[] = [
     fulfillmentType: "manual",
     requiredFields: ["displayNickname", "donationText"],
     description: "Сообщение появится на стриме автоматически.",
+  },
+  {
+    code: STREAM_GIF_SHOP_PRODUCT_CODE,
+    title: "GIF на стрим",
+    category: "donations",
+    priceAzc: 1000n,
+    fulfillmentType: "manual",
+    requiredFields: ["gifUploadId"],
+    description: "GIF пройдёт модерацию и появится на стриме после одобрения.",
   },
   {
     code: "music",
@@ -422,6 +438,9 @@ export function validateShopSubmittedData(
         break;
       case "kickUsername":
         payload.kickUsername = parseShopKickUsername(value);
+        break;
+      case "gifUploadId":
+        payload.gifUploadId = parseShopGifUploadId(value);
         break;
     }
   }
@@ -757,6 +776,17 @@ export async function createShopOrder(
           : {}),
       });
     }
+    if (catalog.code === STREAM_GIF_SHOP_PRODUCT_CODE) {
+      const gifUploadId = submitted.gifUploadId;
+      if (!gifUploadId) {
+        throw new ShopInvalidGifUploadError();
+      }
+      await consumeStreamGifUploadIn(tx, {
+        userId: input.userId,
+        uploadId: gifUploadId,
+        purchaseId: inserted.id,
+      });
+    }
     const updated = await tx
       .update(purchases)
       .set({
@@ -774,11 +804,15 @@ export async function createShopOrder(
       type: autoDeliver ? "shop_order_fulfilled" : "shop_order_created",
       title: autoAlert
         ? "Донат отправлен на стрим"
+        : catalog.code === STREAM_GIF_SHOP_PRODUCT_CODE
+          ? "GIF на модерации"
         : catalog.fulfillmentType === "instant"
           ? "Streak Freeze добавлен в инвентарь"
           : "Заказ создан",
       body: autoAlert
         ? "Сообщение появится на эфире автоматически"
+        : catalog.code === STREAM_GIF_SHOP_PRODUCT_CODE
+          ? "GIF появится на стриме после одобрения администратором"
         : catalog.fulfillmentType === "instant"
           ? "Streak Freeze добавлен в инвентарь"
           : `${catalog.title} — заявка отправлена`,

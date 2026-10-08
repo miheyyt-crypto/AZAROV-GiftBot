@@ -1,6 +1,7 @@
 import { mkdir, readdir, stat, unlink } from "node:fs/promises";
 import { basename, join, resolve, sep } from "node:path";
 import { StreamDonationInvalidRequestError } from "./errors.js";
+import { STREAM_GIF_VISIBLE_MS, STREAM_GIF_PRELOAD_MS } from "./gif-inspect.js";
 
 const DONATION_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -144,11 +145,18 @@ export function wavDurationMs(bytes: Buffer): number {
 export function streamDonationPlayingHoldMs(input: {
   ttsStatus: StreamDonationTtsStatus;
   ttsDurationMs: number | null;
+  kind?: "donation" | "gif";
 }): number {
   const dingAndGap = STREAM_ALERT_DING_MS + STREAM_ALERT_DING_GAP_MS;
   const fade = 900;
   const buffer = 20_000;
   const preshowWait = STREAM_ALERT_TTS_WAIT_MS;
+  if (input.kind === "gif") {
+    return Math.min(
+      STREAM_GIF_PRELOAD_MS + STREAM_GIF_VISIBLE_MS + fade + 5_000,
+      STREAM_ALERT_PLAYING_MAX_MS,
+    );
+  }
   if (input.ttsStatus === "ready" && (input.ttsDurationMs ?? 0) > 0) {
     return Math.min(
       preshowWait + dingAndGap + (input.ttsDurationMs ?? 0) + fade + buffer,

@@ -8,6 +8,7 @@ import {
   attachStreamAlertConsumer,
   claimNextStreamDonation,
   completeStreamDonation,
+  createStreamGifFileStorage,
   heartbeatStreamDonationPlaying,
   listAdminStreamDonations,
   loadStreamDonationForTts,
@@ -43,11 +44,26 @@ function publicDonation(row: StreamDonationView) {
     status: row.status,
     ttsStatus: row.ttsStatus,
     ttsDurationMs: row.ttsDurationMs,
+    kind: row.kind,
+    mediaWidth: row.mediaWidth,
+    mediaHeight: row.mediaHeight,
+    playbackOutcome: row.playbackOutcome,
     createdAt: row.createdAt,
     queuedAt: row.queuedAt,
     startedAt: row.startedAt,
     finishedAt: row.finishedAt,
   };
+}
+
+function readSupportsGif(body: Record<string, unknown>): boolean {
+  if (body.supportsGif === true) {
+    return true;
+  }
+  const capabilities = body.capabilities;
+  if (!Array.isArray(capabilities)) {
+    return false;
+  }
+  return capabilities.some((item) => item === "gif");
 }
 
 function readSessionId(body: Record<string, unknown>): string {
@@ -84,7 +100,11 @@ export function registerStreamDonationRoutes(
   limiter: RateLimiter | undefined,
   overlayToken: string | undefined,
   ttsDir?: string,
+  uploadDir?: string,
 ): void {
+  const gifStorage = uploadDir
+    ? createStreamGifFileStorage(uploadDir)
+    : undefined;
   app.get("/admin/stream-donations", async (request, reply) => {
     try {
       await consumeIp(limiter, request, reply, "admin");
@@ -119,8 +139,12 @@ export function registerStreamDonationRoutes(
     try {
       await consumeIp(limiter, request, reply, "overlay");
       overlayGuard(request, overlayToken);
-      const sessionId = readSessionId(asRecord(request.body) ?? {});
-      const claimed = await claimNextStreamDonation(db, { sessionId });
+      const body = asRecord(request.body) ?? {};
+      const sessionId = readSessionId(body);
+      const claimed = await claimNextStreamDonation(db, {
+        sessionId,
+        supportsGif: readSupportsGif(body),
+      });
       if (claimed.recovered > 0) {
         logger.info("donation_recovered", { recovered: claimed.recovered });
       }
@@ -190,6 +214,35 @@ export function registerStreamDonationRoutes(
     }
   });
 
+  app.get("/stream-alerts/gif/:donationId", async (request, reply) => {
+    try {
+      await consumeIp(limiter, request, reply, "overlay");
+      overlayGuard(request, overlayToken);
+      const donationId = (request.params as { donationId?: string }).donationId;
+      if (!donationId) {
+        throw new ApiError("BAD_REQUEST", "donationId is required", 400);
+      }
+      if (!gifStorage) {
+        return reply.code(404).send();
+      }
+      const row = await loadStreamDonationForTts(db, donationId);
+      if (!row || row.kind !== "gif" || !row.mediaStorageKey) {
+        return reply.code(404).send();
+      }
+      const filePath = gifStorage.resolvePath(row.mediaStorageKey);
+      try {
+        await access(filePath);
+      } catch {
+        return reply.code(404).send();
+      }
+      reply.header("content-type", "image/gif");
+      reply.header("cache-control", "private, max-age=60");
+      return reply.send(createReadStream(filePath));
+    } catch (error) {
+      return sendHttpError(reply, error);
+    }
+  });
+
   app.post("/stream-alerts/complete", async (request, reply) => {
     try {
       await consumeIp(limiter, request, reply, "overlay");
@@ -200,9 +253,15 @@ export function registerStreamDonationRoutes(
       if (typeof donationId !== "string") {
         throw new ApiError("BAD_REQUEST", "donationId is required", 400);
       }
+      const outcome = body.playbackOutcome;
       const finished = await completeStreamDonation(db, {
         sessionId,
         donationId,
+        ...(outcome === "failed" ||
+        outcome === "succeeded" ||
+        outcome === "dismissed"
+          ? { playbackOutcome: outcome }
+          : {}),
       });
       logger.info("donation_finished", { donation_id: finished.id });
       return { donation: publicDonation(finished) };
@@ -229,7 +288,13 @@ export function registerStreamDonationRoutes(
     });
     reply.raw.write("retry: 2000\n\n");
     reply.raw.write("event: ready\ndata: {}\n\n");
-    const send = (): void => {
+    const send = (event: { type: string; donationId?: string }): void => {
+      if (event.type === "dismissed" && event.donationId) {
+        reply.raw.write(
+          `event: dismissed\ndata: ${JSON.stringify({ donationId: event.donationId })}\n\n`,
+        );
+        return;
+      }
       reply.raw.write("event: queued\ndata: {}\n\n");
     };
     const unsubscribe = subscribeStreamAlerts(send);
