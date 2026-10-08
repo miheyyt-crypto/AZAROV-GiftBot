@@ -204,6 +204,92 @@ test("shop fulfill cannot skip gif-stream moderation; delivered order still appr
   assert.equal(report.balanceMinor, 0n);
 });
 
+test("reject refunds a delivered gif-stream still pending_moderation without OBS once", async () => {
+  const admin = await provisionUser(harness.db);
+  const user = await provisionUser(harness.db);
+  await withTelegram(user.userId, 910021n);
+  await fund(user.userId, 1000n, `dep:${user.userId}:del-rej`);
+  const bought = await buyGif(user.userId, `shop:${user.userId}:del-rej`);
+  await harness.db
+    .update(purchases)
+    .set({ status: "delivered", fulfilledAt: new Date(), updatedAt: new Date() })
+    .where(eq(purchases.id, bought.order.orderId));
+  const first = await rejectStreamGif(harness.db, storage, {
+    submissionId: bought.staged.uploadId,
+    adminUserId: admin.userId,
+    reason: "file missing",
+    idempotencyKey: `gif.reject:${bought.staged.uploadId}:del`,
+  });
+  assert.equal(first.replayed, false);
+  assert.equal(first.item.status, "rejected");
+  const second = await rejectStreamGif(harness.db, storage, {
+    submissionId: bought.staged.uploadId,
+    adminUserId: admin.userId,
+    reason: "file missing again",
+    idempotencyKey: `gif.reject:${bought.staged.uploadId}:del-2`,
+  });
+  assert.equal(second.replayed, true);
+  const refunds = await harness.db
+    .select()
+    .from(walletTransactions)
+    .where(eq(walletTransactions.userId, user.userId));
+  assert.equal(refunds.filter((row) => row.type === "shop_refund").length, 1);
+  assert.ok(
+    refunds.some(
+      (row) =>
+        row.type === "shop_refund" &&
+        row.idempotencyKey === `shop.refund:${bought.order.orderId}` &&
+        asBigInt(row.amountMinor) === 1000n,
+    ),
+  );
+  const report = await reconcileWallet(harness.db, user.userId);
+  assert.equal(report.balanceMinor, 1000n);
+  const orderRows = await harness.db
+    .select()
+    .from(purchases)
+    .where(eq(purchases.id, bought.order.orderId));
+  assert.equal(orderRows[0]?.status, "refunded");
+  const donations = await harness.db
+    .select()
+    .from(streamDonations)
+    .where(eq(streamDonations.shopPurchaseId, bought.order.orderId));
+  assert.equal(donations.length, 0);
+});
+
+test("concurrent approve and reject on delivered gif-stream cannot both enqueue and refund", async () => {
+  const adminA = await provisionUser(harness.db);
+  const adminB = await provisionUser(harness.db);
+  const user = await provisionUser(harness.db);
+  await withTelegram(user.userId, 910022n);
+  await fund(user.userId, 1000n, `dep:${user.userId}:del-race`);
+  const bought = await buyGif(user.userId, `shop:${user.userId}:del-race`);
+  await harness.db
+    .update(purchases)
+    .set({ status: "delivered", fulfilledAt: new Date(), updatedAt: new Date() })
+    .where(eq(purchases.id, bought.order.orderId));
+  const results = await Promise.allSettled([
+    approveStreamGif(harness.db, storage, {
+      submissionId: bought.staged.uploadId,
+      adminUserId: adminA.userId,
+      idempotencyKey: `gif.approve:${bought.staged.uploadId}:del-race`,
+    }),
+    rejectStreamGif(harness.db, storage, {
+      submissionId: bought.staged.uploadId,
+      adminUserId: adminB.userId,
+      reason: "no",
+      idempotencyKey: `gif.reject:${bought.staged.uploadId}:del-race`,
+    }),
+  ]);
+  assert.equal(results.filter((row) => row.status === "fulfilled").length, 1);
+  const donations = await harness.db.select().from(streamDonations);
+  const refunds = await harness.db
+    .select()
+    .from(walletTransactions)
+    .where(eq(walletTransactions.userId, user.userId));
+  const refundCount = refunds.filter((row) => row.type === "shop_refund").length;
+  assert.equal(donations.length + refundCount, 1);
+});
+
 test("approve enqueues GIF once without a second debit; reject after approve is blocked", async () => {
   const admin = await provisionUser(harness.db);
   const user = await provisionUser(harness.db);

@@ -583,6 +583,15 @@ export async function rejectStreamGif(
     if (!order) {
       throw new StreamGifNotFoundError();
     }
+    const queueRows = await tx
+      .select({ id: streamDonations.id })
+      .from(streamDonations)
+      .where(eq(streamDonations.shopPurchaseId, current.shopPurchaseId))
+      .limit(1)
+      .for("update");
+    if (queueRows.length > 0) {
+      throw new StreamGifAlreadyDecidedError();
+    }
     const from =
       order.status === "delivered"
         ? "fulfilled"
@@ -609,7 +618,15 @@ export async function rejectStreamGif(
         replayed: true,
       };
     }
-    assertTransition("shop_order", shopOrderTransitions, from, "rejected");
+    const canRefundDeliveredGif =
+      from === "fulfilled" &&
+      order.productCode === STREAM_GIF_SHOP_PRODUCT_CODE &&
+      current.status === "pending_moderation" &&
+      current.streamDonationId === null &&
+      queueRows.length === 0;
+    if (!canRefundDeliveredGif) {
+      assertTransition("shop_order", shopOrderTransitions, from, "rejected");
+    }
     const price = asBigInt(order.priceMinor);
     await applyIn(tx, {
       userId: current.userId,
