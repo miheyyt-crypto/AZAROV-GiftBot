@@ -742,7 +742,7 @@ export function AdminShopOrdersView({
                 : {})}
             >
               <p className="mini-row__title">{item.productName}</p>
-              <p>{item.user ?? item.id}</p>
+              <p>{submission?.displayName ?? item.user ?? item.id}</p>
               {binding ? (
                 <p className="muted">Заказ {binding.orderId.slice(0, 8)}</p>
               ) : null}

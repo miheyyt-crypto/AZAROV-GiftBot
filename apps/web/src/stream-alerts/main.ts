@@ -13,6 +13,7 @@ import {
   playStreamGif,
   pollSpeechUrl,
   settleDonationPlayback,
+  streamGifNeedsRestartLoop,
   STREAM_ALERT_DING_PLAY_MAX_MS,
   type OverlayAudioHandle,
   type OverlayPlaybackDonation,
@@ -361,7 +362,11 @@ async function restartFiniteImage(
   el: HTMLImageElement,
   url: string,
   signal?: AbortSignal,
+  contentType?: string | null,
 ): Promise<void> {
+  if (!streamGifNeedsRestartLoop(contentType)) {
+    return new Promise(() => undefined);
+  }
   const ImageDecoderCtor = (
     globalThis as unknown as {
       ImageDecoder?: new (init: { data: BufferSource; type: string }) => {
@@ -384,9 +389,10 @@ async function restartFiniteImage(
   try {
     const response = await fetch(url, { signal });
     const data = await response.arrayBuffer();
-    const type = el.src.toLowerCase().includes(".webp")
-      ? "image/webp"
-      : "image/gif";
+    const type =
+      contentType === "image/webp" || url.toLowerCase().includes(".webp")
+        ? "image/webp"
+        : "image/gif";
     const decoder = new ImageDecoderCtor({ data, type });
     await decoder.completed;
     const track = decoder.tracks.selectedTrack;
@@ -432,11 +438,11 @@ async function showGif(
       }).catch(() => undefined);
     },
     loadImage: video ? loadOverlayVideo : loadGifImage,
-    ...(video
+    ...(video || !streamGifNeedsRestartLoop(donation.mediaContentType)
       ? {}
       : {
           restartWhileVisible: (playSignal: AbortSignal | undefined) =>
-            restartFiniteImage(gifEl, url, playSignal),
+            restartFiniteImage(gifEl, url, playSignal, donation.mediaContentType),
         }),
     show: () => {
       root.setAttribute("data-kind", "gif");
@@ -508,7 +514,9 @@ async function pumpQueue(): Promise<void> {
 async function attach(): Promise<void> {
   try {
     await postJson("/stream-alerts/attach", { sessionId });
-    void pumpQueue();
+    if (!pumping) {
+      void pumpQueue();
+    }
   } catch (error) {
     const code = (error as { code?: string }).code;
     if (code === "OVERLAY_BUSY") {

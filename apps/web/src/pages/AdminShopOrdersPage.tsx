@@ -186,6 +186,7 @@ function snapshotStreamMedia(
     donationId: string | null;
     status: StreamGifModerationSnapshot["status"];
     playbackReady?: boolean;
+    displayName?: string | null;
   }>,
 ): Record<string, StreamGifModerationSnapshot> {
   const next: Record<string, StreamGifModerationSnapshot> = {};
@@ -198,6 +199,7 @@ function snapshotStreamMedia(
       ...(item.playbackReady === undefined
         ? {}
         : { playbackReady: item.playbackReady }),
+      ...(item.displayName === undefined ? {} : { displayName: item.displayName }),
     };
   }
   return next;

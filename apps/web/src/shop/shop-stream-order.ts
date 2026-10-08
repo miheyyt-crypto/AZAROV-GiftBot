@@ -18,6 +18,7 @@ export type StreamGifModerationSnapshot = {
   donationId: string | null;
   status: StreamGifPlaybackStatus;
   playbackReady?: boolean;
+  displayName?: string | null;
 };
 
 export function streamOrderBinding(item: {

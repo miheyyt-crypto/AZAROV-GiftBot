@@ -7,6 +7,7 @@ import {
   playStreamGif,
   pollSpeechUrl,
   settleDonationPlayback,
+  streamGifNeedsRestartLoop,
   STREAM_ALERT_DING_GAP_MS,
   STREAM_ALERT_SPEECH_START_MAX_MS,
   STREAM_ALERT_TTS_ENABLED,
@@ -786,4 +787,71 @@ test("settleDonationPlayback marks load failure without blocking the next comple
     sleep: async () => undefined,
   });
   assert.deepEqual(outcomes, ["failed"]);
+});
+
+test("JPEG and PNG media do not use the GIF restart loop", () => {
+  assert.equal(streamGifNeedsRestartLoop("image/jpeg"), false);
+  assert.equal(streamGifNeedsRestartLoop("image/png"), false);
+  assert.equal(streamGifNeedsRestartLoop("image/gif"), true);
+  assert.equal(streamGifNeedsRestartLoop("image/webp"), true);
+});
+
+test("playStreamGif keeps the 7s window if restart returns immediately", async () => {
+  const events: string[] = [];
+  const shown = await playStreamGif({
+    url: "/gif/jpeg",
+    visibleMs: 7_000,
+    preloadMs: 10,
+    sleep: async (ms) => {
+      events.push(`sleep:${ms}`);
+    },
+    heartbeat: () => undefined,
+    loadImage: async () => ({ ok: true, width: 64, height: 32 }),
+    show: () => {
+      events.push("show");
+    },
+    hide: () => {
+      events.push("hide");
+    },
+    restartWhileVisible: async () => {
+      events.push("restart-done");
+    },
+  });
+  assert.equal(shown, "shown");
+  assert.ok(events.includes("show"));
+  assert.ok(events.includes("restart-done"));
+  assert.ok(events.includes("sleep:7000"));
+  assert.ok(events.indexOf("hide") > events.indexOf("sleep:7000"));
+  assert.ok(events.indexOf("sleep:7000") > events.indexOf("show"));
+});
+
+test("settleDonationPlayback marks overlay timeout as failed not shown", async () => {
+  const outcomes: Array<string | undefined> = [];
+  await settleDonationPlayback({
+    play: async () => new Promise(() => undefined),
+    complete: async (outcome) => {
+      outcomes.push(outcome);
+    },
+    sleep: async () => undefined,
+    timeoutMs: 1,
+  });
+  assert.deepEqual(outcomes, ["failed"]);
+});
+
+test("complete runs once per item and the queue continues after failed", async () => {
+  const outcomes: Array<string | undefined> = [];
+  const complete = async (outcome?: "succeeded" | "failed"): Promise<void> => {
+    outcomes.push(outcome);
+  };
+  await settleDonationPlayback({
+    play: async () => "failed",
+    complete,
+    sleep: async () => undefined,
+  });
+  await settleDonationPlayback({
+    play: async () => "shown",
+    complete,
+    sleep: async () => undefined,
+  });
+  assert.deepEqual(outcomes, ["failed", "succeeded"]);
 });

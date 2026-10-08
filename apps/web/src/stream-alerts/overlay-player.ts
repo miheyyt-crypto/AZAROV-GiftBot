@@ -427,6 +427,12 @@ export async function playDonationAlert(
 export const STREAM_GIF_VISIBLE_MS = 7_000;
 export const STREAM_GIF_PRELOAD_MS = 8_000;
 
+export function streamGifNeedsRestartLoop(
+  contentType: string | null | undefined,
+): boolean {
+  return contentType === "image/gif" || contentType === "image/webp";
+}
+
 export async function playStreamGif(input: {
   url: string;
   visibleMs?: number;
@@ -463,10 +469,9 @@ export async function playStreamGif(input: {
       waitAbort(input.signal),
     ]);
     if (input.restartWhileVisible) {
-      await Promise.race([visible, input.restartWhileVisible(input.signal)]);
-    } else {
-      await visible;
+      void input.restartWhileVisible(input.signal).catch(() => undefined);
     }
+    await visible;
   } finally {
     input.hide();
   }
@@ -494,7 +499,9 @@ export async function settleDonationPlayback(input: {
   } finally {
     ac.abort();
   }
-  await input.complete(result === "failed" ? "failed" : "succeeded");
+  await input.complete(
+    result === "failed" || result === "timeout" ? "failed" : "succeeded",
+  );
 }
 
 function waitAbort(signal?: AbortSignal): Promise<void> {
