@@ -576,9 +576,11 @@ export function OrdersEmpty({ onShop }: { onShop: () => void }) {
 function StreamOrderPreview({
   submissionId,
   skipRemote,
+  adminToken,
 }: {
   submissionId: string;
   skipRemote: boolean;
+  adminToken?: string;
 }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
@@ -587,7 +589,10 @@ function StreamOrderPreview({
     }
     let revoked: string | null = null;
     let cancelled = false;
-    void resolveAdminBearer()
+    const tokenPromise = adminToken
+      ? Promise.resolve(adminToken)
+      : resolveAdminBearer();
+    void tokenPromise
       .then((token) => loadAdminStreamGifBlob(token, submissionId))
       .then((url) => {
         if (cancelled) {
@@ -604,7 +609,7 @@ function StreamOrderPreview({
         URL.revokeObjectURL(revoked);
       }
     };
-  }, [submissionId, skipRemote]);
+  }, [submissionId, skipRemote, adminToken]);
   if (!src) {
     return <p className="muted">превью медиа</p>;
   }
@@ -629,6 +634,7 @@ export function AdminShopOrdersView({
   note,
   submitting = false,
   skipRemote = true,
+  adminToken,
   onStatusChange,
   onReasonChange,
   onProcess,
@@ -653,6 +659,7 @@ export function AdminShopOrdersView({
   note?: string;
   submitting?: boolean;
   skipRemote?: boolean;
+  adminToken?: string;
   onStatusChange: (status: ShopOrderStatus | "all") => void;
   onReasonChange: (value: string) => void;
   onProcess: (id: string) => void;
@@ -716,6 +723,7 @@ export function AdminShopOrdersView({
                 <StreamOrderPreview
                   submissionId={submissionId}
                   skipRemote={skipRemote}
+                  {...(adminToken ? { adminToken } : {})}
                 />
               ) : null}
               {isStreamMedia ? (

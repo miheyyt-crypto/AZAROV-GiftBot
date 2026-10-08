@@ -12,6 +12,7 @@ import {
 } from "./ShopView.js";
 import {
   clientShopValidationError,
+  friendlyAdminShopActionError,
   friendlyShopError,
   friendlyShopStatus,
   type ShopCatalogProduct,
@@ -566,6 +567,22 @@ test("client shop validation and friendly errors", () => {
     "Файл слишком тяжёлый или слишком большого разрешения",
   );
   assert.doesNotMatch(friendlyShopError("SQLSTATE_23505"), /SQL|23505/);
+  assert.equal(
+    friendlyAdminShopActionError({
+      status: 401,
+      code: "UNAUTHORIZED",
+      message: "session is missing, expired, or revoked",
+    }),
+    "Сессия администратора истекла. Обновите страницу.",
+  );
+  assert.equal(
+    friendlyAdminShopActionError({
+      status: 400,
+      code: "STREAM_MEDIA_NOT_READY",
+      message: "media is not ready",
+    }),
+    "Файл ещё готовится для показа. Подождите несколько секунд",
+  );
 });
 
 test("orders view shows friendly statuses and rejection reason", () => {
@@ -751,6 +768,16 @@ test("admin gif-stream orders send to moderation instead of fulfill", () => {
   assert.match(html, /#\/admin\/stream-gifs/);
   assert.doesNotMatch(html, />Выполнено</);
   assert.doesNotMatch(html, /666b71b2/);
+  const shopViewSrc = readFileSync(join(process.cwd(), "src/shop/ShopView.tsx"), "utf8");
+  assert.match(
+    shopViewSrc,
+    /const submissionId = item\.submittedPayload\.gifUploadId;/,
+  );
+  assert.match(
+    shopViewSrc,
+    /onClick=\{\(\) => onApproveStream\(submissionId\)\}/,
+  );
+  assert.doesNotMatch(shopViewSrc, /onApproveStream\(item\.id\)/);
 });
 
 test("shop product input focus uses local ring and does not blur the sheet", () => {

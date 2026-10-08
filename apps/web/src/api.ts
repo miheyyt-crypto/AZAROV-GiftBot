@@ -1541,6 +1541,9 @@ export async function loadAdminStreamGifBlob(
   const response = await apiFetch(`/admin/stream-gifs/${id}/media`, {
     headers: { authorization: `Bearer ${token}` },
   });
+  if (!response.ok) {
+    await readJson(response);
+  }
   const blob = await response.blob();
   return URL.createObjectURL(blob);
 }
@@ -1550,14 +1553,16 @@ export async function approveAdminStreamGif(
   id: string,
   idempotencyKey: string,
 ): Promise<void> {
-  await apiFetch(`/admin/stream-gifs/${id}/approve`, {
+  const response = await apiFetch(`/admin/stream-gifs/${id}/approve`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${token}`,
+      "content-type": "application/json",
       "idempotency-key": idempotencyKey,
     },
     body: JSON.stringify({}),
   });
+  await readJson(response);
 }
 
 export async function rejectAdminStreamGif(
@@ -1566,7 +1571,7 @@ export async function rejectAdminStreamGif(
   reason: string,
   idempotencyKey: string,
 ): Promise<void> {
-  await apiFetch(`/admin/stream-gifs/${id}/reject`, {
+  const response = await apiFetch(`/admin/stream-gifs/${id}/reject`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${token}`,
@@ -1575,6 +1580,7 @@ export async function rejectAdminStreamGif(
     },
     body: JSON.stringify({ reason }),
   });
+  await readJson(response);
 }
 
 export async function dismissPlayingStreamGif(token: string): Promise<void> {

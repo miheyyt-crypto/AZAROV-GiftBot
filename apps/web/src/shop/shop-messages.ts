@@ -130,9 +130,34 @@ export function friendlyShopError(code?: string, message?: string): string {
     case "SHOP_PRODUCT_UNAVAILABLE":
     case "SHOP_PRODUCT_NOT_FOUND":
       return "Товар недоступен";
+    case "UNAUTHORIZED":
+      return "Сессия администратора истекла. Обновите страницу.";
     default:
       return "Не удалось оформить заказ";
   }
+}
+
+export function friendlyAdminShopActionError(
+  error: unknown,
+  fallback = "Не удалось обновить заказ",
+): string {
+  if (!error || typeof error !== "object") {
+    return fallback;
+  }
+  const code =
+    "code" in error && typeof error.code === "string" ? error.code : undefined;
+  const message =
+    "message" in error && typeof error.message === "string"
+      ? error.message
+      : undefined;
+  if (code === "UNAUTHORIZED") {
+    return "Сессия администратора истекла. Обновите страницу.";
+  }
+  const mapped = friendlyShopError(code, message);
+  if (mapped !== "Не удалось оформить заказ") {
+    return mapped;
+  }
+  return usableShopServerMessage(message) ?? fallback;
 }
 
 export function friendlyShopStatus(status: ShopOrderStatus): string {

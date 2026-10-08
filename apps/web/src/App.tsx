@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { bootMiniApp, readDevRoleFromSearch, type DevLocalRole } from "./boot.js";
 import { DevBadge } from "./components/DevBadge.js";
-import { clearDevAdminToken, clearSession } from "./session.js";
+import { clearAdminSession, clearDevAdminToken, clearSession } from "./session.js";
 import { pingMiniAppPresence } from "./api.js";
 import { seedProfileFromBootstrap } from "./profile/profile-store.js";
 import { applyServerBalance } from "./hooks/useAzcBalance.js";
@@ -173,6 +173,7 @@ export function App() {
             if (!keepSession) {
               clearSession(window.sessionStorage);
               clearDevAdminToken(window.sessionStorage);
+              clearAdminSession(window.sessionStorage);
             }
             setScreen({ kind: "booting" });
             const devRole = import.meta.env.DEV

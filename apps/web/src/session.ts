@@ -2,6 +2,7 @@ import type { SessionCache } from "./types.js";
 
 export const SESSION_STORAGE_KEY = "giftbot.miniAppSession";
 export const DEV_ADMIN_TOKEN_KEY = "giftbot.devAdminToken";
+export const ADMIN_SESSION_KEY = "giftbot.adminSession";
 
 export type KeyValueStore = {
   getItem(key: string): string | null;
@@ -44,4 +45,30 @@ export function writeDevAdminToken(store: KeyValueStore, token: string): void {
 
 export function clearDevAdminToken(store: KeyValueStore): void {
   store.removeItem(DEV_ADMIN_TOKEN_KEY);
+}
+
+export function readAdminSession(
+  store: KeyValueStore,
+): SessionCache | undefined {
+  const raw = store.getItem(ADMIN_SESSION_KEY);
+  if (!raw) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(raw) as SessionCache;
+    if (typeof parsed.token === "string" && typeof parsed.expiresAt === "string") {
+      return parsed;
+    }
+  } catch {
+    store.removeItem(ADMIN_SESSION_KEY);
+  }
+  return undefined;
+}
+
+export function writeAdminSession(store: KeyValueStore, session: SessionCache): void {
+  store.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
+}
+
+export function clearAdminSession(store: KeyValueStore): void {
+  store.removeItem(ADMIN_SESSION_KEY);
 }

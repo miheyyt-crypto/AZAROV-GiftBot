@@ -17,10 +17,12 @@ function GifPreview({
   id,
   skipRemote,
   contentType,
+  adminToken,
 }: {
   id: string;
   skipRemote: boolean;
   contentType?: string;
+  adminToken?: string;
 }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
@@ -29,7 +31,10 @@ function GifPreview({
     }
     let revoked: string | null = null;
     let cancelled = false;
-    void resolveAdminBearer()
+    const tokenPromise = adminToken
+      ? Promise.resolve(adminToken)
+      : resolveAdminBearer();
+    void tokenPromise
       .then((token) => loadAdminStreamGifBlob(token, id))
       .then((url) => {
         if (cancelled) {
@@ -46,7 +51,7 @@ function GifPreview({
         URL.revokeObjectURL(revoked);
       }
     };
-  }, [id, skipRemote]);
+  }, [id, skipRemote, adminToken]);
   if (!src) {
     return <span className="muted">медиа</span>;
   }
@@ -85,6 +90,7 @@ export function AdminStreamGifsPage({
   isSuperAdmin?: boolean;
 }) {
   const [items, setItems] = useState<StreamGifAdminItem[]>([]);
+  const [adminToken, setAdminToken] = useState<string | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [dismissing, setDismissing] = useState(false);
@@ -101,6 +107,9 @@ export function AdminStreamGifsPage({
     let cancelled = false;
     void resolveAdminBearer()
       .then(async (token) => {
+        if (!cancelled) {
+          setAdminToken(token);
+        }
         await refresh(token);
       })
       .catch((err: unknown) => {
@@ -174,6 +183,7 @@ export function AdminStreamGifsPage({
                     <GifPreview
                       id={item.id}
                       skipRemote={skipRemote}
+                      {...(adminToken ? { adminToken } : {})}
                       {...(item.contentType ? { contentType: item.contentType } : {})}
                     />
                   </td>

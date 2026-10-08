@@ -11,7 +11,10 @@ import { resolveAdminBearer } from "../admin/resolve-admin-bearer.js";
 import { AdminLayout } from "../admin/AdminShell.js";
 import { createIdempotencyKey, keyForPost } from "../idempotency.js";
 import { AdminShopOrdersView } from "../shop/ShopView.js";
-import type { ShopOrderStatus } from "../shop/shop-messages.js";
+import {
+  friendlyAdminShopActionError,
+  type ShopOrderStatus,
+} from "../shop/shop-messages.js";
 
 export function AdminShopOrdersPage({
   skipRemote = false,
@@ -74,8 +77,8 @@ export function AdminShopOrdersPage({
       await action();
       setNote(success);
       await refresh(adminToken);
-    } catch {
-      setNote("Не удалось обновить заказ");
+    } catch (error) {
+      setNote(friendlyAdminShopActionError(error));
     } finally {
       setSubmitting(false);
     }
@@ -95,6 +98,7 @@ export function AdminShopOrdersPage({
         {...(note ? { note } : {})}
         submitting={submitting || skipRemote}
         skipRemote={skipRemote}
+        {...(adminToken ? { adminToken } : {})}
         onStatusChange={(next) => {
           setStatus(next);
         }}

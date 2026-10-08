@@ -48,6 +48,8 @@
     "src/admin/admin-promo-view.test.tsx",
     "src/admin/AdminStatusBadge.tsx",
     "src/admin/nav.ts",
+    "src/admin/resolve-admin-bearer.ts",
+    "src/admin/resolve-admin-bearer.test.ts",
     "src/admin/AdminShell.tsx",
     "src/admin/admin-shell.test.tsx",
     "src/admin/AdminBroadcastView.tsx",
