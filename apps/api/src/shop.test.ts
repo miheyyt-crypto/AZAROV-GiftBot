@@ -12,9 +12,18 @@ import {
   purchases,
   walletTransactions,
 } from "@giftbot/db/schema";
-import { apply, asBigInt, ensureShopCatalog } from "@giftbot/domain";
+import {
+  apply,
+  asBigInt,
+  ensureShopCatalog,
+  minimalTestJpeg,
+  STREAM_GIF_MAX_BYTES,
+} from "@giftbot/domain";
 import { eq } from "drizzle-orm";
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { createApiApp } from "./app.js";
 
@@ -722,4 +731,48 @@ test("bonus and custom-slot orders persist payload and appear in profile/admin",
     slotName: "Gates of Olympus",
   });
   await app.close();
+});
+
+test("gif-stream upload accepts 10 MiB and rejects one byte over", async () => {
+  const mini = await miniToken(96991);
+  const uploadDir = await mkdtemp(join(tmpdir(), "giftbot-shop-gif-"));
+  const app = createApiApp({ db, authPolicy: policy, uploadDir });
+  try {
+    const jpeg = minimalTestJpeg();
+    const exact = Buffer.concat([
+      jpeg,
+      Buffer.alloc(STREAM_GIF_MAX_BYTES - jpeg.byteLength),
+    ]);
+    const ok = await app.inject({
+      method: "POST",
+      url: "/shop/gif-uploads",
+      headers: {
+        authorization: `Bearer ${mini.token}`,
+        "content-type": "application/octet-stream",
+        "x-content-type": "image/jpeg",
+      },
+      payload: exact,
+    });
+    assert.equal(ok.statusCode, 200);
+    const body = ok.json() as { uploadId: string; playbackReady: boolean };
+    assert.equal(typeof body.uploadId, "string");
+    assert.equal(body.playbackReady, true);
+    const over = await app.inject({
+      method: "POST",
+      url: "/shop/gif-uploads",
+      headers: {
+        authorization: `Bearer ${mini.token}`,
+        "content-type": "application/octet-stream",
+      },
+      payload: Buffer.alloc(STREAM_GIF_MAX_BYTES + 1, 0xff),
+    });
+    assert.equal(over.statusCode, 400);
+    assert.equal(
+      (over.json() as { error: string }).error,
+      "STREAM_MEDIA_TOO_LARGE",
+    );
+  } finally {
+    await app.close();
+    await rm(uploadDir, { recursive: true, force: true });
+  }
 });

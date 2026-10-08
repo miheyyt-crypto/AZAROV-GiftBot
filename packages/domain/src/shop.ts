@@ -118,12 +118,13 @@ export const SHOP_CATALOG: readonly ShopCatalogProduct[] = [
   },
   {
     code: STREAM_GIF_SHOP_PRODUCT_CODE,
-    title: "GIF на стрим",
+    title: "Медиа на стрим",
     category: "donations",
     priceAzc: 1000n,
     fulfillmentType: "manual",
     requiredFields: ["gifUploadId"],
-    description: "GIF пройдёт модерацию и появится на стриме после одобрения.",
+    description:
+      "JPG, PNG, WebP, GIF, MP4, MOV, WebM. До 10 МБ. Показ 7 секунд после модерации.",
   },
   {
     code: "music",
@@ -805,14 +806,14 @@ export async function createShopOrder(
       title: autoAlert
         ? "Донат отправлен на стрим"
         : catalog.code === STREAM_GIF_SHOP_PRODUCT_CODE
-          ? "GIF на модерации"
+          ? "Медиа на модерации"
         : catalog.fulfillmentType === "instant"
           ? "Streak Freeze добавлен в инвентарь"
           : "Заказ создан",
       body: autoAlert
         ? "Сообщение появится на эфире автоматически"
         : catalog.code === STREAM_GIF_SHOP_PRODUCT_CODE
-          ? "GIF появится на стриме после одобрения администратором"
+          ? "Медиа появится на стриме после одобрения администратором"
         : catalog.fulfillmentType === "instant"
           ? "Streak Freeze добавлен в инвентарь"
           : `${catalog.title} — заявка отправлена`,

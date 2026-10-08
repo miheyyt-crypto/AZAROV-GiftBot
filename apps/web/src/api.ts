@@ -604,32 +604,47 @@ export type ShopOrderResult = {
   inventoryGranted?: { type: "streak_freeze"; quantity: number };
 };
 
+export type ShopGifUpload = {
+  uploadId: string;
+  width: number;
+  height: number;
+  frameCount: number;
+  contentType?: string;
+  durationMs?: number;
+  playbackReady?: boolean;
+  needsPrepare?: boolean;
+  prepareError?: string | null;
+};
+
 export async function uploadShopGif(
   token: string,
   file: File,
-): Promise<{ uploadId: string; width: number; height: number; frameCount: number }> {
-  const gifBase64 = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result ?? "");
-      const comma = result.indexOf(",");
-      resolve(comma >= 0 ? result.slice(comma + 1) : result);
-    };
-    reader.onerror = () => {
-      reject(new Error("gif read failed"));
-    };
-    reader.readAsDataURL(file);
-  });
-  const response = await apiFetch("/shop/gif-uploads", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      contentType: "image/gif",
-      gifBase64,
-    }),
+): Promise<ShopGifUpload> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60_000);
+  try {
+    const response = await fetch("/shop/gif-uploads", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/octet-stream",
+        "x-content-type": file.type || "application/octet-stream",
+      },
+      body: file,
+      signal: controller.signal,
+    });
+    return readJson(response);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function getShopGifUpload(
+  token: string,
+  uploadId: string,
+): Promise<ShopGifUpload> {
+  const response = await apiFetch(`/shop/gif-uploads/${uploadId}`, {
+    headers: { authorization: `Bearer ${token}` },
   });
   return readJson(response);
 }
@@ -1494,6 +1509,8 @@ export type StreamGifAdminItem = {
   width: number;
   height: number;
   frameCount: number;
+  durationMs?: number;
+  contentType?: string;
   createdAt: string;
   rejectionReason: string | null;
 };

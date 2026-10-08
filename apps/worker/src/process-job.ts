@@ -2,6 +2,8 @@ import { kickAccounts } from "@giftbot/db/schema";
 import {
   apply,
   applyKickInboundEvent,
+  applyPreparedStreamGif,
+  createStreamGifFileStorage,
   asBigInt,
   cleanupOldStreamAlertTtsFiles,
   decryptSecret,
@@ -99,6 +101,40 @@ function donationIdOf(payload: unknown): string {
     throw new Error("donation_id is required");
   }
   return id;
+}
+
+function submissionIdOf(payload: unknown): string {
+  const id = asRecord(payload)?.submission_id;
+  if (typeof id !== "string" || id.length === 0) {
+    throw new Error("submission_id is required");
+  }
+  return id;
+}
+
+async function processStreamMediaPrepare(
+  db: GiftbotDb,
+  job: ClaimedJob,
+  deps: WorkerJobDeps,
+): Promise<void> {
+  const submissionId = submissionIdOf(job.payload);
+  const uploadDir = deps.uploadDir;
+  if (!uploadDir) {
+    throw new Error("upload storage is not configured");
+  }
+  await withOneTtsAtATime(async () => {
+    try {
+      await applyPreparedStreamGif(db, createStreamGifFileStorage(uploadDir), {
+        submissionId,
+        ...(deps.ffmpegBin ? { ffmpegBin: deps.ffmpegBin } : {}),
+        ...(deps.ffprobeBin ? { ffprobeBin: deps.ffprobeBin } : {}),
+      });
+    } catch (error) {
+      deps.logger?.warn("stream media prepare failed", {
+        submission_id: submissionId,
+        error: error instanceof Error ? error.message : "unknown",
+      });
+    }
+  });
 }
 
 async function fileExists(path: string): Promise<boolean> {
@@ -280,6 +316,9 @@ export type WorkerJobDeps = {
   sileroSampleRate?: number;
   sileroThreads?: number;
   synthesizeTts?: StreamAlertTtsSynthesizer;
+  uploadDir?: string;
+  ffmpegBin?: string;
+  ffprobeBin?: string;
 };
 
 async function processKickInbound(
@@ -482,6 +521,10 @@ export async function executeWorkerJob(
   }
   if (job.type === JOB_TYPES.streamAlertSynthesizeTts) {
     await processStreamAlertTts(db, job, deps);
+    return;
+  }
+  if (job.type === JOB_TYPES.streamMediaPrepare) {
+    await processStreamMediaPrepare(db, job, deps);
     return;
   }
 

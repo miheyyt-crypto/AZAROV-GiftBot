@@ -6,6 +6,7 @@ import {
   loadReferralCaseCatalog,
   openPaidCase,
   openReferralCase,
+  getShopGifUpload,
   uploadShopGif,
 } from "../api.js";
 import { navigate } from "../app/routes.js";
@@ -216,11 +217,37 @@ export function ShopPage({
       }
       if (selected.code === "gif-stream") {
         if (!gifFile) {
-          setNote("Загрузите GIF");
+          setNote("Загрузите фото, GIF или видео");
           setSubmitting(false);
           return;
         }
-        const uploaded = await uploadShopGif(token, gifFile);
+        if (gifFile.size > 10 * 1024 * 1024) {
+          setNote("Файл больше 10 МБ");
+          setSubmitting(false);
+          return;
+        }
+        let uploaded = await uploadShopGif(token, gifFile);
+        const deadline = Date.now() + 30_000;
+        while (!uploaded.playbackReady) {
+          if (uploaded.prepareError) {
+            throw new ApiRequestError(
+              400,
+              uploaded.prepareError,
+              "STREAM_MEDIA_CODEC_UNSUPPORTED",
+            );
+          }
+          if (Date.now() > deadline) {
+            throw new ApiRequestError(
+              409,
+              "media is still being prepared",
+              "STREAM_MEDIA_NOT_READY",
+            );
+          }
+          await new Promise((resolve) => {
+            window.setTimeout(resolve, 400);
+          });
+          uploaded = await getShopGifUpload(token, uploaded.uploadId);
+        }
         submittedData.gifUploadId = uploaded.uploadId;
       }
       const result = await createShopOrder(
@@ -250,6 +277,7 @@ export function ShopPage({
       setNote(
         friendlyShopError(
           error instanceof ApiRequestError ? error.code : undefined,
+          error instanceof ApiRequestError ? error.message : undefined,
         ),
       );
       await refreshBalanceIfAmbiguous(token, error);
@@ -388,7 +416,13 @@ export function ShopPage({
             {...(selected ? { selected } : {})}
             fields={fields}
             gifPreviewUrl={gifPreviewUrl}
+            gifPreviewKind={gifFile?.type.startsWith("video/") ? "video" : "image"}
             onGifFile={(file) => {
+              if (file && file.size > 10 * 1024 * 1024) {
+                setNote("Файл больше 10 МБ");
+                setGifFile(null);
+                return;
+              }
               setGifFile(file);
               setFields((current) => ({
                 ...current,

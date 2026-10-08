@@ -1,26 +1,36 @@
-import { StreamGifInvalidFileError } from "./errors.js";
+import {
+  StreamMediaCorruptError,
+  StreamMediaLimitError,
+  StreamMediaTooLargeError,
+  StreamMediaUnsupportedFormatError,
+} from "./errors.js";
 
-export const STREAM_GIF_MAX_BYTES = 4 * 1024 * 1024;
-/** JSON+base64 of a 4 MiB GIF is ~5.4 MiB; 8 MiB covers multipart too. */
-export const STREAM_GIF_UPLOAD_BODY_MAX = 8 * 1024 * 1024;
-export const STREAM_GIF_MAX_WIDTH = 1280;
-export const STREAM_GIF_MAX_HEIGHT = 1280;
+export const STREAM_GIF_MAX_BYTES = 10 * 1024 * 1024;
+/** 10 MiB file + multipart/binary headers. */
+export const STREAM_GIF_UPLOAD_BODY_MAX = 12 * 1024 * 1024;
+export const STREAM_GIF_DISPLAY_MAX = 1920;
+export const STREAM_GIF_SOURCE_MAX = 8192;
+export const STREAM_GIF_MAX_WIDTH = STREAM_GIF_SOURCE_MAX;
+export const STREAM_GIF_MAX_HEIGHT = STREAM_GIF_SOURCE_MAX;
 export const STREAM_GIF_MAX_FRAMES = 240;
 export const STREAM_GIF_MAX_PIXELS_PER_FRAME =
-  STREAM_GIF_MAX_WIDTH * STREAM_GIF_MAX_HEIGHT;
+  STREAM_GIF_DISPLAY_MAX * STREAM_GIF_DISPLAY_MAX;
 /** Caps expanded LZW output across all frames (VPS CPU/RAM). */
 export const STREAM_GIF_MAX_DECODED_PIXELS = 16_777_216;
 export const STREAM_GIF_LZW_MAX_MS = 400;
 export const STREAM_GIF_STAGING_TTL_MS = 60 * 60 * 1000;
-export const STREAM_GIF_VISIBLE_MS = 15_000;
+export const STREAM_GIF_VISIBLE_MS = 7_000;
 export const STREAM_GIF_PRELOAD_MS = 8_000;
-export const STREAM_GIF_MESSAGE = "GIF";
+export const STREAM_GIF_MESSAGE = "Медиа";
 export const STREAM_GIF_SHOP_PRODUCT_CODE = "gif-stream";
 
 export type InspectedGif = {
   width: number;
   height: number;
   frameCount: number;
+  /** 0 = infinite, 1 = play once, null = unspecified (treat as infinite). */
+  loopCount: number | null;
+  needsDownscale: boolean;
 };
 
 export type InspectGifLimits = {
@@ -44,7 +54,7 @@ function skipSubBlocks(bytes: Buffer, offset: number): number {
     }
     i += size;
   }
-  throw new StreamGifInvalidFileError("truncated GIF sub-blocks");
+  throw new StreamMediaCorruptError("Не удалось прочитать файл");
 }
 
 function decodeLzw(
@@ -60,10 +70,10 @@ function decodeLzw(
   },
 ): number {
   if (minCodeSize < 2 || minCodeSize > 8) {
-    throw new StreamGifInvalidFileError("invalid GIF LZW code size");
+    throw new StreamMediaCorruptError("Не удалось прочитать файл");
   }
   if (data.length === 0) {
-    throw new StreamGifInvalidFileError("empty GIF image data");
+    throw new StreamMediaCorruptError("Не удалось прочитать файл");
   }
   const clear = 1 << minCodeSize;
   const eoi = clear + 1;
@@ -77,7 +87,7 @@ function decodeLzw(
   const bitLength = data.length * 8;
   const readCode = (): number => {
     if (bitPos + codeSize > bitLength) {
-      throw new StreamGifInvalidFileError("truncated GIF LZW stream");
+      throw new StreamMediaCorruptError("Не удалось прочитать файл");
     }
     let code = 0;
     for (let i = 0; i < codeSize; i += 1) {
@@ -94,16 +104,16 @@ function decodeLzw(
   while (bitPos < bitLength) {
     steps += 1;
     if ((steps & 1023) === 0 && limits.now() - limits.startedMs > limits.lzwMaxMs) {
-      throw new StreamGifInvalidFileError("GIF decode exceeded time limit");
+      throw new StreamMediaLimitError("Обработка GIF превысила лимит времени");
     }
     const code = readCode();
     if (code === eoi) {
       if (decoded === 0) {
-        throw new StreamGifInvalidFileError("GIF image produced no pixels");
+        throw new StreamMediaCorruptError("Не удалось прочитать файл");
       }
       limits.totalDecoded.value += decoded;
       if (limits.totalDecoded.value > limits.maxDecodedPixels) {
-        throw new StreamGifInvalidFileError("GIF decoded pixel budget exceeded");
+        throw new StreamMediaLimitError("GIF слишком тяжёлый для обработки");
       }
       return decoded;
     }
@@ -119,16 +129,16 @@ function decodeLzw(
     } else if (code === nextCode && prevLen > 0) {
       entryLen = prevLen + 1;
     } else {
-      throw new StreamGifInvalidFileError("GIF LZW code is not decodable");
+      throw new StreamMediaCorruptError("Не удалось прочитать файл");
     }
     decoded += entryLen;
     if (decoded > limits.maxPerFrame) {
-      throw new StreamGifInvalidFileError("GIF frame expanded past pixel limit");
+      throw new StreamMediaLimitError("GIF слишком тяжёлый для обработки");
     }
     if (prevLen > 0 && nextCode < 4096) {
       const nextLen = prevLen + 1;
       if (nextLen > 0xffff) {
-        throw new StreamGifInvalidFileError("GIF LZW dictionary overflow");
+        throw new StreamMediaCorruptError("Не удалось прочитать файл");
       }
       lengths[nextCode] = nextLen;
       nextCode += 1;
@@ -139,11 +149,11 @@ function decodeLzw(
     prevLen = entryLen;
   }
   if (decoded === 0) {
-    throw new StreamGifInvalidFileError("GIF image produced no pixels");
+    throw new StreamMediaCorruptError("Не удалось прочитать файл");
   }
   limits.totalDecoded.value += decoded;
   if (limits.totalDecoded.value > limits.maxDecodedPixels) {
-    throw new StreamGifInvalidFileError("GIF decoded pixel budget exceeded");
+    throw new StreamMediaLimitError("GIF слишком тяжёлый для обработки");
   }
   return decoded;
 }
@@ -151,7 +161,7 @@ function decodeLzw(
 function collectImageData(bytes: Buffer, offset: number): { data: Buffer; next: number } {
   const minCodeSize = bytes[offset];
   if (minCodeSize === undefined) {
-    throw new StreamGifInvalidFileError("truncated GIF image");
+    throw new StreamMediaCorruptError("Не удалось прочитать файл");
   }
   let i = offset + 1;
   const chunks: Buffer[] = [];
@@ -162,12 +172,12 @@ function collectImageData(bytes: Buffer, offset: number): { data: Buffer; next: 
       return { data: Buffer.concat(chunks), next: i };
     }
     if (i + size > bytes.length) {
-      throw new StreamGifInvalidFileError("truncated GIF image data");
+      throw new StreamMediaCorruptError("Не удалось прочитать файл");
     }
     chunks.push(bytes.subarray(i, i + size));
     i += size;
   }
-  throw new StreamGifInvalidFileError("truncated GIF image data");
+  throw new StreamMediaCorruptError("Не удалось прочитать файл");
 }
 
 export function inspectGif(bytes: Buffer, limits: InspectGifLimits = {}): InspectedGif {
@@ -177,22 +187,34 @@ export function inspectGif(bytes: Buffer, limits: InspectGifLimits = {}): Inspec
   const maxDecodedPixels = limits.maxDecodedPixels ?? STREAM_GIF_MAX_DECODED_PIXELS;
   const maxPixelsPerFrame = limits.maxPixelsPerFrame ?? STREAM_GIF_MAX_PIXELS_PER_FRAME;
   if (bytes.byteLength <= 0 || bytes.byteLength > STREAM_GIF_MAX_BYTES) {
-    throw new StreamGifInvalidFileError("GIF exceeds size limit");
+    throw new StreamMediaTooLargeError();
+  }
+  const header = bytes.length >= 6 ? bytes.subarray(0, 6).toString("ascii") : "";
+  if (header !== "GIF87a" && header !== "GIF89a") {
+    throw new StreamMediaUnsupportedFormatError();
   }
   if (bytes.length < 13) {
-    throw new StreamGifInvalidFileError("file is not a GIF");
-  }
-  const header = bytes.subarray(0, 6).toString("ascii");
-  if (header !== "GIF87a" && header !== "GIF89a") {
-    throw new StreamGifInvalidFileError("file is not a GIF");
+    throw new StreamMediaCorruptError("Не удалось прочитать файл");
   }
   const width = readU16(bytes, 6);
   const height = readU16(bytes, 8);
   if (width < 1 || height < 1) {
-    throw new StreamGifInvalidFileError("GIF has invalid dimensions");
+    throw new StreamMediaCorruptError("Не удалось прочитать файл");
   }
-  if (width > STREAM_GIF_MAX_WIDTH || height > STREAM_GIF_MAX_HEIGHT) {
-    throw new StreamGifInvalidFileError("GIF resolution is too large");
+  if (width > STREAM_GIF_SOURCE_MAX || height > STREAM_GIF_SOURCE_MAX) {
+    throw new StreamMediaLimitError("Разрешение больше 8192×8192");
+  }
+  const needsDownscale =
+    width > STREAM_GIF_DISPLAY_MAX || height > STREAM_GIF_DISPLAY_MAX;
+  let loopCount: number | null = null;
+  if (needsDownscale) {
+    return {
+      width,
+      height,
+      frameCount: 1,
+      loopCount,
+      needsDownscale: true,
+    };
   }
   const packed = bytes[10]!;
   let offset = 13;
@@ -204,35 +226,42 @@ export function inspectGif(bytes: Buffer, limits: InspectGifLimits = {}): Inspec
   const totalDecoded = { value: 0 };
   while (offset < bytes.length) {
     if (now() - startedMs > lzwMaxMs) {
-      throw new StreamGifInvalidFileError("GIF decode exceeded time limit");
+      throw new StreamMediaLimitError("Обработка GIF превысила лимит времени");
     }
     const marker = bytes[offset]!;
     if (marker === 0x3b) {
       break;
     }
     if (marker === 0x21) {
+      const label = bytes[offset + 1];
+      if (label === 0xff && bytes.length >= offset + 16) {
+        const app = bytes.subarray(offset + 3, offset + 14).toString("ascii");
+        if (app === "NETSCAPE2.0" && bytes[offset + 14] === 0x03 && bytes[offset + 15] === 0x01) {
+          loopCount = readU16(bytes, offset + 16);
+        }
+      }
       offset = skipSubBlocks(bytes, offset + 2);
       continue;
     }
     if (marker !== 0x2c) {
-      throw new StreamGifInvalidFileError("GIF contains an unknown block");
+      throw new StreamMediaCorruptError("Не удалось прочитать файл");
     }
     if (offset + 10 > bytes.length) {
-      throw new StreamGifInvalidFileError("truncated GIF frame");
+      throw new StreamMediaCorruptError("Не удалось прочитать файл");
     }
     const frameWidth = readU16(bytes, offset + 4);
     const frameHeight = readU16(bytes, offset + 6);
     if (
       frameWidth < 1 ||
       frameHeight < 1 ||
-      frameWidth > STREAM_GIF_MAX_WIDTH ||
-      frameHeight > STREAM_GIF_MAX_HEIGHT
+      frameWidth > STREAM_GIF_DISPLAY_MAX ||
+      frameHeight > STREAM_GIF_DISPLAY_MAX
     ) {
-      throw new StreamGifInvalidFileError("GIF frame resolution is too large");
+      throw new StreamMediaLimitError("Разрешение больше 1920×1920");
     }
     const framePixels = frameWidth * frameHeight;
     if (framePixels > maxPixelsPerFrame) {
-      throw new StreamGifInvalidFileError("GIF frame expanded past pixel limit");
+      throw new StreamMediaLimitError("GIF слишком тяжёлый для обработки");
     }
     const localPacked = bytes[offset + 9]!;
     offset += 10;
@@ -252,13 +281,13 @@ export function inspectGif(bytes: Buffer, limits: InspectGifLimits = {}): Inspec
     offset = image.next;
     frames += 1;
     if (frames > STREAM_GIF_MAX_FRAMES) {
-      throw new StreamGifInvalidFileError("GIF has too many frames");
+      throw new StreamMediaLimitError("GIF слишком тяжёлый для обработки");
     }
   }
   if (frames < 1) {
-    throw new StreamGifInvalidFileError("GIF has no frames");
+    throw new StreamMediaCorruptError("Не удалось прочитать файл");
   }
-  return { width, height, frameCount: frames };
+  return { width, height, frameCount: frames, loopCount, needsDownscale: false };
 }
 
 /** 1×1 GIF89a used in isolated tests. */

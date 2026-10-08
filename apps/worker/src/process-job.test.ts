@@ -4,12 +4,14 @@ import {
   jobs,
   kickAccounts,
   streamDonations,
+  streamGifSubmissions,
   telegramAccounts,
   walletTransactions,
   wallets,
 } from "@giftbot/db/schema";
 import {
   apply,
+  createStreamGifFileStorage,
   createShopOrder,
   decryptSecret,
   encodePcmWav,
@@ -20,9 +22,11 @@ import {
   playCatalogGame,
   provisionUser,
   readGameRound,
+  stageStreamGifUpload,
   wavDurationMs,
+  minimalTestJpeg,
 } from "@giftbot/domain";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -889,6 +893,45 @@ test("first tts timeout fails open; second donation still synthesizes", async ()
   assert.equal(afterFirst?.message, "первое");
   assert.equal(afterSecond?.ttsStatus, "ready");
   assert.equal(afterSecond?.ttsVoice, "ru_roman");
+});
+
+test("stream_media.prepare shares the TTS mutex and does not retry codec failures", async () => {
+  const user = await provisionUser(harness.db);
+  const uploadDir = await mkdtemp(join(tmpdir(), "giftbot-worker-media-"));
+  try {
+    const storage = createStreamGifFileStorage(uploadDir);
+    const staged = await stageStreamGifUpload(harness.db, storage, {
+      userId: user.userId,
+      bytes: minimalTestJpeg(),
+    });
+    await harness.db
+      .update(streamGifSubmissions)
+      .set({ playbackReady: false })
+      .where(eq(streamGifSubmissions.id, staged.uploadId));
+    const enqueued = await enqueueJob(harness.db, {
+      type: JOB_TYPES.streamMediaPrepare,
+      idempotencyKey: `stream_media.prepare:${staged.uploadId}`,
+      payload: { submission_id: staged.uploadId },
+    });
+    await processWorkerJob(harness.db, await loadJob(enqueued.jobId), {
+      uploadDir,
+      ffmpegBin: join(uploadDir, "missing-ffmpeg"),
+    });
+    const row = (
+      await harness.db
+        .select()
+        .from(streamGifSubmissions)
+        .where(eq(streamGifSubmissions.id, staged.uploadId))
+    )[0];
+    assert.equal(row?.playbackReady, false);
+    assert.ok(row?.prepareError);
+    const jobRow = (
+      await harness.db.select().from(jobs).where(eq(jobs.id, enqueued.jobId))
+    )[0];
+    assert.equal(jobRow?.status, "completed");
+  } finally {
+    await rm(uploadDir, { recursive: true, force: true });
+  }
 });
 
 test("referral_contest.finalize job requires contest_id", async () => {

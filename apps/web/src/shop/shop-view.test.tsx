@@ -548,6 +548,15 @@ test("client shop validation and friendly errors", () => {
     "Введите название слота",
   );
   assert.equal(friendlyShopError("SHOP_INVALID_SLOT_NAME"), "Введите название слота");
+  assert.equal(friendlyShopError("STREAM_MEDIA_TOO_LARGE"), "Файл больше 10 МБ");
+  assert.equal(
+    friendlyShopError("STREAM_MEDIA_NOT_READY"),
+    "Файл ещё готовится для показа. Подождите несколько секунд",
+  );
+  assert.equal(
+    friendlyShopError("STREAM_MEDIA_UNSUPPORTED_FORMAT"),
+    "Формат не поддерживается. Нужны JPG, PNG, WebP, GIF, MP4, MOV или WebM",
+  );
   assert.doesNotMatch(friendlyShopError("SQLSTATE_23505"), /SQL|23505/);
 });
 

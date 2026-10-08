@@ -88,6 +88,7 @@ export function ShopView({
   onClose,
   onFieldChange,
   gifPreviewUrl,
+  gifPreviewKind = "image",
   onGifFile,
   onBuy,
   onOrders,
@@ -131,6 +132,7 @@ export function ShopView({
   onClose: () => void;
   onFieldChange: (field: string, value: string) => void;
   gifPreviewUrl?: string | null;
+  gifPreviewKind?: "image" | "video";
   onGifFile?: (file: File | null) => void;
   onBuy: () => void;
   onOrders: () => void;
@@ -369,7 +371,7 @@ export function ShopView({
                 {selected.code === "donat"
                   ? "Сообщение появится на стриме автоматически."
                   : selected.code === "gif-stream"
-                    ? "GIF появится на стриме после одобрения модератором."
+                    ? "JPG, PNG, WebP, GIF, MP4, MOV, WebM · до 10 МБ · показ 7 секунд после модерации."
                   : selected.fulfillmentType === "instant"
                     ? "Награда сразу попадёт в инвентарь."
                     : "Заявку обработает администратор — статус увидишь в «Моих заказах»."}
@@ -380,6 +382,7 @@ export function ShopView({
                 <ShopGifField
                   key={field}
                   previewUrl={gifPreviewUrl ?? null}
+                  previewKind={gifPreviewKind}
                   disabled={submitting}
                   onFile={(file) => onGifFile?.(file)}
                 />
@@ -424,21 +427,30 @@ export function ShopView({
 
 function ShopGifField({
   previewUrl,
+  previewKind,
   disabled,
   onFile,
 }: {
   previewUrl: string | null;
+  previewKind: "image" | "video";
   disabled: boolean;
   onFile: (file: File | null) => void;
 }) {
+  const previewStyle = {
+    marginTop: "0.6rem",
+    maxWidth: "100%",
+    maxHeight: "180px",
+    objectFit: "contain" as const,
+    background: "transparent",
+  };
   return (
     <label className="shop-field">
       <span className="shop-field__row">
-        <span>GIF</span>
+        <span>Файл</span>
       </span>
       <input
         type="file"
-        accept="image/gif,.gif"
+        accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm,.jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.webm"
         disabled={disabled}
         onChange={(event) => {
           const file = event.target.files?.[0] ?? null;
@@ -446,19 +458,16 @@ function ShopGifField({
         }}
       />
       {previewUrl ? (
-        <img
-          src={previewUrl}
-          alt="Превью GIF"
-          style={{
-            marginTop: "0.6rem",
-            maxWidth: "100%",
-            maxHeight: "180px",
-            objectFit: "contain",
-            background: "transparent",
-          }}
-        />
+        previewKind === "video" ? (
+          <video src={previewUrl} muted playsInline autoPlay loop style={previewStyle} />
+        ) : (
+          <img src={previewUrl} alt="Превью" style={previewStyle} />
+        )
       ) : (
-        <p className="muted">Выбери GIF, чтобы увидеть превью до покупки.</p>
+        <p className="muted">
+          Превью до покупки. JPG, PNG, WebP, GIF, MP4, MOV, WebM · до 10 МБ · на
+          стриме 7 секунд.
+        </p>
       )}
     </label>
   );

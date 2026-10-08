@@ -47,6 +47,8 @@ export * from "./referral-contest.js";
 export * from "./stream-donation.js";
 export * from "./stream-donation-audio.js";
 export * from "./gif-inspect.js";
+export * from "./media-inspect.js";
+export * from "./stream-media-ffmpeg.js";
 export * from "./stream-gif-storage.js";
 export * from "./stream-gif.js";
 export * from "./stream-alert-tts-text.js";

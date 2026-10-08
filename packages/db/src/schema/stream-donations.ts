@@ -1,5 +1,6 @@
 import {
   bigint,
+  boolean,
   index,
   integer,
   pgTable,
@@ -50,6 +51,8 @@ export const streamDonations = pgTable(
     mediaWidth: integer("media_width"),
     mediaHeight: integer("media_height"),
     mediaFrameCount: integer("media_frame_count"),
+    mediaContentType: text("media_content_type"),
+    mediaDurationMs: integer("media_duration_ms"),
     playbackOutcome: text("playback_outcome"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -97,6 +100,9 @@ export const streamGifSubmissions = pgTable(
     width: integer("width").notNull(),
     height: integer("height").notNull(),
     frameCount: integer("frame_count").notNull(),
+    durationMs: integer("duration_ms").notNull().default(0),
+    playbackReady: boolean("playback_ready").notNull().default(true),
+    prepareError: text("prepare_error"),
     rejectionReason: text("rejection_reason"),
     moderatedByAdminId: uuid("moderated_by_admin_id"),
     moderatedAt: timestamp("moderated_at", { withTimezone: true }),

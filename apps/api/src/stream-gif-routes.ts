@@ -106,7 +106,7 @@ export function registerStreamGifRoutes(
       const key = row.acceptedStorageKey ?? row.stagingStorageKey;
       const absolutePath = storage.resolvePath(key);
       await access(absolutePath);
-      reply.header("content-type", "image/gif");
+      reply.header("content-type", row.contentType);
       reply.header("cache-control", "private, no-store");
       return reply.send(createReadStream(absolutePath));
     } catch (error) {

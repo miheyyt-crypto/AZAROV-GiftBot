@@ -48,7 +48,8 @@ body,
   filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45));
 }
 
-#alert-gif {
+#alert-gif,
+#alert-media {
   display: none;
   max-width: min(720px, 70vw);
   max-height: min(420px, 48vh);
@@ -66,7 +67,11 @@ body,
   display: none;
 }
 
-#alert[data-kind="gif"] #alert-gif {
+#alert[data-kind="gif"][data-media="image"] #alert-gif {
+  display: block;
+}
+
+#alert[data-kind="gif"][data-media="video"] #alert-media {
   display: block;
 }
 

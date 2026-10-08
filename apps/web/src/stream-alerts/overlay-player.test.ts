@@ -713,11 +713,11 @@ test("ding failure still continues the queue without speech wait hang", async ()
   assert.deepEqual(events, ["show"]);
 });
 
-test("GIF overlay waits 15s from appearance and skipping load is not a successful show", async () => {
+test("media overlay waits 7s from appearance and skipping load is not a successful show", async () => {
   const events: string[] = [];
   const shown = await playStreamGif({
     url: "/gif/ok",
-    visibleMs: 15_000,
+    visibleMs: 7_000,
     preloadMs: 50,
     sleep: async (ms) => {
       events.push(`sleep:${ms}`);
@@ -735,7 +735,7 @@ test("GIF overlay waits 15s from appearance and skipping load is not a successfu
   });
   assert.equal(shown, "shown");
   assert.ok(events.includes("show"));
-  assert.ok(events.includes("sleep:15000"));
+  assert.ok(events.includes("sleep:7000"));
   const failed = await playStreamGif({
     url: "/gif/bad",
     sleep: async () => undefined,
@@ -748,6 +748,32 @@ test("GIF overlay waits 15s from appearance and skipping load is not a successfu
   });
   assert.equal(failed, "failed");
   assert.equal(events.includes("must-not-show"), false);
+});
+
+test("playStreamGif can restart a finite image until the 7s window ends", async () => {
+  let restarts = 0;
+  const shown = await playStreamGif({
+    url: "/gif/once",
+    visibleMs: 40,
+    preloadMs: 10,
+    sleep: async (ms) => {
+      if (ms > 0) {
+        await new Promise((resolve) => {
+          setTimeout(resolve, Math.min(ms, 5));
+        });
+      }
+    },
+    heartbeat: () => undefined,
+    loadImage: async () => ({ ok: true, width: 8, height: 8 }),
+    show: () => undefined,
+    hide: () => undefined,
+    restartWhileVisible: async () => {
+      restarts += 1;
+      await new Promise(() => undefined);
+    },
+  });
+  assert.equal(shown, "shown");
+  assert.equal(restarts, 1);
 });
 
 test("settleDonationPlayback marks load failure without blocking the next complete", async () => {

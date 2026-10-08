@@ -19,6 +19,7 @@ process.stdout.write(
     gameSettleOwner: ownerForJobType(JOB_TYPES.gameSettleAsync),
     contestFinalizeOwner: ownerForJobType(JOB_TYPES.referralContestFinalize),
     streamAlertTtsOwner: ownerForJobType(JOB_TYPES.streamAlertSynthesizeTts),
+    streamMediaPrepareOwner: ownerForJobType(JOB_TYPES.streamMediaPrepare),
     reconcileSweepKey: reconcileSweepIdempotencyKey(new Date(0)),
   })}\n`,
 );

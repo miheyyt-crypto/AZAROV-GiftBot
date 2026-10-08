@@ -13,7 +13,7 @@ export const ADMIN_NAV: Array<{
   { href: "#/admin/promo-codes", label: "Промокоды", route: "admin-promo-codes" },
   { href: "#/admin/broadcast", label: "Рассылка", route: "admin-broadcast" },
   { href: "#/admin/donations", label: "Донаты", route: "admin-donations" },
-  { href: "#/admin/stream-gifs", label: "GIF на стрим", route: "admin-stream-gifs" },
+  { href: "#/admin/stream-gifs", label: "Медиа на стрим", route: "admin-stream-gifs" },
 ];
 
 export function isAdminRouteName(name: AppRoute["name"]): boolean {

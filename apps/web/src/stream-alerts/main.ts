@@ -27,6 +27,7 @@ const sessionId = overlaySessionId(window.sessionStorage);
 const root = document.getElementById("alert");
 const icon = document.getElementById("alert-icon") as HTMLImageElement | null;
 const gifEl = document.getElementById("alert-gif") as HTMLImageElement | null;
+const mediaEl = document.getElementById("alert-media") as HTMLVideoElement | null;
 const nameEl = document.getElementById("alert-name");
 const messageEl = document.getElementById("alert-message");
 let currentPlayingId: string | null = null;
@@ -238,6 +239,10 @@ function readClaimedDonation(raw: unknown): OverlayPlaybackDonation | null {
     ttsDurationMs:
       typeof row.ttsDurationMs === "number" ? row.ttsDurationMs : null,
     ...(row.kind === "gif" ? { kind: "gif" as const } : { kind: "donation" as const }),
+    mediaContentType:
+      typeof row.mediaContentType === "string" ? row.mediaContentType : null,
+    mediaDurationMs:
+      typeof row.mediaDurationMs === "number" ? row.mediaDurationMs : null,
   };
 }
 
@@ -265,7 +270,11 @@ function loadGifImage(
   signal?: AbortSignal,
 ): Promise<{ ok: boolean; width: number; height: number }> {
   return new Promise((resolve) => {
-    const image = new Image();
+    if (!gifEl) {
+      resolve({ ok: false, width: 0, height: 0 });
+      return;
+    }
+    const image = gifEl;
     let done = false;
     const finish = (ok: boolean): void => {
       if (done) {
@@ -290,7 +299,7 @@ function loadGifImage(
       signal.addEventListener(
         "abort",
         () => {
-          image.src = "";
+          image.removeAttribute("src");
           finish(false);
         },
         { once: true },
@@ -300,15 +309,120 @@ function loadGifImage(
   });
 }
 
+function loadOverlayVideo(
+  url: string,
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; width: number; height: number }> {
+  return new Promise((resolve) => {
+    if (!mediaEl) {
+      resolve({ ok: false, width: 0, height: 0 });
+      return;
+    }
+    const video = mediaEl;
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    let done = false;
+    const finish = (ok: boolean): void => {
+      if (done) {
+        return;
+      }
+      done = true;
+      video.onloadeddata = null;
+      video.onerror = null;
+      resolve({
+        ok,
+        width: video.videoWidth,
+        height: video.videoHeight,
+      });
+    };
+    video.onloadeddata = () => {
+      finish(video.videoWidth > 0 && video.videoHeight > 0);
+    };
+    video.onerror = () => {
+      finish(false);
+    };
+    if (signal) {
+      signal.addEventListener(
+        "abort",
+        () => {
+          video.removeAttribute("src");
+          video.load();
+          finish(false);
+        },
+        { once: true },
+      );
+    }
+    video.src = url;
+  });
+}
+
+async function restartFiniteImage(
+  el: HTMLImageElement,
+  url: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const ImageDecoderCtor = (
+    globalThis as unknown as {
+      ImageDecoder?: new (init: { data: BufferSource; type: string }) => {
+        completed: Promise<void>;
+        tracks: {
+          selectedTrack: {
+            frameCount: number;
+            repetitionCount: number;
+          } | null;
+        };
+        decode: (opts: { frameIndex: number }) => Promise<{
+          image: { duration: number; close: () => void };
+        }>;
+      };
+    }
+  ).ImageDecoder;
+  if (!ImageDecoderCtor || !signal) {
+    return new Promise(() => undefined);
+  }
+  try {
+    const response = await fetch(url, { signal });
+    const data = await response.arrayBuffer();
+    const type = el.src.toLowerCase().includes(".webp")
+      ? "image/webp"
+      : "image/gif";
+    const decoder = new ImageDecoderCtor({ data, type });
+    await decoder.completed;
+    const track = decoder.tracks.selectedTrack;
+    if (!track || track.repetitionCount < 0 || track.repetitionCount > 0) {
+      return new Promise(() => undefined);
+    }
+    while (!signal.aborted) {
+      el.src = url;
+      let totalUs = 0;
+      for (let i = 0; i < track.frameCount; i += 1) {
+        const frame = await decoder.decode({ frameIndex: i });
+        totalUs += frame.image.duration;
+        frame.image.close();
+      }
+      await sleep(Math.max(80, Math.round(totalUs / 1000)));
+    }
+  } catch {
+    return;
+  }
+}
+
+function isOverlayVideo(type: string | null | undefined): boolean {
+  return typeof type === "string" && type.startsWith("video/");
+}
+
 async function showGif(
   donation: OverlayPlaybackDonation,
   signal: AbortSignal,
 ): Promise<"shown" | "failed"> {
-  if (!root || !gifEl) {
+  if (!root || !gifEl || !mediaEl) {
     return "failed";
   }
+  const url = overlayUrl(`/stream-alerts/gif/${donation.id}`);
+  const video = isOverlayVideo(donation.mediaContentType);
   return playStreamGif({
-    url: overlayUrl(`/stream-alerts/gif/${donation.id}`),
+    url,
     signal,
     sleep,
     heartbeat: () => {
@@ -317,19 +431,35 @@ async function showGif(
         donationId: donation.id,
       }).catch(() => undefined);
     },
-    loadImage: loadGifImage,
+    loadImage: video ? loadOverlayVideo : loadGifImage,
+    ...(video
+      ? {}
+      : {
+          restartWhileVisible: (playSignal: AbortSignal | undefined) =>
+            restartFiniteImage(gifEl, url, playSignal),
+        }),
     show: () => {
       root.setAttribute("data-kind", "gif");
+      root.setAttribute("data-media", video ? "video" : "image");
       root.classList.remove("is-out");
       root.classList.add("is-in");
       root.setAttribute("data-visible", "true");
-      gifEl.src = overlayUrl(`/stream-alerts/gif/${donation.id}`);
+      if (video) {
+        mediaEl.muted = true;
+        mediaEl.playsInline = true;
+        mediaEl.loop = (donation.mediaDurationMs ?? 0) < 7_000;
+        void mediaEl.play().catch(() => undefined);
+      }
     },
     hide: () => {
       root.classList.remove("is-in");
       root.classList.add("is-out");
       gifEl.removeAttribute("src");
+      mediaEl.pause();
+      mediaEl.removeAttribute("src");
+      mediaEl.load();
       root.removeAttribute("data-kind");
+      root.removeAttribute("data-media");
       root.classList.remove("is-out");
       root.removeAttribute("data-visible");
     },
@@ -346,7 +476,8 @@ async function pumpQueue(): Promise<void> {
       const claimed = await postJson("/stream-alerts/claim", {
         sessionId,
         supportsGif: true,
-        capabilities: ["gif"],
+        supportsVideo: true,
+        capabilities: ["gif", "video"],
       });
       const donation = readClaimedDonation(claimed.donation);
       if (!donation) {

@@ -4,10 +4,15 @@ import { randomUUID } from "node:crypto";
 import { StreamGifInvalidFileError } from "./errors.js";
 import { STREAM_GIF_STAGING_TTL_MS } from "./gif-inspect.js";
 
-const STAGING_KEY_RE =
-  /^stream-gifs\/staging\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.gif$/i;
-const ACCEPTED_KEY_RE =
-  /^stream-gifs\/accepted\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.gif$/i;
+const EXT = "gif|jpe?g|png|webp|mp4|mov|webm";
+const STAGING_KEY_RE = new RegExp(
+  `^stream-gifs\\/staging\\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.(${EXT})$`,
+  "i",
+);
+const ACCEPTED_KEY_RE = new RegExp(
+  `^stream-gifs\\/accepted\\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.(${EXT})$`,
+  "i",
+);
 
 export const STREAM_GIF_STORAGE_KEY_RE = new RegExp(
   `${STAGING_KEY_RE.source}|${ACCEPTED_KEY_RE.source}`,
@@ -15,7 +20,20 @@ export const STREAM_GIF_STORAGE_KEY_RE = new RegExp(
 );
 
 export type StreamGifFileStorage = {
-  putStaging(input: { userId: string; bytes: Buffer }): Promise<{
+  putStaging(input: {
+    userId: string;
+    bytes: Buffer;
+    extension: string;
+  }): Promise<{
+    storageKey: string;
+    absolutePath: string;
+  }>;
+  replaceStaging(input: {
+    stagingKey: string;
+    userId: string;
+    bytes: Buffer;
+    extension: string;
+  }): Promise<{
     storageKey: string;
     absolutePath: string;
   }>;
@@ -35,11 +53,17 @@ function assertInsideRoot(root: string, absolutePath: string): void {
   }
 }
 
+function extensionOf(storageKey: string): string {
+  const dot = storageKey.lastIndexOf(".");
+  return dot >= 0 ? storageKey.slice(dot + 1).toLowerCase() : "bin";
+}
+
 export function createStreamGifFileStorage(rootDir: string): StreamGifFileStorage {
   const root = resolve(rootDir);
   return {
     async putStaging(input) {
-      const key = `stream-gifs/staging/${input.userId}/${randomUUID()}.gif`;
+      const ext = input.extension.replace(/^\./, "").toLowerCase();
+      const key = `stream-gifs/staging/${input.userId}/${randomUUID()}.${ext}`;
       if (!STAGING_KEY_RE.test(key)) {
         throw new StreamGifInvalidFileError("unsafe storage key");
       }
@@ -49,13 +73,24 @@ export function createStreamGifFileStorage(rootDir: string): StreamGifFileStorag
       await writeFile(absolutePath, input.bytes);
       return { storageKey: key, absolutePath };
     },
+    async replaceStaging(input) {
+      const stored = await this.putStaging({
+        userId: input.userId,
+        bytes: input.bytes,
+        extension: input.extension,
+      });
+      if (input.stagingKey !== stored.storageKey) {
+        await this.delete(input.stagingKey);
+      }
+      return stored;
+    },
     async promoteAccepted(stagingKey, userId) {
       if (!STAGING_KEY_RE.test(stagingKey)) {
         throw new StreamGifInvalidFileError("unsafe storage key");
       }
       const from = join(root, stagingKey);
       assertInsideRoot(root, from);
-      const key = `stream-gifs/accepted/${userId}/${randomUUID()}.gif`;
+      const key = `stream-gifs/accepted/${userId}/${randomUUID()}.${extensionOf(stagingKey)}`;
       if (!ACCEPTED_KEY_RE.test(key)) {
         throw new StreamGifInvalidFileError("unsafe storage key");
       }
@@ -98,9 +133,6 @@ export function createStreamGifFileStorage(rootDir: string): StreamGifFileStorag
           continue;
         }
         for (const name of names) {
-          if (!name.endsWith(".gif")) {
-            continue;
-          }
           const file = join(dir, name);
           try {
             const info = await stat(file);

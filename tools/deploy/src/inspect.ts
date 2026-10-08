@@ -141,11 +141,11 @@ export function assertNginxApiOnly(nginx: string): void {
     throw new Error("nginx client_max_body_size must be 256k");
   }
   if (
-    !/location\s+=\s+\/shop\/gif-uploads[\s\S]{0,500}client_max_body_size\s+8m/.test(
+    !/location\s+=\s+\/shop\/gif-uploads[\s\S]{0,500}client_max_body_size\s+12m/.test(
       nginx,
     )
   ) {
-    throw new Error("nginx must raise body size only on /shop/gif-uploads to 8m");
+    throw new Error("nginx must raise body size only on /shop/gif-uploads to 12m");
   }
 }
 

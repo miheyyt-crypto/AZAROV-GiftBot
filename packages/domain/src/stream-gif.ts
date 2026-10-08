@@ -6,6 +6,7 @@ import {
   users,
   wallets,
 } from "@giftbot/db/schema";
+import { readFile } from "node:fs/promises";
 import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
 import { writeAuditIn } from "./admin.js";
 import type { GiftbotDb, GiftbotTx } from "./db.js";
@@ -13,18 +14,20 @@ import {
   ShopInvalidGifUploadError,
   ShopRejectionReasonRequiredError,
   StreamGifAlreadyDecidedError,
-  StreamGifInvalidFileError,
   StreamGifNotFoundError,
   StreamGifNotPlayingError,
   StreamGifUploadNotFoundError,
+  StreamMediaCodecUnsupportedError,
+  StreamMediaNotReadyError,
   WalletNotFoundError,
 } from "./errors.js";
 import {
-  inspectGif,
   STREAM_GIF_MESSAGE,
   STREAM_GIF_SHOP_PRODUCT_CODE,
   STREAM_GIF_STAGING_TTL_MS,
 } from "./gif-inspect.js";
+import { inspectStreamMedia } from "./media-inspect.js";
+import { prepareObsPlayback } from "./stream-media-ffmpeg.js";
 import { asBigInt } from "./money.js";
 import { assertTransition, shopOrderTransitions } from "./states.js";
 import { enqueueStreamDonationIn } from "./stream-donation.js";
@@ -53,6 +56,9 @@ export type StreamGifSubmissionView = {
   width: number;
   height: number;
   frameCount: number;
+  durationMs: number;
+  contentType: string;
+  playbackReady: boolean;
   byteSize: number;
   rejectionReason: string | null;
   createdAt: string;
@@ -125,6 +131,9 @@ function serialize(
     width: submission.width,
     height: submission.height,
     frameCount: submission.frameCount,
+    durationMs: submission.durationMs,
+    contentType: submission.contentType,
+    playbackReady: submission.playbackReady,
     byteSize: submission.byteSize,
     rejectionReason: submission.rejectionReason,
     createdAt: submission.createdAt.toISOString(),
@@ -135,16 +144,27 @@ function serialize(
 export async function stageStreamGifUpload(
   db: GiftbotDb,
   storage: StreamGifFileStorage,
-  input: { userId: string; bytes: Buffer; contentType?: string },
-): Promise<{ uploadId: string; width: number; height: number; frameCount: number }> {
-  if (input.contentType && input.contentType !== "image/gif") {
-    throw new StreamGifInvalidFileError("contentType must be image/gif");
-  }
-  const inspected = inspectGif(input.bytes);
+  input: {
+    userId: string;
+    bytes: Buffer;
+    contentType?: string;
+  },
+): Promise<{
+  uploadId: string;
+  width: number;
+  height: number;
+  frameCount: number;
+  contentType: string;
+  durationMs: number;
+  playbackReady: boolean;
+  needsPrepare: boolean;
+}> {
+  const inspected = inspectStreamMedia(input.bytes);
   await storage.cleanupStaging();
   const stored = await storage.putStaging({
     userId: input.userId,
     bytes: input.bytes,
+    extension: inspected.extension,
   });
   const inserted = await db
     .insert(streamGifSubmissions)
@@ -152,22 +172,68 @@ export async function stageStreamGifUpload(
       userId: input.userId,
       status: "staging",
       stagingStorageKey: stored.storageKey,
-      contentType: "image/gif",
+      contentType: inspected.contentType,
       byteSize: input.bytes.byteLength,
       width: inspected.width,
       height: inspected.height,
       frameCount: inspected.frameCount,
+      durationMs: inspected.durationMs,
+      playbackReady: !inspected.needsPrepare,
     })
     .returning();
   const row = inserted[0];
   if (!row) {
-    throw new Error("failed to stage GIF upload");
+    throw new Error("failed to stage media upload");
   }
   return {
     uploadId: row.id,
     width: inspected.width,
     height: inspected.height,
     frameCount: inspected.frameCount,
+    contentType: inspected.contentType,
+    durationMs: inspected.durationMs,
+    playbackReady: !inspected.needsPrepare,
+    needsPrepare: inspected.needsPrepare,
+  };
+}
+
+export async function getOwnedStreamGifUpload(
+  db: GiftbotDb,
+  input: { userId: string; uploadId: string },
+): Promise<{
+  uploadId: string;
+  width: number;
+  height: number;
+  frameCount: number;
+  contentType: string;
+  durationMs: number;
+  playbackReady: boolean;
+  prepareError: string | null;
+}> {
+  const uploadId = parseShopGifUploadId(input.uploadId);
+  const rows = await db
+    .select()
+    .from(streamGifSubmissions)
+    .where(
+      and(
+        eq(streamGifSubmissions.id, uploadId),
+        eq(streamGifSubmissions.userId, input.userId),
+      ),
+    )
+    .limit(1);
+  const row = rows[0];
+  if (!row) {
+    throw new StreamGifUploadNotFoundError();
+  }
+  return {
+    uploadId: row.id,
+    width: row.width,
+    height: row.height,
+    frameCount: row.frameCount,
+    contentType: row.contentType,
+    durationMs: row.durationMs,
+    playbackReady: row.playbackReady,
+    prepareError: row.prepareError,
   };
 }
 
@@ -189,6 +255,12 @@ export async function consumeStreamGifUploadIn(
   const row = rows[0];
   if (!row || row.status !== "staging" || row.shopPurchaseId) {
     throw new StreamGifUploadNotFoundError();
+  }
+  if (row.prepareError) {
+    throw new StreamMediaCodecUnsupportedError(row.prepareError);
+  }
+  if (!row.playbackReady) {
+    throw new StreamMediaNotReadyError();
   }
   const now = new Date();
   await tx
@@ -236,6 +308,64 @@ export async function listAdminStreamGifs(
   );
 }
 
+export async function applyPreparedStreamGif(
+  db: GiftbotDb,
+  storage: StreamGifFileStorage,
+  input: { submissionId: string; ffmpegBin?: string; ffprobeBin?: string },
+): Promise<void> {
+  const row = await getStreamGifSubmission(db, input.submissionId);
+  if (!row) {
+    throw new StreamGifNotFoundError();
+  }
+  if (row.playbackReady) {
+    return;
+  }
+  try {
+    const bytes = await readFile(storage.resolvePath(row.stagingStorageKey));
+    const inspected = inspectStreamMedia(bytes);
+    const prepared = await prepareObsPlayback({
+      bytes,
+      inspected,
+      ...(input.ffmpegBin ? { ffmpegBin: input.ffmpegBin } : {}),
+      ...(input.ffprobeBin ? { ffprobeBin: input.ffprobeBin } : {}),
+    });
+    const stored = await storage.replaceStaging({
+      stagingKey: row.stagingStorageKey,
+      userId: row.userId,
+      bytes: prepared.bytes,
+      extension: prepared.extension,
+    });
+    const now = new Date();
+    await db
+      .update(streamGifSubmissions)
+      .set({
+        stagingStorageKey: stored.storageKey,
+        contentType: prepared.contentType,
+        byteSize: prepared.bytes.byteLength,
+        width: prepared.width,
+        height: prepared.height,
+        frameCount: prepared.frameCount,
+        durationMs: prepared.durationMs,
+        playbackReady: true,
+        prepareError: null,
+        updatedAt: now,
+      })
+      .where(eq(streamGifSubmissions.id, row.id));
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "media prepare failed";
+    await db
+      .update(streamGifSubmissions)
+      .set({
+        prepareError: message,
+        playbackReady: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(streamGifSubmissions.id, row.id));
+    throw error;
+  }
+}
+
 export async function getStreamGifSubmission(
   db: GiftbotDb,
   id: string,
@@ -272,6 +402,12 @@ export async function approveStreamGif(
     }
     if (current.status === "rejected") {
       throw new StreamGifAlreadyDecidedError();
+    }
+    if (current.prepareError) {
+      throw new StreamMediaCodecUnsupportedError(current.prepareError);
+    }
+    if (!current.playbackReady) {
+      throw new StreamMediaNotReadyError();
     }
     const identity = await loadPublicUser(tx, current.userId);
     if (current.status === "queued" && current.streamDonationId) {
@@ -336,6 +472,8 @@ export async function approveStreamGif(
       mediaWidth: current.width,
       mediaHeight: current.height,
       mediaFrameCount: current.frameCount,
+      mediaContentType: current.contentType,
+      mediaDurationMs: current.durationMs,
     });
     const now = new Date();
     if (from !== "fulfilled") {

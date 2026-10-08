@@ -22,6 +22,8 @@ export type OverlayPlaybackDonation = {
   ttsStatus?: OverlayTtsStatus;
   ttsDurationMs?: number | null;
   kind?: "donation" | "gif";
+  mediaContentType?: string | null;
+  mediaDurationMs?: number | null;
 };
 
 export type OverlayVolumes = {
@@ -422,7 +424,7 @@ export async function playDonationAlert(
   }
 }
 
-export const STREAM_GIF_VISIBLE_MS = 15_000;
+export const STREAM_GIF_VISIBLE_MS = 7_000;
 export const STREAM_GIF_PRELOAD_MS = 8_000;
 
 export async function playStreamGif(input: {
@@ -438,6 +440,7 @@ export async function playStreamGif(input: {
   ) => Promise<{ ok: boolean; width: number; height: number }>;
   show: (size: { width: number; height: number }) => void;
   hide: () => void;
+  restartWhileVisible?: (signal: AbortSignal | undefined) => Promise<void>;
 }): Promise<"shown" | "failed"> {
   const visibleMs = input.visibleMs ?? STREAM_GIF_VISIBLE_MS;
   const preloadMs = input.preloadMs ?? STREAM_GIF_PRELOAD_MS;
@@ -455,10 +458,15 @@ export async function playStreamGif(input: {
   input.show({ width: loaded.width, height: loaded.height });
   input.heartbeat();
   try {
-    await Promise.race([
+    const visible = Promise.race([
       input.sleep(visibleMs),
       waitAbort(input.signal),
     ]);
+    if (input.restartWhileVisible) {
+      await Promise.race([visible, input.restartWhileVisible(input.signal)]);
+    } else {
+      await visible;
+    }
   } finally {
     input.hide();
   }

@@ -93,6 +93,11 @@ async function main(): Promise<void> {
     });
     const deps: WorkerJobDeps = {
       ...(ttsDir ? { ttsDir } : {}),
+      ...(env.UPLOAD_DIR ? { uploadDir: env.UPLOAD_DIR } : {}),
+      ...(process.env.FFMPEG_BIN ? { ffmpegBin: process.env.FFMPEG_BIN } : {}),
+      ...(process.env.FFPROBE_BIN
+        ? { ffprobeBin: process.env.FFPROBE_BIN }
+        : {}),
       ...(env.PIPER_BIN ? { piperBin: env.PIPER_BIN } : {}),
       ...(env.PIPER_MODEL ? { piperModel: env.PIPER_MODEL } : {}),
       piperVoice: env.PIPER_VOICE ?? DEFAULT_PIPER_VOICE,

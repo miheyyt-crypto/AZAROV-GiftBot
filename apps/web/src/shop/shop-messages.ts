@@ -68,7 +68,7 @@ export const SHOP_FIELD_LABEL: Record<ShopRequiredField, string> = {
   mediaUrl: "YouTube или SoundCloud",
   telegramUsername: "Telegram username",
   kickUsername: "Kick username",
-  gifUploadId: "GIF",
+  gifUploadId: "Файл",
 };
 
 export function shopPayloadDetailLabel(key: string): string {
@@ -81,7 +81,7 @@ export function shopPayloadDetailLabel(key: string): string {
   return key;
 }
 
-export function friendlyShopError(code?: string): string {
+export function friendlyShopError(code?: string, message?: string): string {
   switch (code) {
     case "SHOP_INSUFFICIENT_BALANCE":
       return "Недостаточно монет";
@@ -100,10 +100,26 @@ export function friendlyShopError(code?: string): string {
     case "SHOP_INVALID_SLOT_NAME":
       return "Введите название слота";
     case "SHOP_INVALID_GIF_UPLOAD":
+      return "Загрузите файл заново";
     case "STREAM_GIF_INVALID_FILE":
-      return "Загрузите корректный GIF";
+    case "STREAM_MEDIA_CORRUPT":
+      return "Не удалось прочитать файл";
+    case "STREAM_MEDIA_TOO_LARGE":
+      return "Файл больше 10 МБ";
+    case "STREAM_MEDIA_UNSUPPORTED_FORMAT":
+      return "Формат не поддерживается. Нужны JPG, PNG, WebP, GIF, MP4, MOV или WebM";
+    case "STREAM_MEDIA_LIMIT":
+      return message && message.length > 0
+        ? message
+        : "Файл слишком тяжёлый для обработки";
+    case "STREAM_MEDIA_CODEC_UNSUPPORTED":
+      return message && message.length > 0
+        ? message
+        : "Этот кодек OBS не воспроизведёт. Нужен H.264, VP8, VP9 или AV1";
     case "STREAM_GIF_UPLOAD_NOT_FOUND":
-      return "Загрузите GIF заново";
+      return "Загрузите файл заново";
+    case "STREAM_MEDIA_NOT_READY":
+      return "Файл ещё готовится для показа. Подождите несколько секунд";
     case "SHOP_PRODUCT_UNAVAILABLE":
     case "SHOP_PRODUCT_NOT_FOUND":
       return "Товар недоступен";
@@ -183,7 +199,7 @@ export function clientShopValidationError(
     }
     if (field === "gifUploadId") {
       if (value.length === 0) {
-        return "Загрузите GIF";
+        return "Загрузите фото, GIF или видео";
       }
       continue;
     }

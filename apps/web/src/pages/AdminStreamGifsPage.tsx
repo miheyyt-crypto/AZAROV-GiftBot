@@ -13,7 +13,15 @@ import { resolveAdminBearer } from "../admin/resolve-admin-bearer.js";
 import { formatShortDateTime } from "../lib/format.js";
 import { keyForPost } from "../idempotency.js";
 
-function GifPreview({ id, skipRemote }: { id: string; skipRemote: boolean }) {
+function GifPreview({
+  id,
+  skipRemote,
+  contentType,
+}: {
+  id: string;
+  skipRemote: boolean;
+  contentType?: string;
+}) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     if (skipRemote) {
@@ -40,20 +48,18 @@ function GifPreview({ id, skipRemote }: { id: string; skipRemote: boolean }) {
     };
   }, [id, skipRemote]);
   if (!src) {
-    return <span className="muted">GIF</span>;
+    return <span className="muted">медиа</span>;
   }
-  return (
-    <img
-      src={src}
-      alt=""
-      style={{
-        width: 96,
-        height: 72,
-        objectFit: "contain",
-        background: "transparent",
-      }}
-    />
-  );
+  const previewStyle = {
+    width: 96,
+    height: 72,
+    objectFit: "contain" as const,
+    background: "transparent",
+  };
+  if (contentType?.startsWith("video/")) {
+    return <video src={src} muted playsInline style={previewStyle} />;
+  }
+  return <img src={src} alt="" style={previewStyle} />;
 }
 
 function statusLabel(status: StreamGifAdminItem["status"]): string {
@@ -123,8 +129,8 @@ export function AdminStreamGifsPage({
   return (
     <AdminLayout
       isSuperAdmin={isSuperAdmin}
-      title="GIF на стрим"
-      description="Модерация GIF перед показом в OBS. Одобрение ставит файл в общую очередь алертов."
+      title="Медиа на стрим"
+      description="Модерация фото, GIF и видео перед показом в OBS. Одобрение ставит файл в общую очередь алертов."
       {...(error ? { error } : {})}
     >
       <div className="admin-toolbar">
@@ -136,7 +142,7 @@ export function AdminStreamGifsPage({
             setDismissing(true);
             void withAdmin((token) => dismissPlayingStreamGif(token))
               .catch(() => {
-                setError("Сейчас нет GIF на экране");
+                setError("Сейчас нет медиа на экране");
               })
               .finally(() => {
                 setDismissing(false);
@@ -147,7 +153,7 @@ export function AdminStreamGifsPage({
         </button>
       </div>
       {items.length === 0 ? (
-        <p className="muted">Пока нет GIF.</p>
+        <p className="muted">Пока нет заявок.</p>
       ) : (
         <div className="admin-table-wrap">
           <table className="admin-table">
@@ -165,7 +171,11 @@ export function AdminStreamGifsPage({
               {items.map((item) => (
                 <tr key={item.id}>
                   <td>
-                    <GifPreview id={item.id} skipRemote={skipRemote} />
+                    <GifPreview
+                      id={item.id}
+                      skipRemote={skipRemote}
+                      {...(item.contentType ? { contentType: item.contentType } : {})}
+                    />
                   </td>
                   <td>{item.displayName ?? item.publicId ?? item.userId}</td>
                   <td>{item.orderId ? item.orderId.slice(0, 8) : "—"}</td>

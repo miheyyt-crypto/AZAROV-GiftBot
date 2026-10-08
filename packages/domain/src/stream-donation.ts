@@ -59,6 +59,8 @@ export type StreamDonationView = {
   kind: StreamDonationKind;
   mediaWidth: number | null;
   mediaHeight: number | null;
+  mediaContentType: string | null;
+  mediaDurationMs: number | null;
   playbackOutcome: string | null;
   createdAt: string;
   queuedAt: string;
@@ -168,6 +170,8 @@ function toView(
     kind: row.kind,
     mediaWidth: row.mediaWidth,
     mediaHeight: row.mediaHeight,
+    mediaContentType: row.mediaContentType,
+    mediaDurationMs: row.mediaDurationMs,
     playbackOutcome: row.playbackOutcome,
     createdAt: row.createdAt.toISOString(),
     queuedAt: row.queuedAt.toISOString(),
@@ -236,6 +240,8 @@ export async function enqueueStreamDonationIn(
     mediaWidth?: number;
     mediaHeight?: number;
     mediaFrameCount?: number;
+    mediaContentType?: string;
+    mediaDurationMs?: number;
   },
 ): Promise<StreamDonationEnqueueResult> {
   const message = normalizeStreamDonationMessage(input.message);
@@ -282,6 +288,8 @@ export async function enqueueStreamDonationIn(
               mediaWidth: input.mediaWidth,
               mediaHeight: input.mediaHeight,
               mediaFrameCount: input.mediaFrameCount,
+              mediaContentType: input.mediaContentType,
+              mediaDurationMs: input.mediaDurationMs ?? 0,
             }
           : {}),
       })
@@ -429,9 +437,25 @@ async function assertConsumerOwns(
   }
 }
 
+export function overlayCanPlayStreamDonation(
+  donation: { kind: StreamDonationKind; mediaContentType: string | null },
+  caps: { gif: boolean; video: boolean },
+): boolean {
+  if (donation.kind !== "gif") {
+    return true;
+  }
+  const video = (donation.mediaContentType ?? "").startsWith("video/");
+  return video ? caps.video : caps.gif;
+}
+
 export async function claimNextStreamDonation(
   db: GiftbotDb,
-  input: { sessionId: string; clock?: Clock; supportsGif?: boolean },
+  input: {
+    sessionId: string;
+    clock?: Clock;
+    supportsGif?: boolean;
+    supportsVideo?: boolean;
+  },
 ): Promise<{ donation: StreamDonationView | null; recovered: number }> {
   const sessionId = parseOverlaySessionId(input.sessionId);
   const clock = input.clock ?? systemClock;
@@ -454,18 +478,40 @@ export async function claimNextStreamDonation(
       .orderBy(asc(streamDonations.createdAt))
       .limit(1);
     const already = playing[0];
+    const caps = {
+      gif: input.supportsGif === true,
+      video: input.supportsVideo === true,
+    };
     if (already) {
-      if (already.kind === "gif" && !input.supportsGif) {
+      if (!overlayCanPlayStreamDonation(already, caps)) {
         return { donation: null, recovered };
       }
       return { donation: toView(already), recovered };
     }
-    const queuedFilter = input.supportsGif
-      ? eq(streamDonations.status, "queued")
-      : and(
-          eq(streamDonations.status, "queued"),
-          ne(streamDonations.kind, "gif"),
-        );
+    const allowed = [ne(streamDonations.kind, "gif")];
+    if (caps.gif) {
+      allowed.push(
+        and(
+          eq(streamDonations.kind, "gif"),
+          or(
+            isNull(streamDonations.mediaContentType),
+            sql`${streamDonations.mediaContentType} not like 'video/%'`,
+          ),
+        )!,
+      );
+    }
+    if (caps.video) {
+      allowed.push(
+        and(
+          eq(streamDonations.kind, "gif"),
+          sql`${streamDonations.mediaContentType} like 'video/%'`,
+        )!,
+      );
+    }
+    const queuedFilter = and(
+      eq(streamDonations.status, "queued"),
+      allowed.length === 1 ? allowed[0]! : or(...allowed),
+    );
     const queued = await tx
       .select()
       .from(streamDonations)

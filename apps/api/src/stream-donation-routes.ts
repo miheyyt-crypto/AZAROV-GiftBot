@@ -47,6 +47,8 @@ function publicDonation(row: StreamDonationView) {
     kind: row.kind,
     mediaWidth: row.mediaWidth,
     mediaHeight: row.mediaHeight,
+    mediaContentType: row.mediaContentType,
+    mediaDurationMs: row.mediaDurationMs,
     playbackOutcome: row.playbackOutcome,
     createdAt: row.createdAt,
     queuedAt: row.queuedAt,
@@ -55,15 +57,19 @@ function publicDonation(row: StreamDonationView) {
   };
 }
 
-function readSupportsGif(body: Record<string, unknown>): boolean {
-  if (body.supportsGif === true) {
+function readCapability(
+  body: Record<string, unknown>,
+  flag: "supportsGif" | "supportsVideo",
+  capability: "gif" | "video",
+): boolean {
+  if (body[flag] === true) {
     return true;
   }
   const capabilities = body.capabilities;
   if (!Array.isArray(capabilities)) {
     return false;
   }
-  return capabilities.some((item) => item === "gif");
+  return capabilities.some((item) => item === capability);
 }
 
 function readSessionId(body: Record<string, unknown>): string {
@@ -143,7 +149,8 @@ export function registerStreamDonationRoutes(
       const sessionId = readSessionId(body);
       const claimed = await claimNextStreamDonation(db, {
         sessionId,
-        supportsGif: readSupportsGif(body),
+        supportsGif: readCapability(body, "supportsGif", "gif"),
+        supportsVideo: readCapability(body, "supportsVideo", "video"),
       });
       if (claimed.recovered > 0) {
         logger.info("donation_recovered", { recovered: claimed.recovered });
@@ -235,7 +242,7 @@ export function registerStreamDonationRoutes(
       } catch {
         return reply.code(404).send();
       }
-      reply.header("content-type", "image/gif");
+      reply.header("content-type", row.mediaContentType ?? "application/octet-stream");
       reply.header("cache-control", "private, max-age=60");
       return reply.send(createReadStream(filePath));
     } catch (error) {

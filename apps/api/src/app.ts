@@ -4,6 +4,7 @@ import {
   createGiveawayImageStorage,
   createBroadcastImageStorage,
   resolveStreamAlertsTtsDir,
+  STREAM_GIF_UPLOAD_BODY_MAX,
   type SubmissionFileStorage,
 } from "@giftbot/domain";
 import {
@@ -92,6 +93,13 @@ export function createApiApp(options: ApiAppOptions = {}) {
     fastifyOpts.trustProxy = options.trustProxy;
   }
   const app = Fastify(fastifyOpts);
+  app.addContentTypeParser(
+    "application/octet-stream",
+    { parseAs: "buffer", bodyLimit: STREAM_GIF_UPLOAD_BODY_MAX },
+    (_request, body, done) => {
+      done(null, body);
+    },
+  );
   const ratePolicy = options.rateLimitPolicy ?? createRateLimitPolicy();
   const userRateLimiter =
     options.userRateLimiter ??
@@ -125,7 +133,7 @@ export function createApiApp(options: ApiAppOptions = {}) {
         reply.header("access-control-allow-credentials", "true");
         reply.header(
           "access-control-allow-headers",
-          "authorization, content-type, idempotency-key",
+          "authorization, content-type, idempotency-key, x-content-type",
         );
         reply.header(
           "access-control-allow-methods",

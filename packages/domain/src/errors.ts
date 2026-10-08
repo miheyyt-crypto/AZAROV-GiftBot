@@ -416,6 +416,44 @@ export class StreamGifInvalidFileError extends DomainError {
   }
 }
 
+export class StreamMediaTooLargeError extends DomainError {
+  constructor() {
+    super("STREAM_MEDIA_TOO_LARGE", "Файл больше 10 МБ");
+  }
+}
+
+export class StreamMediaUnsupportedFormatError extends DomainError {
+  constructor(
+    message = "Формат не поддерживается. Нужны JPG, PNG, WebP, GIF, MP4, MOV или WebM",
+  ) {
+    super("STREAM_MEDIA_UNSUPPORTED_FORMAT", message);
+  }
+}
+
+export class StreamMediaCorruptError extends DomainError {
+  constructor(message = "Не удалось прочитать файл") {
+    super("STREAM_MEDIA_CORRUPT", message);
+  }
+}
+
+export class StreamMediaLimitError extends DomainError {
+  constructor(message: string) {
+    super("STREAM_MEDIA_LIMIT", message);
+  }
+}
+
+export class StreamMediaCodecUnsupportedError extends DomainError {
+  constructor(message: string) {
+    super("STREAM_MEDIA_CODEC_UNSUPPORTED", message);
+  }
+}
+
+export class StreamMediaNotReadyError extends ConflictError {
+  constructor() {
+    super("media is still being prepared", "STREAM_MEDIA_NOT_READY");
+  }
+}
+
 export class StreamGifUploadNotFoundError extends NotFoundError {
   constructor() {
     super("GIF upload not found", "STREAM_GIF_UPLOAD_NOT_FOUND");

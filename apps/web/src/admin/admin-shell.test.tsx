@@ -129,7 +129,7 @@ test("each admin page renders its own title", () => {
       renderToStaticMarkup(
         createElement(AdminStreamGifsPage, { skipRemote: true, isSuperAdmin: true }),
       ),
-      "GIF на стрим",
+      "Медиа на стрим",
     ],
   ] as const;
   for (const [html, title] of pages) {

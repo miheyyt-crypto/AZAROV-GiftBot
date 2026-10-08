@@ -17,11 +17,12 @@ import {
   STREAM_ALERT_SHOP_PRODUCT_CODE,
   STREAM_GIF_UPLOAD_BODY_MAX,
   createStreamGifFileStorage,
+  getOwnedStreamGifUpload,
   stageStreamGifUpload,
   type ShopOrderRecord,
   type ShopOrderStatus,
 } from "@giftbot/domain";
-import { runIdempotentPost } from "@giftbot/jobs";
+import { enqueueJob, JOB_TYPES, runIdempotentPost } from "@giftbot/jobs";
 import type { RateLimiter } from "@giftbot/rate-limit";
 import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyReply } from "fastify";
@@ -199,16 +200,30 @@ export function registerShopRoutes(
         if (!uploadDir) {
           throw new ApiError("UNAVAILABLE", "upload storage is not configured", 503);
         }
-        const body = asRecord(request.body) ?? {};
-        const gifBase64 = body.gifBase64;
-        if (typeof gifBase64 !== "string" || gifBase64.length === 0) {
-          throw new ApiError("STREAM_GIF_INVALID_FILE", "gifBase64 is required", 400);
-        }
         let bytes: Buffer;
-        try {
-          bytes = Buffer.from(gifBase64, "base64");
-        } catch {
-          throw new ApiError("STREAM_GIF_INVALID_FILE", "invalid GIF payload", 400);
+        let declaredType: string | undefined;
+        if (Buffer.isBuffer(request.body)) {
+          bytes = request.body;
+          const headerType = request.headers["x-content-type"];
+          declaredType = Array.isArray(headerType) ? headerType[0] : headerType;
+        } else {
+          const body = asRecord(request.body) ?? {};
+          const gifBase64 = body.gifBase64;
+          if (typeof gifBase64 !== "string" || gifBase64.length === 0) {
+            throw new ApiError(
+              "STREAM_MEDIA_UNSUPPORTED_FORMAT",
+              "Загрузите JPG, PNG, WebP, GIF, MP4, MOV или WebM",
+              400,
+            );
+          }
+          try {
+            bytes = Buffer.from(gifBase64, "base64");
+          } catch {
+            throw new ApiError("STREAM_MEDIA_CORRUPT", "Не удалось прочитать файл", 400);
+          }
+          if (typeof body.contentType === "string") {
+            declaredType = body.contentType;
+          }
         }
         const staged = await stageStreamGifUpload(
           db,
@@ -216,17 +231,39 @@ export function registerShopRoutes(
           {
             userId: session.userId,
             bytes,
-            ...(typeof body.contentType === "string"
-              ? { contentType: body.contentType }
-              : {}),
+            ...(declaredType ? { contentType: declaredType } : {}),
           },
         );
+        if (staged.needsPrepare) {
+          await enqueueJob(db, {
+            type: JOB_TYPES.streamMediaPrepare,
+            idempotencyKey: `stream_media.prepare:${staged.uploadId}`,
+            payload: { submission_id: staged.uploadId },
+          });
+        }
         return staged;
       } catch (error) {
         return sendHttpError(reply, error);
       }
     },
   );
+
+  app.get("/shop/gif-uploads/:uploadId", async (request, reply) => {
+    try {
+      const session = await resolveMiniAppSession(
+        db,
+        readBearer(request.headers.authorization),
+      );
+      await consumeAuthed(limiter, request, reply, "shop", session.userId);
+      const params = request.params as { uploadId?: string };
+      return await getOwnedStreamGifUpload(db, {
+        userId: session.userId,
+        uploadId: params.uploadId ?? "",
+      });
+    } catch (error) {
+      return sendHttpError(reply, error);
+    }
+  });
 
   app.post("/shop/orders", async (request, reply) => {
     try {

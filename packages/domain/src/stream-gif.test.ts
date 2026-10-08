@@ -16,10 +16,12 @@ import { after, afterEach, before, test } from "node:test";
 import { randomUUID } from "node:crypto";
 import {
   StreamGifAlreadyDecidedError,
-  StreamGifInvalidFileError,
   StreamGifNotPlayingError,
+  StreamMediaNotReadyError,
+  StreamMediaUnsupportedFormatError,
 } from "./errors.js";
 import { minimalTestGif } from "./gif-inspect.js";
+import { minimalTestJpeg } from "./media-inspect.js";
 import type { DomainHarness } from "./harness.js";
 import { startDomainHarness } from "./harness.js";
 import { asBigInt } from "./money.js";
@@ -119,18 +121,23 @@ test("GIF purchase debits 1000 once, stays on moderation, and does not enqueue O
   assert.equal(ledger.filter((row) => row.type === "shop_purchase").length, 1);
 });
 
-test("JPEG bytes are rejected before a shop debit", async () => {
+test("unsupported bytes are rejected before a shop debit; JPEG stages", async () => {
   const user = await provisionUser(harness.db);
   await fund(user.userId, 1000n, `dep:${user.userId}:badgif`);
   await assert.rejects(
     () =>
       stageStreamGifUpload(harness.db, storage, {
         userId: user.userId,
-        bytes: Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+        bytes: Buffer.from("not-a-media-file"),
         contentType: "image/gif",
       }),
-    StreamGifInvalidFileError,
+    StreamMediaUnsupportedFormatError,
   );
+  const staged = await stageStreamGifUpload(harness.db, storage, {
+    userId: user.userId,
+    bytes: minimalTestJpeg(),
+  });
+  assert.equal(staged.contentType, "image/jpeg");
   const report = await reconcileWallet(harness.db, user.userId);
   assert.equal(report.balanceMinor, 1000n);
 });
@@ -349,4 +356,61 @@ test("dismiss current GIF finishes playing and unblocks the queue", async () => 
     playbackOutcome: "succeeded",
   });
   assert.equal(replay.playbackOutcome, "dismissed");
+});
+
+test("purchase is blocked until playback is prepared", async () => {
+  const user = await provisionUser(harness.db);
+  await withTelegram(user.userId, 920017n);
+  await fund(user.userId, 1000n, `dep:${user.userId}:prep`);
+  const staged = await stageStreamGifUpload(harness.db, storage, {
+    userId: user.userId,
+    bytes: minimalTestJpeg(),
+  });
+  await harness.db
+    .update(streamGifSubmissions)
+    .set({ playbackReady: false })
+    .where(eq(streamGifSubmissions.id, staged.uploadId));
+  await assert.rejects(
+    () =>
+      createShopOrder(harness.db, {
+        userId: user.userId,
+        productCode: "gif-stream",
+        submittedData: { gifUploadId: staged.uploadId },
+        idempotencyKey: `shop:${user.userId}:prep`,
+      }),
+    StreamMediaNotReadyError,
+  );
+  const report = await reconcileWallet(harness.db, user.userId);
+  assert.equal(report.balanceMinor, 1000n);
+});
+
+test("supportsGif does not claim video media", async () => {
+  const admin = await provisionUser(harness.db);
+  const user = await provisionUser(harness.db);
+  await withTelegram(user.userId, 920008n);
+  await fund(user.userId, 1000n, `dep:${user.userId}:vid`);
+  const bought = await buyGif(user.userId, `shop:${user.userId}:vid`);
+  await approveStreamGif(harness.db, storage, {
+    submissionId: bought.staged.uploadId,
+    adminUserId: admin.userId,
+    idempotencyKey: `gif.approve:${bought.staged.uploadId}`,
+  });
+  await harness.db
+    .update(streamDonations)
+    .set({ mediaContentType: "video/mp4" })
+    .where(eq(streamDonations.shopPurchaseId, bought.order.orderId));
+  const sessionId = randomUUID();
+  await attachStreamAlertConsumer(harness.db, { sessionId });
+  const skipped = await claimNextStreamDonation(harness.db, {
+    sessionId,
+    supportsGif: true,
+  });
+  assert.equal(skipped.donation, null);
+  const claimed = await claimNextStreamDonation(harness.db, {
+    sessionId,
+    supportsGif: true,
+    supportsVideo: true,
+  });
+  assert.equal(claimed.donation?.kind, "gif");
+  assert.equal(claimed.donation?.mediaContentType, "video/mp4");
 });
