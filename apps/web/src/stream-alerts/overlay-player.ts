@@ -29,6 +29,7 @@ export type OverlayPlaybackDonation = {
 export type OverlayVolumes = {
   ding: number;
   speech: number;
+  media?: number;
 };
 
 export function clampVolume(raw: number): number {
@@ -42,11 +43,18 @@ export function parseOverlayVolumes(search: string): OverlayVolumes {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   const dingRaw = params.get("dingVolume");
   const speechRaw = params.get("speechVolume");
+  const mediaRaw = params.get("mediaVolume");
   const ding =
     dingRaw === null || dingRaw === "" ? 0.8 : Number(dingRaw) / 100;
   const speech =
     speechRaw === null || speechRaw === "" ? 1 : Number(speechRaw) / 100;
-  return { ding: clampVolume(ding), speech: clampVolume(speech) };
+  const media =
+    mediaRaw === null || mediaRaw === "" ? 1 : Number(mediaRaw) / 100;
+  return {
+    ding: clampVolume(ding),
+    speech: clampVolume(speech),
+    media: clampVolume(media),
+  };
 }
 
 export type OverlayFetch = (
@@ -431,6 +439,45 @@ export function streamGifNeedsRestartLoop(
   contentType: string | null | undefined,
 ): boolean {
   return contentType === "image/gif" || contentType === "image/webp";
+}
+
+export function overlayVideoShouldLoop(
+  durationMs: number | null | undefined,
+  visibleMs = STREAM_GIF_VISIBLE_MS,
+): boolean {
+  return (durationMs ?? 0) < visibleMs;
+}
+
+export type OverlayVideoHandle = {
+  muted: boolean;
+  volume: number;
+  playsInline: boolean;
+  loop: boolean;
+  paused?: boolean;
+  pause: () => void;
+  load: () => void;
+  play?: () => Promise<void>;
+  removeAttribute: (name: string) => void;
+};
+
+export function applyOverlayVideoPlayback(
+  el: OverlayVideoHandle,
+  input: {
+    volume: number;
+    durationMs?: number | null;
+    visibleMs?: number;
+  },
+): void {
+  el.muted = false;
+  el.playsInline = true;
+  el.volume = clampVolume(input.volume);
+  el.loop = overlayVideoShouldLoop(input.durationMs, input.visibleMs);
+}
+
+export function stopOverlayVideo(el: OverlayVideoHandle): void {
+  el.pause();
+  el.removeAttribute("src");
+  el.load();
 }
 
 export async function playStreamGif(input: {

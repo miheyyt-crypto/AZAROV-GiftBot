@@ -61,25 +61,10 @@ export async function prepareObsPlayback(input: {
         };
       }
       const out = join(dir, "out.mp4");
-      await runFfmpeg(ffmpegBin, [
-        "-y",
-        "-i",
-        src,
-        "-an",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-threads",
-        "1",
-        "-pix_fmt",
-        "yuv420p",
-        "-movflags",
-        "+faststart",
-        "-vf",
-        scaleFilter(),
-        out,
-      ]);
+      await runFfmpeg(
+        ffmpegBin,
+        obsVideoEncodeArgs({ src, out, hasAudio: probe.hasAudio }),
+      );
       const converted = await readFile(out);
       const again = inspectStreamMedia(converted);
       const probed = await runFfprobe(ffprobeBin, out);
@@ -179,35 +164,83 @@ function scaleFilter(): string {
   return `scale='min(${DISPLAY_MAX},iw)':'min(${DISPLAY_MAX},ih)':force_original_aspect_ratio=decrease`;
 }
 
-type Probe = { codec: string; width: number; height: number; durationMs: number };
+/** Video keep/convert audio. GIF/WebP still use `-an`. */
+export function obsVideoEncodeArgs(input: {
+  src: string;
+  out: string;
+  hasAudio: boolean;
+}): string[] {
+  const args = [
+    "-y",
+    "-i",
+    input.src,
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-threads",
+    "1",
+    "-pix_fmt",
+    "yuv420p",
+    "-movflags",
+    "+faststart",
+    "-vf",
+    scaleFilter(),
+  ];
+  if (input.hasAudio) {
+    args.push("-c:a", "aac", "-b:a", "160k", "-ac", "2", "-ar", "44100");
+  }
+  args.push(input.out);
+  return args;
+}
+
+export function ffmpegArgsDropAudio(args: readonly string[]): boolean {
+  return args.includes("-an");
+}
+
+type Probe = {
+  codec: string;
+  width: number;
+  height: number;
+  durationMs: number;
+  hasAudio: boolean;
+};
 
 async function runFfprobe(bin: string, file: string): Promise<Probe> {
   const raw = await spawnCapture(bin, [
     "-v",
     "error",
-    "-select_streams",
-    "v:0",
     "-show_entries",
-    "stream=codec_name,width,height,duration:format=duration",
+    "stream=codec_type,codec_name,width,height,duration:format=duration",
     "-of",
     "json",
     file,
   ]);
   const parsed = JSON.parse(raw) as {
-    streams?: Array<{ codec_name?: string; width?: number; height?: number; duration?: string }>;
+    streams?: Array<{
+      codec_type?: string;
+      codec_name?: string;
+      width?: number;
+      height?: number;
+      duration?: string;
+    }>;
     format?: { duration?: string };
   };
-  const stream = parsed.streams?.[0];
-  const durationRaw = stream?.duration ?? parsed.format?.duration ?? "0";
+  const streams = parsed.streams ?? [];
+  const video =
+    streams.find((row) => row.codec_type === "video") ?? streams[0];
+  const hasAudio = streams.some((row) => row.codec_type === "audio");
+  const durationRaw = video?.duration ?? parsed.format?.duration ?? "0";
   const durationMs = Math.max(0, Math.round(Number(durationRaw) * 1000));
   if (!Number.isFinite(durationMs)) {
     throw new StreamMediaCodecUnsupportedError("ffprobe не вернул длительность");
   }
   return {
-    codec: stream?.codec_name ?? "",
-    width: stream?.width ?? 0,
-    height: stream?.height ?? 0,
+    codec: video?.codec_name ?? "",
+    width: video?.width ?? 0,
+    height: video?.height ?? 0,
     durationMs,
+    hasAudio,
   };
 }
 

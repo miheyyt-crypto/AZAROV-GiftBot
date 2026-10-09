@@ -19,6 +19,7 @@ export type StreamGifModerationSnapshot = {
   status: StreamGifPlaybackStatus;
   playbackReady?: boolean;
   displayName?: string | null;
+  contentType?: string | null;
 };
 
 export function streamOrderBinding(item: {

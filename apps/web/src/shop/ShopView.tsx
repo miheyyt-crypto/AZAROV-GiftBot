@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { loadAdminStreamGifBlob } from "../api.js";
+import { AdminStreamMediaPreview } from "../admin/AdminStreamMediaPreview.js";
 import { resolveAdminBearer } from "../admin/resolve-admin-bearer.js";
 import { BottomSheet } from "../components/BottomSheet.js";
 import { GameBanners } from "../components/GameBanners.js";
@@ -584,10 +585,12 @@ function StreamOrderPreview({
   submissionId,
   skipRemote,
   adminToken,
+  contentType,
 }: {
   submissionId: string;
   skipRemote: boolean;
   adminToken?: string;
+  contentType?: string | null;
 }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
@@ -617,24 +620,12 @@ function StreamOrderPreview({
       }
     };
   }, [submissionId, skipRemote, adminToken]);
-  if (!src) {
-    return (
-      <p className="muted" data-preview-submission-id={submissionId}>
-        превью медиа
-      </p>
-    );
-  }
   return (
-    <img
+    <AdminStreamMediaPreview
       src={src}
-      alt=""
-      data-preview-submission-id={submissionId}
-      style={{
-        width: 96,
-        height: 72,
-        objectFit: "contain",
-        background: "transparent",
-      }}
+      submissionId={submissionId}
+      placeholder="превью медиа"
+      {...(contentType ? { contentType } : {})}
     />
   );
 }
@@ -762,6 +753,9 @@ export function AdminShopOrdersView({
                   submissionId={binding.submissionId}
                   skipRemote={skipRemote}
                   {...(adminToken ? { adminToken } : {})}
+                  {...(submission?.contentType
+                    ? { contentType: submission.contentType }
+                    : {})}
                 />
               ) : null}
               {isStreamMedia ? (

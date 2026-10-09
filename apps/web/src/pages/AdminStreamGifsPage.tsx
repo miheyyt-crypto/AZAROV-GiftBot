@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AdminStreamMediaPreview } from "../admin/AdminStreamMediaPreview.js";
 import {
   approveAdminStreamGif,
   dismissPlayingStreamGif,
@@ -53,19 +54,13 @@ function GifPreview({
       }
     };
   }, [id, skipRemote, adminToken]);
-  if (!src) {
-    return <span className="muted">медиа</span>;
-  }
-  const previewStyle = {
-    width: 96,
-    height: 72,
-    objectFit: "contain" as const,
-    background: "transparent",
-  };
-  if (contentType?.startsWith("video/")) {
-    return <video src={src} muted playsInline style={previewStyle} />;
-  }
-  return <img src={src} alt="" style={previewStyle} />;
+  return (
+    <AdminStreamMediaPreview
+      src={src}
+      placeholder="медиа"
+      {...(contentType ? { contentType } : {})}
+    />
+  );
 }
 
 function statusLabel(status: StreamGifAdminItem["status"]): string {

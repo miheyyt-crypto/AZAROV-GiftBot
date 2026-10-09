@@ -187,6 +187,7 @@ function snapshotStreamMedia(
     status: StreamGifModerationSnapshot["status"];
     playbackReady?: boolean;
     displayName?: string | null;
+    contentType?: string | null;
   }>,
 ): Record<string, StreamGifModerationSnapshot> {
   const next: Record<string, StreamGifModerationSnapshot> = {};
@@ -200,6 +201,7 @@ function snapshotStreamMedia(
         ? {}
         : { playbackReady: item.playbackReady }),
       ...(item.displayName === undefined ? {} : { displayName: item.displayName }),
+      ...(item.contentType === undefined ? {} : { contentType: item.contentType }),
     };
   }
   return next;

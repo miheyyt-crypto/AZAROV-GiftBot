@@ -52,6 +52,8 @@
     "src/admin/resolve-admin-bearer.test.ts",
     "src/admin/AdminShell.tsx",
     "src/admin/admin-shell.test.tsx",
+    "src/admin/AdminStreamMediaPreview.tsx",
+    "src/admin/admin-stream-media-preview.test.tsx",
     "src/admin/AdminBroadcastView.tsx",
     "src/admin/admin-broadcast-view.test.tsx",
     "src/admin/broadcast-parse.ts",

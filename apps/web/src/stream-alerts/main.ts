@@ -6,6 +6,7 @@ import {
   overlaySessionId,
 } from "./overlay-dom.js";
 import {
+  applyOverlayVideoPlayback,
   createBrowserAudio,
   parseOverlayVolumes,
   playBoundedAudio,
@@ -13,6 +14,7 @@ import {
   playStreamGif,
   pollSpeechUrl,
   settleDonationPlayback,
+  stopOverlayVideo,
   streamGifNeedsRestartLoop,
   STREAM_ALERT_DING_PLAY_MAX_MS,
   type OverlayAudioHandle,
@@ -320,7 +322,8 @@ function loadOverlayVideo(
       return;
     }
     const video = mediaEl;
-    video.muted = true;
+    video.muted = false;
+    video.volume = volumes.media ?? 1;
     video.playsInline = true;
     video.preload = "auto";
     let done = false;
@@ -347,8 +350,7 @@ function loadOverlayVideo(
       signal.addEventListener(
         "abort",
         () => {
-          video.removeAttribute("src");
-          video.load();
+          stopOverlayVideo(video);
           finish(false);
         },
         { once: true },
@@ -451,9 +453,12 @@ async function showGif(
       root.classList.add("is-in");
       root.setAttribute("data-visible", "true");
       if (video) {
-        mediaEl.muted = true;
-        mediaEl.playsInline = true;
-        mediaEl.loop = (donation.mediaDurationMs ?? 0) < 7_000;
+        applyOverlayVideoPlayback(mediaEl, {
+          volume: volumes.media ?? 1,
+          ...(donation.mediaDurationMs !== undefined
+            ? { durationMs: donation.mediaDurationMs }
+            : {}),
+        });
         void mediaEl.play().catch(() => undefined);
       }
     },
@@ -461,9 +466,7 @@ async function showGif(
       root.classList.remove("is-in");
       root.classList.add("is-out");
       gifEl.removeAttribute("src");
-      mediaEl.pause();
-      mediaEl.removeAttribute("src");
-      mediaEl.load();
+      stopOverlayVideo(mediaEl);
       root.removeAttribute("data-kind");
       root.removeAttribute("data-media");
       root.classList.remove("is-out");

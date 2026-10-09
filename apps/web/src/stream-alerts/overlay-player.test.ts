@@ -1,17 +1,21 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  applyOverlayVideoPlayback,
+  overlayVideoShouldLoop,
   parseOverlayVolumes,
   playBoundedAudio,
   playDonationAlert,
   playStreamGif,
   pollSpeechUrl,
   settleDonationPlayback,
+  stopOverlayVideo,
   streamGifNeedsRestartLoop,
   STREAM_ALERT_DING_GAP_MS,
   STREAM_ALERT_SPEECH_START_MAX_MS,
   STREAM_ALERT_TTS_ENABLED,
   type OverlayAudioHandle,
+  type OverlayVideoHandle,
 } from "./overlay-player.js";
 
 function wait(ms: number): Promise<void> {
@@ -21,13 +25,23 @@ function wait(ms: number): Promise<void> {
 }
 
 test("overlay volumes are independent 0–100 query params", () => {
-  assert.deepEqual(parseOverlayVolumes(""), { ding: 0.8, speech: 1 });
+  assert.deepEqual(parseOverlayVolumes(""), { ding: 0.8, speech: 1, media: 1 });
   assert.deepEqual(parseOverlayVolumes("dingVolume=25&speechVolume=50"), {
     ding: 0.25,
     speech: 0.5,
+    media: 1,
   });
   assert.equal(parseOverlayVolumes("dingVolume=0").ding, 0);
   assert.equal(parseOverlayVolumes("speechVolume=150").speech, 1);
+  assert.equal(parseOverlayVolumes("mediaVolume=40").media, 0.4);
+  assert.equal(parseOverlayVolumes("mediaVolume=0").media, 0);
+  assert.equal(parseOverlayVolumes("mediaVolume=150").media, 1);
+  const mixed = parseOverlayVolumes(
+    "dingVolume=25&speechVolume=50&mediaVolume=10",
+  );
+  assert.equal(mixed.ding, 0.25);
+  assert.equal(mixed.speech, 0.5);
+  assert.equal(mixed.media, 0.1);
 });
 
 test("card sequence is ding, gap, then speech only", async () => {
@@ -854,4 +868,75 @@ test("complete runs once per item and the queue continues after failed", async (
     sleep: async () => undefined,
   });
   assert.deepEqual(outcomes, ["failed", "succeeded"]);
+});
+
+function fakeVideo(): OverlayVideoHandle & { src: string; paused: boolean } {
+  const el: OverlayVideoHandle & { src: string; paused: boolean } = {
+    muted: true,
+    volume: 0,
+    playsInline: false,
+    loop: false,
+    paused: true,
+    src: "blob:video",
+    pause() {
+      el.paused = true;
+    },
+    load() {
+      el.paused = true;
+    },
+    removeAttribute(name) {
+      if (name === "src") {
+        el.src = "";
+      }
+    },
+  };
+  return el;
+}
+
+test("overlay video is unmuted, loops only when shorter than 7s, and stop clears src", () => {
+  assert.equal(overlayVideoShouldLoop(1_200), true);
+  assert.equal(overlayVideoShouldLoop(7_000), false);
+  assert.equal(overlayVideoShouldLoop(12_000), false);
+  const shortClip = fakeVideo();
+  applyOverlayVideoPlayback(shortClip, { volume: 0.4, durationMs: 1_200 });
+  assert.equal(shortClip.muted, false);
+  assert.equal(shortClip.volume, 0.4);
+  assert.equal(shortClip.loop, true);
+  const longClip = fakeVideo();
+  applyOverlayVideoPlayback(longClip, { volume: 1, durationMs: 20_000 });
+  assert.equal(longClip.loop, false);
+  assert.equal(longClip.muted, false);
+  stopOverlayVideo(longClip);
+  assert.equal(longClip.paused, true);
+  assert.equal(longClip.src, "");
+});
+
+test("video hide on abort stops sound before the next queue item", async () => {
+  const video = fakeVideo();
+  video.paused = false;
+  const ac = new AbortController();
+  const shown = playStreamGif({
+    url: "/gif/video",
+    visibleMs: 7_000,
+    preloadMs: 10,
+    sleep: async (ms) => {
+      if (ms === 7_000) {
+        ac.abort();
+        return;
+      }
+    },
+    signal: ac.signal,
+    heartbeat: () => undefined,
+    loadImage: async () => ({ ok: true, width: 64, height: 32 }),
+    show: () => {
+      applyOverlayVideoPlayback(video, { volume: 1, durationMs: 2_000 });
+      video.paused = false;
+    },
+    hide: () => {
+      stopOverlayVideo(video);
+    },
+  });
+  assert.equal(await shown, "failed");
+  assert.equal(video.paused, true);
+  assert.equal(video.src, "");
 });
