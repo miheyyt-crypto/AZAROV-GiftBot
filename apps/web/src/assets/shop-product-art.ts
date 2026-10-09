@@ -2,6 +2,7 @@
 export const SHOP_PRODUCT_ART_SRC = {
   vip: "/assets/shop-vip.png",
   donation: "/assets/shop-donation.png",
+  "gif-stream": "/assets/shop-gif-stream.png",
   music: "/assets/shop-music.png",
   freeze: "/assets/shop-freeze.png",
   "welvura-200": "/assets/shop-welvura-200.png",

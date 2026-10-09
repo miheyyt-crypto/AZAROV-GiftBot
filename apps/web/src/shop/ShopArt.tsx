@@ -52,6 +52,9 @@ export function shopProductKind(code: string, title: string): string {
   if (key.includes("welvura")) {
     return "welvura-200";
   }
+  if (key.includes("gif-stream") || key.includes("медиа на стрим")) {
+    return "gif-stream";
+  }
   if (key.includes("donat") || key.includes("gif")) {
     return "donation";
   }
@@ -99,6 +102,9 @@ export function ShopProductArt({
         <ShopPhotoArt src={SHOP_PRODUCT_ART_SRC["custom-slot"]} />
       ) : null}
       {kind === "donation" ? <ShopPhotoArt src={SHOP_PRODUCT_ART_SRC.donation} /> : null}
+      {kind === "gif-stream" ? (
+        <ShopPhotoArt src={SHOP_PRODUCT_ART_SRC["gif-stream"]} />
+      ) : null}
       {kind === "music" ? <ShopPhotoArt src={SHOP_PRODUCT_ART_SRC.music} /> : null}
       {kind === "freeze" ? <ShopPhotoArt src={SHOP_PRODUCT_ART_SRC.freeze} /> : null}
       {kind === "premium-6" ? <PremiumArt variant="green" /> : null}

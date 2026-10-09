@@ -70,6 +70,16 @@ const SAMPLE_CATALOG: ShopCatalogProduct[] = [
     description: "Сообщение появится на стриме автоматически.",
   },
   {
+    code: "gif-stream",
+    title: "Медиа на стрим",
+    category: "donations",
+    priceAzc: "1000",
+    fulfillmentType: "manual",
+    requiredFields: ["gifUploadId"],
+    description:
+      "JPG, PNG, WebP, GIF, MP4, MOV, WebM. До 10 МБ. Показ 7 секунд после модерации.",
+  },
+  {
     code: "music",
     title: "Заказать музыку",
     category: "other",
@@ -145,6 +155,7 @@ test("shop view renders canonical catalog prices", () => {
   assert.match(html, /shop-art--custom-slot/);
   assert.match(html, /\/assets\/shop-vip\.png/);
   assert.match(html, /\/assets\/shop-donation\.png/);
+  assert.match(html, /\/assets\/shop-gif-stream\.png/);
   assert.match(html, /\/assets\/shop-music\.png/);
   assert.match(html, /\/assets\/shop-freeze\.png/);
   assert.match(html, /\/assets\/shop-welvura-200\.png/);
@@ -161,6 +172,7 @@ test("shop view renders canonical catalog prices", () => {
       "5 000 ₽ Welvura",
       "БОНУСКА ЗА 3000 ₽",
       "Донат на стрим",
+      "Медиа на стрим",
       "Заказать музыку",
       "ЗАКАЗАТЬ СВОЙ СЛОТ",
       "Streak Freeze",
@@ -201,6 +213,7 @@ test("shop view renders canonical catalog prices", () => {
   for (const name of [
     "shop-vip.png",
     "shop-donation.png",
+    "shop-gif-stream.png",
     "shop-music.png",
     "shop-freeze.png",
     "shop-welvura-200.png",
